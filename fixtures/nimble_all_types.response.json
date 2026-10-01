@@ -1,0 +1,43 @@
+{
+    "model": "nimble",
+    "answers": {
+        "intent": {
+            "type": "choice",
+            "choice": "dialogue",
+            "probabilities": {
+                "action": 0.004749997116161774,
+                "dialogue": 0.98695357090101,
+                "accusation": 0.005195085604789168,
+                "meta": 0.0031013463780389873
+            },
+            "confidence": 0.9396873513729809
+        },
+        "needs_interrogation": {
+            "type": "noul",
+            "noul": 0.9976584630205132
+        },
+        "urgency": {
+            "type": "score",
+            "score": 1.0462546661942138,
+            "legend": {
+                "0": "Mundane",
+                "1": "Mild",
+                "2": "Tense",
+                "3": "Dramatic",
+                "4": "Climactic"
+            },
+            "probabilities": {
+                "0": 0.1666691492603911,
+                "1": 0.6478169137263083,
+                "2": 0.15854495344038774,
+                "3": 0.026528088704520857,
+                "4": 0.00044089486839183267
+            },
+            "confidence": 0.3963339101503236
+        }
+    },
+    "usage": {
+        "input_tokens": 1000,
+        "output_tokens": 4
+    }
+}
