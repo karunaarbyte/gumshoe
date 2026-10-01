@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from gumshoe.decider.contract.errors import (
     DeciderAPIError,
+    DeciderConfigError,
     DeciderConnectionError,
     DeciderParseError,
 )
@@ -44,6 +45,12 @@ class SystemOneClient:
         except httpx.TimeoutException as exc:
             raise DeciderConnectionError(
                 self.name, f"timed out after {self._timeout:g}s calling {url}"
+            ) from exc
+        except httpx.LocalProtocolError as exc:
+            # The request itself was malformed before leaving the machine; an illegal header value
+            # almost always means stray whitespace or a newline in the API key.
+            raise DeciderConfigError(
+                self.name, "request rejected as malformed; check the API key for stray whitespace"
             ) from exc
         except httpx.TransportError as exc:
             raise DeciderConnectionError(

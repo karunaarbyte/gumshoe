@@ -45,3 +45,14 @@ def test_make_decider_backend_override():
     settings = Settings(_env_file=None, jev_api_key="k")
     assert make_decider(settings, backend="nimble").name == "nimble"
     assert make_decider(settings, backend="jev").name == "jev"
+
+
+@pytest.mark.parametrize("raw", ["  k123\n", "k123\r\n", "\tk123 "])
+def test_pasted_key_whitespace_is_stripped(raw):
+    profile = build_profile(Settings(_env_file=None, jev_api_key=raw), "jev")
+    assert profile.api_key == "k123"
+
+
+def test_whitespace_only_key_counts_as_missing():
+    with pytest.raises(DeciderConfigError, match="JEV_API_KEY"):
+        build_profile(Settings(_env_file=None, jev_api_key=" \n"), "jev")

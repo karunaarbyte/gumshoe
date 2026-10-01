@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from gumshoe.decider.backends.client import SystemOneClient
 from gumshoe.decider.contract.errors import (
     DeciderAPIError,
+    DeciderConfigError,
     DeciderConnectionError,
     DeciderParseError,
 )
@@ -143,3 +144,13 @@ async def test_invalid_input_fails_before_any_network_call():
         with pytest.raises(ValidationError):
             await client.decide("   ", DEMO_QUESTIONS)
     assert calls == []
+
+
+async def test_illegal_header_value_points_at_the_api_key_not_the_network():
+    def handler(request):
+        raise httpx.LocalProtocolError("Illegal header value b'Bearer abc\\n'")
+
+    async with make_client(handler, api_key="s3cret", name="jev") as client:
+        with pytest.raises(DeciderConfigError, match="API key") as info:
+            await client.decide(DEMO_STATE, DEMO_QUESTIONS)
+    assert "s3cret" not in str(info.value)

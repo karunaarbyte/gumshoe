@@ -10,7 +10,7 @@ from gumshoe.decider.backends.profile import BackendProfile
 def build_profile(settings: Settings, backend: Backend) -> BackendProfile:
     if backend == "nimble":
         return BackendProfile("nimble", settings.nimble_base_url, settings.nimble_model)
-    key = settings.jev_api_key.get_secret_value()
+    key = settings.jev_api_key.get_secret_value().strip()  # tolerate pasted newlines/spaces
     if not key:
         raise DeciderConfigError("jev", "JEV_API_KEY is not set (add it to .env)")
     return BackendProfile("jev", settings.jev_base_url, settings.jev_model, api_key=key)
