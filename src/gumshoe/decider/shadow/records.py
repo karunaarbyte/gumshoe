@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, runtime_checkable
 
 from gumshoe.decider.contract.answers import answer_confidence
 from gumshoe.decider.contract.errors import DeciderError
@@ -51,6 +51,7 @@ class CallRecord:
     answers: dict[str, Answer] | None
 
 
+@runtime_checkable
 class Recorder(Protocol):
     async def record(self, records: Sequence[CallRecord]) -> None: ...
 

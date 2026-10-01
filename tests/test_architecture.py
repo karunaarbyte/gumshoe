@@ -62,8 +62,19 @@ def violations(
 
 def test_contract_is_pure():
     # contract: types and interfaces only. No HTTP, no backends, no tooling.
-    forbidden = ("gumshoe.decider.backends", "gumshoe.decider.tools", "httpx")
+    forbidden = (
+        "gumshoe.decider.shadow",
+        "gumshoe.decider.backends",
+        "gumshoe.decider.tools",
+        "httpx",
+    )
     files = [p for p in sources(DECIDER / "contract") if p.name != "__init__.py"]
+    assert violations(files, forbidden) == []
+
+
+def test_shadow_depends_only_on_contract():
+    forbidden = ("gumshoe.decider.backends", "gumshoe.decider.tools", "httpx")
+    files = [p for p in sources(DECIDER / "shadow") if p.name != "__init__.py"]
     assert violations(files, forbidden) == []
 
 
