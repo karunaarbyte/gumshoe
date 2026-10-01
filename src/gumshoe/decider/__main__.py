@@ -1,3 +1,3 @@
-from gumshoe.decider.cli import main
+from gumshoe.decider.tools.cli import main
 
 raise SystemExit(main())

@@ -6,13 +6,13 @@ from types import TracebackType
 import httpx
 from pydantic import ValidationError
 
-from gumshoe.decider.errors import (
+from gumshoe.decider.contract.errors import (
     DeciderAPIError,
     DeciderConnectionError,
     DeciderParseError,
 )
-from gumshoe.decider.models import DecisionRequest, DecisionResult, Question
-from gumshoe.decider.profile import BackendProfile
+from gumshoe.decider.contract.models import DecisionRequest, DecisionResult, Question
+from gumshoe.decider.backends.profile import BackendProfile
 
 
 class SystemOneClient:

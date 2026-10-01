@@ -1,8 +1,8 @@
 import asyncio
 from collections.abc import Mapping
 
-from gumshoe.decider.errors import DeciderError
-from gumshoe.decider.models import DecisionResult, Question
+from gumshoe.decider.contract.errors import DeciderError
+from gumshoe.decider.contract.models import DecisionResult, Question
 
 
 class FakeDecider:

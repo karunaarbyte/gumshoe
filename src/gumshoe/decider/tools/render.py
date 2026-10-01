@@ -2,8 +2,8 @@
 
 from collections.abc import Mapping
 
-from gumshoe.decider.compare import Outcome
-from gumshoe.decider.models import Answer, ChoiceAnswer, DecisionResult, NoulAnswer, ScoreAnswer
+from gumshoe.decider.tools.compare import Outcome
+from gumshoe.decider.contract.models import Answer, ChoiceAnswer, DecisionResult, NoulAnswer, ScoreAnswer
 
 COLUMN = 24
 

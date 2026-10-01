@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from gumshoe.decider.models import (
+from gumshoe.decider.contract.models import (
     ChoiceAnswer,
     ChoiceQuestion,
     DecisionRequest,
@@ -11,7 +11,7 @@ from gumshoe.decider.models import (
     ScoreAnswer,
     ScoreQuestion,
 )
-from gumshoe.decider.samples import DEMO_QUESTIONS, DEMO_STATE
+from gumshoe.decider.tools.samples import DEMO_QUESTIONS, DEMO_STATE
 
 
 def test_request_serialises_with_type_tags():

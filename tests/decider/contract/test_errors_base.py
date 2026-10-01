@@ -1,7 +1,7 @@
 import pytest
 
-from gumshoe.decider.base import Decider
-from gumshoe.decider.errors import (
+from gumshoe.decider.contract.base import Decider
+from gumshoe.decider.contract.errors import (
     DeciderAPIError,
     DeciderConfigError,
     DeciderConnectionError,

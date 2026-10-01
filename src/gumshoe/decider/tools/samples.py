@@ -1,6 +1,6 @@
 """Demo input used by the CLI and tests (matches fixtures/nimble_all_types.request.json)."""
 
-from gumshoe.decider.models import ChoiceQuestion, NoulQuestion, Question, ScoreQuestion
+from gumshoe.decider.contract.models import ChoiceQuestion, NoulQuestion, Question, ScoreQuestion
 
 DEMO_STATE = "Player says: I want to question the butler about the broken window."
 

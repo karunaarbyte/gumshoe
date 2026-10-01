@@ -4,14 +4,14 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from gumshoe.decider.client import SystemOneClient
-from gumshoe.decider.errors import (
+from gumshoe.decider.backends.client import SystemOneClient
+from gumshoe.decider.contract.errors import (
     DeciderAPIError,
     DeciderConnectionError,
     DeciderParseError,
 )
-from gumshoe.decider.profile import BackendProfile
-from gumshoe.decider.samples import DEMO_QUESTIONS, DEMO_STATE
+from gumshoe.decider.backends.profile import BackendProfile
+from gumshoe.decider.tools.samples import DEMO_QUESTIONS, DEMO_STATE
 
 
 def make_client(handler, *, api_key=None, name="nimble", base_url="http://test/v1"):

@@ -5,9 +5,9 @@ import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from gumshoe.decider.base import Decider
-from gumshoe.decider.errors import DeciderError
-from gumshoe.decider.models import DecisionResult, Question
+from gumshoe.decider.contract.base import Decider
+from gumshoe.decider.contract.errors import DeciderError
+from gumshoe.decider.contract.models import DecisionResult, Question
 
 
 @dataclass

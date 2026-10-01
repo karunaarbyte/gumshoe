@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
 
-from gumshoe.decider.models import DecisionResult, Question
+from gumshoe.decider.contract.models import DecisionResult, Question
 
 
 @runtime_checkable

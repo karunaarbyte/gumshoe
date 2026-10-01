@@ -1,10 +1,10 @@
 """Builds a Decider for a backend from settings."""
 
 from gumshoe.config import Backend, Settings, get_settings
-from gumshoe.decider.base import Decider
-from gumshoe.decider.client import SystemOneClient
-from gumshoe.decider.errors import DeciderConfigError
-from gumshoe.decider.profile import BackendProfile
+from gumshoe.decider.contract.base import Decider
+from gumshoe.decider.backends.client import SystemOneClient
+from gumshoe.decider.contract.errors import DeciderConfigError
+from gumshoe.decider.backends.profile import BackendProfile
 
 
 def build_profile(settings: Settings, backend: Backend) -> BackendProfile:
