@@ -2,6 +2,7 @@ import pytest
 
 from gumshoe.decider.contract.base import Decider
 from gumshoe.decider.contract.errors import (
+    DeciderAllFailedError,
     DeciderAPIError,
     DeciderConfigError,
     DeciderConnectionError,
@@ -53,3 +54,15 @@ def test_errors_can_chain():
         assert isinstance(outer.__cause__, ValueError)
     with pytest.raises(DeciderError):
         raise DeciderConfigError("jev", "missing key")
+
+
+def test_all_failed_error_lists_every_backend_failure():
+    failures = {
+        "jev": DeciderConnectionError("jev", "cannot reach"),
+        "nimble": DeciderAPIError("nimble", 404, "model not found"),
+    }
+    exc = DeciderAllFailedError(failures)
+    assert isinstance(exc, DeciderError)
+    assert exc.failures == failures
+    assert exc.backend == "jev+nimble"
+    assert "cannot reach" in str(exc) and "model not found" in str(exc)

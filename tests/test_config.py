@@ -70,3 +70,16 @@ def test_timeout_must_be_a_positive_number(monkeypatch, bad):
     monkeypatch.setenv("REQUEST_TIMEOUT_S", bad)
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_stats_defaults():
+    s = Settings(_env_file=None)
+    assert s.stats_db_path.as_posix() == "data/decisions.db"
+    assert s.cold_after_s == 300.0
+
+
+@pytest.mark.parametrize("bad", ["0", "-1", "nan", "inf"])
+def test_cold_after_must_be_positive_and_finite(monkeypatch, bad):
+    monkeypatch.setenv("COLD_AFTER_S", bad)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)

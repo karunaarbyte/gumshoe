@@ -1,5 +1,7 @@
 """Exceptions raised by the decision layer. Messages never contain secrets."""
 
+from collections.abc import Mapping
+
 
 class DeciderError(Exception):
     def __init__(self, backend: str, message: str) -> None:
@@ -31,3 +33,12 @@ class DeciderParseError(DeciderError):
     def __init__(self, backend: str, detail: str, raw: str) -> None:
         super().__init__(backend, f"could not parse response: {detail[:300]}")
         self.raw = raw
+
+
+class DeciderAllFailedError(DeciderError):
+    """The primary and the shadow both failed, so there is no result to use."""
+
+    def __init__(self, failures: Mapping[str, DeciderError]) -> None:
+        detail = "; ".join(f"{name}: {exc.message}" for name, exc in failures.items())
+        super().__init__("+".join(failures), f"all backends failed ({detail})")
+        self.failures = dict(failures)

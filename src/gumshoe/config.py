@@ -1,6 +1,7 @@
 """Application settings, loaded from environment variables and `.env`."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Literal, Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -24,6 +25,10 @@ class Settings(BaseSettings):
     nimble_model: str = "nimble"
 
     request_timeout_s: float = Field(30.0, gt=0, allow_inf_nan=False)
+
+    stats_db_path: Path = Path("data/decisions.db")
+    # A backend with no call in this many seconds counts as cold (e.g. Ollama unloaded the model).
+    cold_after_s: float = Field(300.0, gt=0, allow_inf_nan=False)
 
     @field_validator("decider_shadow", mode="before")
     @classmethod
