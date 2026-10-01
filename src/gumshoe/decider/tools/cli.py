@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from contextlib import AsyncExitStack
 from pathlib import Path
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from gumshoe.config import get_settings
 from gumshoe.decider.contract.base import Decider
@@ -75,10 +75,22 @@ async def _compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def describe_validation_error(exc: ValidationError) -> str:
+    """One line per problem, e.g. `questions.x.criteria: Dictionary should have at least 2 items`."""
+    return "; ".join(
+        f"{'.'.join(str(part) for part in err['loc']) or 'input'}: {err['msg']}"
+        for err in exc.errors()
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return asyncio.run(args.handler(args))
     except DeciderError as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return 1
+    except ValidationError as exc:  # bad state or --questions file: the user's input, not a bug
+        print(f"error: invalid input: {describe_validation_error(exc)}", file=sys.stderr)
+    except OSError as exc:  # e.g. --questions file missing or unreadable
+        print(f"error: {exc.strerror or exc}: {exc.filename or ''}".rstrip(": "), file=sys.stderr)
+    return 1
