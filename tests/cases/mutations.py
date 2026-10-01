@@ -231,3 +231,40 @@ mutation(
     lambda c: replace_record_source(c, "ledger", "s_anna", requires=("f_lie_anna",)),
     {"GATE_ON_OWN_LIE", "EXPOSER_DEPENDS_ON_LIE"},
 )
+
+
+# ---- group 5: lies --------------------------------------------------------------------------
+
+mutation("LIE_NO_CLAIM", lambda c: replace_fact(c, "f_lie_anna", claim=None))
+mutation("LIE_NO_SPEAKER", lambda c: replace_fact(c, "f_lie_anna", speaker=None))
+mutation("EXPOSER_MISSING", lambda c: replace_fact(c, "f_lie_anna", exposed_by=()))
+mutation("EXPOSER_IS_LIE", lambda c: replace_fact(c, "f_lie_anna", exposed_by=("f_lie_boris",)))
+mutation(
+    "EXPOSER_OWNED_BY_SPEAKER", lambda c: replace_fact(c, "f_lie_anna", exposed_by=("f_sup_boris",))
+)
+
+
+def _exposer_depends_on_lie(c: Case) -> Case:
+    c = add_fact(c, _fact("f_exp_anna", source=search("l_garden"), requires=("f_lie_anna",)))
+    return replace_fact(
+        c, "f_lie_anna", exposed_by=("f_exp_anna",), exposure_hook=search("l_garden")
+    )
+
+
+mutation("EXPOSER_DEPENDS_ON_LIE", _exposer_depends_on_lie)
+
+
+def _exposer_unreachable(c: Case) -> Case:
+    c = replace_fact(c, "f_secret_anna", requires=("f_clara_keys",))
+    return replace_start(c, locations=("l_study",))
+
+
+mutation(
+    "EXPOSER_UNREACHABLE",
+    _exposer_unreachable,
+    {"EXPOSER_UNREACHABLE", "ORPHAN_ENTITY", "ORPHAN_FACT"},
+)
+mutation(
+    "HOOK_MISMATCH",
+    lambda c: replace_fact(c, "f_lie_anna", exposure_hook=record("ledger", "s_boris")),
+)
