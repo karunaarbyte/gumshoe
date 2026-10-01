@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from unittest.mock import patch
 
 from gumshoe.cases.model.case import Case
-from gumshoe.cases.model.entities import Effect, Event, Fact, SourceRef
-from gumshoe.cases.model.enums import Axis, EffectKind, FactKind, SourceKind
+from gumshoe.cases.model.entities import Claim, Effect, Event, Fact, SourceRef
+from gumshoe.cases.model.enums import Axis, ClaimKind, EffectKind, FactKind, SourceKind
 from gumshoe.cases.model.spec import PRESETS
 from gumshoe.cases.validate import runner
 from gumshoe.cases.validate.catalogue import CATALOGUE
@@ -293,4 +293,56 @@ mutation(
         replace_fact(c, "f_trace_poison", effects=()), "f_absent_dagger", effects=()
     ),
     {"NO_ROUTE", "WRONG_SURVIVES", "NO_POSITIVE_EVIDENCE", "SHAPE_MISMATCH"},
+)
+
+
+# ---- group 7: timeline ----------------------------------------------------------------------
+
+mutation(
+    "DOUBLE_BOOKED",
+    lambda c: c.model_copy(
+        update={
+            "timeline": (
+                *c.timeline,
+                Event(id="t_dup", slot=2, actor="s_anna", place="l_study", action="present"),
+            )
+        }
+    ),
+)
+mutation("NO_CRIME_EVENT", lambda c: replace_in(c, "timeline", "t_crime", action="present"))
+mutation("MULTIPLE_CRIME_EVENTS", lambda c: replace_in(c, "timeline", "t_clara_2", action="crime"))
+mutation(
+    "CULPRIT_NO_OPPORTUNITY",
+    lambda c: replace_in(c, "timeline", "t_crime", actor="s_clara"),
+    {"CULPRIT_NO_OPPORTUNITY", "LIE_CONSISTENT_WITH_TIMELINE"},
+)
+mutation(
+    "OPPORTUNITY_NOT_RULED_OUT",
+    lambda c: replace_fact(c, "f_clara_keys", effects=()),
+    {"OPPORTUNITY_NOT_RULED_OUT", "WRONG_SURVIVES", "SHAPE_MISMATCH"},
+)
+mutation(
+    "CLAIM_CONTRADICTS_TIMELINE",
+    lambda c: replace_fact(
+        c,
+        "f_alibi_anna",
+        claim=Claim(kind=ClaimKind.PRESENCE, actor="s_anna", slot=2, place="l_study"),
+    ),
+    {"CLAIM_CONTRADICTS_TIMELINE", "ALIBI_NOT_ELSEWHERE"},
+)
+mutation(
+    "LIE_CONSISTENT_WITH_TIMELINE",
+    lambda c: replace_fact(
+        c,
+        "f_lie_anna",
+        claim=Claim(kind=ClaimKind.PRESENCE, actor="s_anna", slot=2, place="l_garden"),
+    ),
+)
+mutation(
+    "ALIBI_NOT_ELSEWHERE",
+    lambda c: replace_fact(
+        c,
+        "f_alibi_anna",
+        claim=Claim(kind=ClaimKind.PRESENCE, actor="s_anna", slot=1, place="l_garden"),
+    ),
 )
