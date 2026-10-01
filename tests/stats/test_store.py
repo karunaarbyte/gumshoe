@@ -203,3 +203,54 @@ def test_a_malformed_timestamp_is_rejected_before_anything_is_written(store):
             [make_record(decision_id="ok"), make_record(decision_id="bad", ts="yesterday")]
         )
     assert store.fetch_calls() == []
+
+
+def test_since_keeps_or_drops_a_decision_as_a_whole(store):
+    cutoff = datetime(2026, 10, 1, 10, 15, tzinfo=UTC)
+    store.insert(
+        [  # started 1 microsecond before the cutoff, its shadow row lands after it
+            make_record(decision_id="straddles", ts="2026-10-01T10:14:59.999999+00:00"),
+            make_record(
+                decision_id="straddles",
+                ts="2026-10-01T10:15:00.000001+00:00",
+                backend="nimble",
+                role="shadow",
+                used=False,
+            ),
+            make_record(decision_id="inside", ts="2026-10-01T10:15:00.000000+00:00"),
+            make_record(
+                decision_id="inside",
+                ts="2026-10-01T10:15:00.000010+00:00",
+                backend="nimble",
+                role="shadow",
+                used=False,
+            ),
+        ]
+    )
+    kept = store.fetch_calls(since=cutoff)
+    assert {r.decision_id for r in kept} == {"inside"}
+    assert len(kept) == 2  # both rows of the kept decision, never half of one
+
+
+def test_since_and_node_filters_combine(store):
+    store.insert(
+        [
+            make_record(decision_id="a", node="intent", ts="2026-10-01T11:00:00.000000+00:00"),
+            make_record(decision_id="b", node="route", ts="2026-10-01T11:00:00.000000+00:00"),
+            make_record(decision_id="c", node="route", ts="2026-10-01T09:00:00.000000+00:00"),
+        ]
+    )
+    since = datetime(2026, 10, 1, 10, 0, tzinfo=UTC)
+    assert [r.decision_id for r in store.fetch_calls(node="route", since=since)] == ["b"]
+
+
+def test_fetch_recent_orders_decisions_by_when_they_started(store):
+    store.insert(
+        [  # A started first but its shadow row finished last; B started later
+            make_record(decision_id="A", ts="2026-10-01T10:00:00.000000+00:00"),
+            make_record(decision_id="A", ts="2026-10-01T10:10:00.000000+00:00", role="shadow"),
+            make_record(decision_id="B", ts="2026-10-01T10:05:00.000000+00:00"),
+            make_record(decision_id="B", ts="2026-10-01T10:06:00.000000+00:00", role="shadow"),
+        ]
+    )
+    assert {r.decision_id for r in store.fetch_recent(limit=1)} == {"B"}

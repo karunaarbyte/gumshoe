@@ -20,6 +20,15 @@ uv run python -m gumshoe.decider ask "I search the study for fingerprints"
 uv run python -m gumshoe.decider compare "I accuse the butler!"     # Jev vs Nimble side by side
 ```
 
+## Stats API
+
+```bash
+uv run python -m gumshoe.api      # http://127.0.0.1:8000  (docs at /docs)
+```
+
+Local only by design: it binds to 127.0.0.1:8000 and has no authentication. Stats are aggregated in
+Python from SQLite, which is comfortable for tens of thousands of decisions, not millions.
+
 ## Checks (run all four before committing)
 
 ```bash

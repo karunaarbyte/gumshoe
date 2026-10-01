@@ -86,26 +86,35 @@ class SqliteStatsStore:
     def fetch_calls(
         self, *, node: str | None = None, since: datetime | None = None
     ) -> list[CallRecord]:
-        """Calls in time order. A naive `since` is read as UTC, like every timestamp we store."""
+        """Calls in time order, for the decisions that started at or after `since`.
+
+        A naive `since` is read as UTC, like every timestamp we store. Everything is loaded into
+        memory for aggregation, which is fine for tens of thousands of rows, not millions.
+        """
         sql = "SELECT * FROM decision_calls WHERE 1 = 1"
         params: list[Any] = []
         if node is not None:
             sql += " AND node = ?"
             params.append(node)
         if since is not None:
-            sql += " AND ts >= ?"
+            # By decision, not by row: a decision belongs to the window if its first call does,
+            # so its primary and shadow rows are never split by the cutoff.
+            sql += (
+                " AND decision_id IN (SELECT decision_id FROM decision_calls"
+                " GROUP BY decision_id HAVING MIN(ts) >= ?)"
+            )
             params.append(to_utc_iso(since))
         return self._query(sql + " ORDER BY ts, id", params)
 
     def fetch_recent(self, *, limit: int, node: str | None = None) -> list[CallRecord]:
-        """All calls of the `limit` most recent decisions."""
+        """All calls of the `limit` most recently *started* decisions."""
         where, params = ("WHERE node = ?", [node]) if node is not None else ("", [])
         with closing(self._connect()) as conn:
             ids = [
                 row["decision_id"]
                 for row in conn.execute(
                     f"SELECT decision_id FROM decision_calls {where} "
-                    "GROUP BY decision_id ORDER BY MAX(ts) DESC, MAX(id) DESC LIMIT ?",
+                    "GROUP BY decision_id ORDER BY MIN(ts) DESC, MIN(id) DESC LIMIT ?",
                     [*params, limit],
                 )
             ]
