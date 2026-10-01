@@ -22,3 +22,19 @@ DEMO_QUESTIONS: dict[str, Question] = {
         criteria=["Mundane", "Mild", "Tense", "Dramatic", "Climactic"],
     ),
 }
+
+# Twelve player inputs spanning clear, ambiguous, compound and nonsense phrasing.
+DEMO_PLAYER_INPUTS: tuple[str, ...] = (
+    "I search the study for fingerprints",
+    "I accuse the butler!",
+    "what do I know so far?",
+    "show me the map",
+    "ask the maid where she was at 9pm",
+    "i guess i'll look around, maybe talk to someone",
+    "asdf",
+    "I sneak in and pick the lock then question the cook",
+    "examine the broken window",
+    "who had a motive?",
+    "I think it was the gardener, but I'm not sure",
+    "save my game",
+)

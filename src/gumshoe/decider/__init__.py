@@ -43,10 +43,13 @@ from gumshoe.decider.contract.models import (
     ScoreQuestion,
     Usage,
 )
+from gumshoe.decider.contract.samples import DEMO_PLAYER_INPUTS, DEMO_QUESTIONS
 from gumshoe.decider.shadow.records import CallRecord, Recorder
 from gumshoe.decider.shadow.shadow import ShadowDecider
 
 __all__ = [
+    "DEMO_PLAYER_INPUTS",
+    "DEMO_QUESTIONS",
     "Answer",
     "CallRecord",
     "ChoiceAnswer",
