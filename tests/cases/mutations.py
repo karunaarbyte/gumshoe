@@ -142,3 +142,39 @@ mutation(
 # ---- group 0: the runner's crash guard ------------------------------------------------------
 
 mutation("INTERNAL_ERROR", lambda c: c, crash_group=2)
+
+
+# ---- group 2: labels ------------------------------------------------------------------------
+
+mutation(
+    "LABEL_DUPLICATE",
+    lambda c: replace_in(
+        c, "methods", "m_dagger", label="strangled with a rope", aliases=("knife",)
+    ),
+)
+mutation(
+    "LABEL_OVERLAP",
+    lambda c: replace_in(
+        replace_in(c, "methods", "m_rope", label="poison"), "methods", "m_poison", aliases=()
+    ),
+)
+mutation(
+    "ALIAS_COLLISION", lambda c: replace_in(c, "methods", "m_dagger", aliases=("knife", "rope"))
+)
+mutation(
+    "LABEL_NAME_COLLISION",
+    lambda c: replace_in(c, "motives", "v_debt", label="to cover a debt owed to Boris"),
+)
+mutation(
+    "LABEL_LENGTH_SKEW",
+    lambda c: replace_in(
+        replace_in(c, "motives", "v_jealousy", label="jealousy"),
+        "motives",
+        "v_debt",
+        label="to cover a truly enormous and ruinous gambling debt incurred over many long years",
+    ),
+)
+mutation(
+    "NO_DISTINCTIVE_TOKEN",
+    lambda c: replace_in(c, "methods", "m_poison", label="dagger rope", aliases=()),
+)
