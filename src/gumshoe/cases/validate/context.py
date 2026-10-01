@@ -10,6 +10,7 @@ from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.spec import PRESETS, PresetDef
 from gumshoe.cases.validate.catalogue import CATALOGUE
 from gumshoe.cases.validate.graph import Graph, build_graph
+from gumshoe.cases.validate.reach import Reach, compute_reach
 from gumshoe.cases.validate.report import Hint, Issue, Profile, Severity
 
 
@@ -27,6 +28,10 @@ class Ctx:
     @cached_property
     def graph(self) -> Graph:
         return build_graph(self.index)
+
+    @cached_property
+    def reach(self) -> Reach:
+        return compute_reach(self.index)
 
     def issue(self, code: str, *subjects: str, axis: Axis | None = None, **params: object) -> Issue:
         spec = CATALOGUE[code]  # KeyError for an unknown code: groups cannot invent codes

@@ -6,7 +6,7 @@ from gumshoe.cases.model.case import Case
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.spec import PRESETS, PresetDef
 from gumshoe.cases.validate.context import Ctx
-from gumshoe.cases.validate.groups import g01_structure, g02_labels, g03_graph
+from gumshoe.cases.validate.groups import g01_structure, g02_labels, g03_graph, g04_reachability
 from gumshoe.cases.validate.report import Issue, Profile, Report, Severity
 
 # Registered by each group task (replace the empty dict entries as groups land).
@@ -14,6 +14,7 @@ RUNNERS: dict[int, Callable[[Ctx], list[Issue]]] = {
     1: g01_structure.run,
     2: g02_labels.run,
     3: g03_graph.run,
+    4: g04_reachability.run,
 }
 
 REQUIRES: dict[int, frozenset[int]] = {

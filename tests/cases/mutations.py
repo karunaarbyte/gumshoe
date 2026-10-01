@@ -21,8 +21,10 @@ from tests.cases.fixtures import (
 )
 from tests.cases.helpers import (
     add_fact,
+    drop_fact,
     replace_fact,
     replace_in,
+    replace_record_source,
     replace_spec,
     replace_start,
     replace_truth,
@@ -189,4 +191,43 @@ mutation(
         "f_absent_rope",
         requires=("f_absent_dagger",),
     ),
+)
+
+
+# ---- group 4: reachability ------------------------------------------------------------------
+
+
+def _orphan_the_garden(c: Case) -> Case:
+    c = replace_in(c, "locations", "l_garden", decorative=True)
+    c = replace_in(c, "locations", "l_cellar", decorative=True)
+    return replace_start(c, locations=("l_study",))
+
+
+mutation("ORPHAN_FACT", _orphan_the_garden)
+
+
+mutation(
+    "ORPHAN_ENTITY",
+    lambda c: replace_start(c, suspects=("s_anna", "s_boris")),
+    {"ORPHAN_ENTITY", "ORPHAN_FACT", "NO_STATEMENT"},
+)
+mutation("SOURCE_CAP_EXCEEDED", lambda c: add_fact(c, _fact("f_extra")))
+mutation(
+    "UNTOUCHABLE_CANDIDATE",
+    lambda c: drop_fact(drop_fact(c, "f_absent_rope"), "f_sup_rope"),
+)
+mutation(
+    "NO_STATEMENT",
+    lambda c: replace_in(
+        drop_fact(drop_fact(c, "f_lie_clara"), "f_sup_anna"), "suspects", "s_clara", knows=()
+    ),
+)
+mutation(
+    "EMPTY_LOCATION",
+    lambda c: replace_fact(c, "f_clara_keys", source=search("l_garden")),
+)
+mutation(
+    "GATE_ON_OWN_LIE",
+    lambda c: replace_record_source(c, "ledger", "s_anna", requires=("f_lie_anna",)),
+    {"GATE_ON_OWN_LIE", "EXPOSER_DEPENDS_ON_LIE"},
 )
