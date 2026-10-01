@@ -11,6 +11,7 @@ Rules (enforced by tests/test_architecture.py):
   * contract/ never imports shadow/, backends/, tools/, or httpx.
   * shadow/ imports only contract/ (and the standard library).
   * backends/ never imports tools/.
+  * This package never imports gumshoe.stats or gumshoe.api (they depend on it, not the reverse).
   * Only __main__.py (the entrypoint) imports tools/ from outside tools/.
   * Code outside this package imports from `gumshoe.decider` only, never its submodules.
 

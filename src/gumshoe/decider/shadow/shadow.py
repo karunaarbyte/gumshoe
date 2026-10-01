@@ -41,7 +41,7 @@ class ShadowDecider:
         self._primary = primary
         self._shadow = shadow
         self._recorder = recorder
-        self._cold_after_s = cold_after_s
+        self.cold_after_s = cold_after_s
         self._clock = clock
         self._last_end: dict[str, float] = {}  # backend name -> clock() when its last call ended
         self._background: set[asyncio.Task[None]] = set()
@@ -105,7 +105,7 @@ class ShadowDecider:
         """One backend call. Backend failures become part of the outcome; bugs still raise."""
         started = self._clock()
         last_end = self._last_end.get(decider.name)
-        cold = last_end is None or started - last_end > self._cold_after_s
+        cold = last_end is None or started - last_end > self.cold_after_s
         ts = datetime.now(UTC).isoformat(timespec="microseconds")
         t0 = time.perf_counter()
         result: DecisionResult | None = None

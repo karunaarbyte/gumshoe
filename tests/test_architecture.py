@@ -92,6 +92,14 @@ def test_only_the_entrypoint_imports_tools():
     assert violations(outside_tools, ("gumshoe.decider.tools",)) == []
 
 
+def test_decider_never_imports_stats_or_api():
+    assert violations(sources(DECIDER), ("gumshoe.stats", "gumshoe.api")) == []
+
+
+def test_stats_never_imports_api():
+    assert violations(sources(SRC / "gumshoe" / "stats"), ("gumshoe.api",)) == []
+
+
 def test_other_packages_use_only_the_public_decider_api():
     # Anything in gumshoe outside decider/ may import `gumshoe.decider`, never its submodules.
     outside = [p for p in sources(SRC / "gumshoe") if DECIDER not in p.parents]
