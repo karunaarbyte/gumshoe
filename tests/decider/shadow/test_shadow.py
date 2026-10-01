@@ -4,7 +4,11 @@ import logging
 import pytest
 
 from gumshoe.decider.contract.base import Decider
-from gumshoe.decider.contract.errors import DeciderConnectionError
+from gumshoe.decider.contract.errors import (
+    DeciderAllFailedError,
+    DeciderConfigError,
+    DeciderConnectionError,
+)
 from gumshoe.decider.contract.models import DecisionResult
 from gumshoe.decider.contract.samples import DEMO_QUESTIONS, DEMO_STATE
 from gumshoe.decider.shadow.shadow import ShadowDecider
@@ -188,4 +192,93 @@ async def test_a_shadow_crash_is_logged_even_when_the_primary_blows_up_first(res
     decider, _ = make(primary, shadow)
     with caplog.at_level(logging.ERROR), pytest.raises(RuntimeError, match="bug in primary"):
         await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    assert any("shadow call crashed" in r.getMessage() for r in caplog.records)
+
+
+async def test_primary_failure_falls_back_to_the_shadow_and_flags_it(result):
+    primary = FakeDecider("jev", error=DeciderConnectionError("jev", "timed out"))
+    decider, recorder = make(primary, FakeDecider("nimble", result))
+    assert await decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="route") is result
+    [batch] = recorder.batches  # recorded inline, no drain needed
+    by_backend = {r.backend: r for r in batch}
+    assert by_backend["nimble"].used is True and by_backend["jev"].used is False
+    assert by_backend["jev"].fallback is True and by_backend["nimble"].fallback is True
+    assert by_backend["jev"].error is not None and "timed out" in by_backend["jev"].error
+
+
+async def test_missing_primary_key_also_falls_back(result):
+    primary = FakeDecider("jev", error=DeciderConfigError("jev", "JEV_API_KEY is not set"))
+    decider, recorder = make(primary, FakeDecider("nimble", result))
+    assert await decider.decide(DEMO_STATE, DEMO_QUESTIONS) is result
+    assert recorder.batches[0][0].fallback is True
+
+
+async def test_both_failing_raises_all_failed_and_records_both():
+    jev_err = DeciderConnectionError("jev", "timed out")
+    nimble_err = DeciderConnectionError("nimble", "ollama is down")
+    decider, recorder = make(
+        FakeDecider("jev", error=jev_err), FakeDecider("nimble", error=nimble_err)
+    )
+    with pytest.raises(DeciderAllFailedError) as info:
+        await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    assert set(info.value.failures) == {"jev", "nimble"}
+    assert "timed out" in str(info.value) and "ollama is down" in str(info.value)
+    assert info.value.__cause__ is jev_err
+    [batch] = recorder.batches
+    assert len(batch) == 2
+    assert not any(r.used or r.fallback for r in batch)
+    assert all(r.error is not None for r in batch)
+
+
+async def test_primary_failure_without_a_shadow_reraises_the_original_error():
+    err = DeciderConnectionError("jev", "timed out")
+    decider, recorder = make(FakeDecider("jev", error=err), None)
+    with pytest.raises(DeciderConnectionError) as info:
+        await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    assert info.value is err
+    assert len(recorder.batches[0]) == 1
+
+
+async def test_recorder_failure_does_not_stop_the_fallback_result(result):
+    primary = FakeDecider("jev", error=DeciderConnectionError("jev", "timed out"))
+    decider, _ = make(
+        primary, FakeDecider("nimble", result), FakeRecorder(error=OSError("db locked"))
+    )
+    assert await decider.decide(DEMO_STATE, DEMO_QUESTIONS) is result
+
+
+async def test_fallback_waits_for_the_shadow_it_already_started(result):
+    gate = asyncio.Event()
+    primary = FakeDecider("jev", error=DeciderConnectionError("jev", "refused"))
+    decider, recorder = make(primary, FakeDecider("nimble", result, gate=gate))
+    turn = asyncio.create_task(decider.decide(DEMO_STATE, DEMO_QUESTIONS))
+    await asyncio.sleep(0.05)
+    assert not turn.done()  # the primary failed, but the turn waits for the shadow's answer
+    gate.set()
+    assert await asyncio.wait_for(turn, 1) is result
+
+
+async def test_cancelling_during_a_fallback_cancels_the_shadow(result):
+    gate = asyncio.Event()  # never set
+    shadow = FakeDecider("nimble", result, gate=gate)
+    primary = FakeDecider("jev", error=DeciderConnectionError("jev", "refused"))
+    decider, _ = make(primary, shadow)
+    turn = asyncio.create_task(decider.decide(DEMO_STATE, DEMO_QUESTIONS))
+    await asyncio.sleep(0.05)
+    turn.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await turn
+    await asyncio.wait_for(shadow.cancelled.wait(), 1)
+
+
+async def test_primary_failure_plus_a_shadow_bug_surfaces_the_primary_failure(caplog):
+    primary_err = DeciderConnectionError("jev", "timed out")
+    shadow = FakeDecider("nimble", error=RuntimeError("bug in shadow"))
+    decider, recorder = make(FakeDecider("jev", error=primary_err), shadow)
+    with caplog.at_level(logging.ERROR), pytest.raises(DeciderConnectionError) as info:
+        await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    assert info.value is primary_err  # not the shadow's RuntimeError
+    [batch] = recorder.batches  # the primary's failure is still recorded
+    assert [(r.backend, r.used, r.fallback) for r in batch] == [("jev", False, False)]
+    await asyncio.sleep(0)  # the shadow was already done, so its done-callback has not run yet
     assert any("shadow call crashed" in r.getMessage() for r in caplog.records)

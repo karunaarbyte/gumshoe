@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from gumshoe.decider.contract.base import Decider
-from gumshoe.decider.contract.errors import DeciderError
+from gumshoe.decider.contract.errors import DeciderAllFailedError, DeciderError
 from gumshoe.decider.contract.models import DecisionResult, Question
 from gumshoe.decider.shadow.records import CallOutcome, Recorder, Role, build_record
 
@@ -71,12 +71,7 @@ class ShadowDecider:
             self._spawn(self._finish(decision_id, node, state, primary, shadow_task))
             return primary.result
 
-        # Primary failed. Task 1b.4 replaces this with the fallback logic.
-        await self._record(decision_id, node, state, [primary], used_role=None, fallback=False)
-        if shadow_task is not None:
-            shadow_task.cancel()
-        assert primary.failure is not None
-        raise primary.failure
+        return await self._after_primary_failure(decision_id, node, state, primary, shadow_task)
 
     async def drain(self, grace_s: float | None = None) -> None:
         """Wait up to `grace_s` seconds for background recording; cancel what is still running."""
@@ -131,6 +126,40 @@ class ShadowDecider:
             result=result,
             failure=failure,
         )
+
+    async def _after_primary_failure(
+        self,
+        decision_id: str,
+        node: str,
+        state: str,
+        primary: CallOutcome,
+        shadow_task: asyncio.Task[CallOutcome] | None,
+    ) -> DecisionResult:
+        assert primary.failure is not None
+        if shadow_task is None:  # nothing to fall back to: surface the original error
+            await self._record(decision_id, node, state, [primary], used_role=None, fallback=False)
+            raise primary.failure
+
+        try:
+            shadow = await shadow_task  # already running; cancelling the turn cancels it too
+        except (
+            Exception
+        ):  # a bug in the shadow (already logged): the primary's failure is the story
+            await self._record(decision_id, node, state, [primary], used_role=None, fallback=False)
+            raise primary.failure from None
+        if shadow.result is not None:
+            await self._record(
+                decision_id, node, state, [primary, shadow], used_role="shadow", fallback=True
+            )
+            return shadow.result
+
+        assert shadow.failure is not None
+        await self._record(
+            decision_id, node, state, [primary, shadow], used_role=None, fallback=False
+        )
+        raise DeciderAllFailedError(
+            {primary.backend: primary.failure, shadow.backend: shadow.failure}
+        ) from primary.failure
 
     async def _finish(
         self,
