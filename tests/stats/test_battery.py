@@ -1,3 +1,6 @@
+import asyncio
+import time
+
 import pytest
 
 from gumshoe.config import Settings
@@ -51,6 +54,33 @@ class FlakyDecider:
 
     async def aclose(self):
         pass
+
+
+async def test_battery_settles_after_every_decision(result):
+    events = []
+
+    class Recording(FakeDecider):
+        async def decide(self, state, questions, *, node="adhoc"):
+            events.append("decide")
+            return await super().decide(state, questions, node=node)
+
+    async def settle():
+        events.append("settle")
+
+    await run_battery(Recording("jev", result), rounds=1, settle=settle)
+    expected = ["decide", "settle"] * len(DEMO_PLAYER_INPUTS)
+    assert events == expected  # never two decisions in flight against the shadow at once
+
+
+async def test_battery_settles_even_when_a_decision_fails(result):
+    settled = []
+
+    async def settle():
+        settled.append(1)
+
+    decider = FlakyDecider(result, {DEMO_PLAYER_INPUTS[0]})
+    await run_battery(decider, rounds=1, settle=settle)
+    assert len(settled) == len(DEMO_PLAYER_INPUTS)
 
 
 async def test_a_failing_input_does_not_abort_the_run(result):
@@ -132,3 +162,23 @@ def test_main_reports_a_missing_key_cleanly(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(stats_main, "get_settings", lambda: settings)
     assert stats_main.main(["battery"]) == 1
     assert "JEV_API_KEY" in capsys.readouterr().err
+
+
+def test_a_hung_shadow_cannot_stall_the_battery(monkeypatch, tmp_path, result, capsys):
+    db = tmp_path / "decisions.db"
+    settings = Settings(_env_file=None, stats_db_path=db, jev_api_key="k", request_timeout_s=0.05)
+    never = asyncio.Event()  # the shadow never answers
+
+    def fake_make_decider(settings, backend=None, recorder=None):
+        shadow = FakeDecider("nimble", result, gate=never)
+        return ShadowDecider(FakeDecider("jev", result), shadow, recorder)
+
+    monkeypatch.setattr(stats_main, "get_settings", lambda: settings)
+    monkeypatch.setattr(stats_main, "make_decider", fake_make_decider)
+    monkeypatch.setattr(stats_main, "SETTLE_SLACK_S", 0.0)
+    started = time.perf_counter()
+    assert stats_main.main(["battery"]) == 0
+    assert time.perf_counter() - started < 3  # 12 decisions x ~0.05 s of patience, not 12 x forever
+    calls = SqliteStatsStore(db).fetch_calls()
+    assert [c.backend for c in calls] == ["jev"] * len(DEMO_PLAYER_INPUTS)  # shadow rows dropped
+    assert "ran" in capsys.readouterr().out

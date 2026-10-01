@@ -20,6 +20,16 @@ uv run python -m gumshoe.decider ask "I search the study for fingerprints"
 uv run python -m gumshoe.decider compare "I accuse the butler!"     # Jev vs Nimble side by side
 ```
 
+## Shadow mode: Jev vs Nimble on every decision
+
+With a Jev key in `.env` (and no `DECIDER_PRIMARY`/`DECIDER_SHADOW` overrides), every decision runs on Jev
+(used by the game) and Nimble (shadow, recorded only) concurrently. If Jev fails, Nimble's answer is used and
+the decision is flagged `fallback`. Latency, tokens, confidence and agreement go to `data/decisions.db`.
+
+```bash
+uv run python -m gumshoe.stats battery --rounds 3   # push 36 sample decisions through both backends
+```
+
 ## Stats API
 
 ```bash

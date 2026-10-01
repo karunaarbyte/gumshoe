@@ -4,11 +4,15 @@ import argparse
 import asyncio
 import sys
 from collections.abc import Sequence
+from functools import partial
 
 from gumshoe.config import get_settings
-from gumshoe.decider import DeciderError, make_decider
+from gumshoe.decider import DeciderError, ShadowDecider, make_decider
 from gumshoe.stats.battery import run_battery
 from gumshoe.stats.store import SqliteStatsStore
+
+# How long past the request timeout to wait for a shadow call before giving up on it.
+SETTLE_SLACK_S = 5.0
 
 
 def positive_int(text: str) -> int:
@@ -34,7 +38,11 @@ async def _battery(rounds: int) -> int:
     store = SqliteStatsStore(settings.stats_db_path)
     decider = make_decider(settings, recorder=store)
     try:
-        outcome = await run_battery(decider, rounds)
+        # let each shadow call finish before the next decision (see run_battery), but never forever
+        settle = None
+        if isinstance(decider, ShadowDecider):
+            settle = partial(decider.drain, settings.request_timeout_s + SETTLE_SLACK_S)
+        outcome = await run_battery(decider, rounds, settle=settle)
     finally:
         await decider.aclose()  # waits for shadow calls still being recorded
     if outcome.failed == outcome.attempted:  # nothing worked: a setup problem, not flakiness
