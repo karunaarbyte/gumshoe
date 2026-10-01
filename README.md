@@ -39,6 +39,15 @@ uv run python -m gumshoe.api      # http://127.0.0.1:8000  (docs at /docs)
 Local only by design: it binds to 127.0.0.1:8000 and has no authentication. Stats are aggregated in
 Python from SQLite, which is comfortable for tens of thousands of decisions, not millions.
 
+## Case engine (in progress)
+
+```bash
+uv run python -m gumshoe.cases validate tests/cases/golden/manor_small.json --profile custom
+```
+
+Validates a detective case against the rule groups (add `--dev` to show spoiler issues and
+`--pack pack.json` for the pack-bound rules). Exit code 0 is clean, 1 has errors, 2 is unreadable input.
+
 ## Checks (run all four before committing)
 
 ```bash

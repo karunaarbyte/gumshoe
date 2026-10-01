@@ -353,3 +353,8 @@ def test_real_cases_decider_imports():
 
 def test_real_cases_determinism():
     assert cases_determinism_problems(SRC) == []
+
+
+def test_code_outside_cases_uses_only_the_cases_public_api():
+    outside = [p for p in sources(SRC / "gumshoe") if CASES not in p.parents]
+    assert violations(outside, ("gumshoe.cases.",)) == []
