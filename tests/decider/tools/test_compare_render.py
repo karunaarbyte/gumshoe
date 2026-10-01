@@ -5,7 +5,7 @@ import pytest
 from gumshoe.decider.tools.compare import Outcome, compare_backends, run_one
 from gumshoe.decider.contract.errors import DeciderConnectionError
 from gumshoe.decider.contract.models import ChoiceAnswer, DecisionResult
-from gumshoe.decider.tools.render import format_comparison, format_result, pick, summarise
+from gumshoe.decider.tools.render import format_comparison, format_result, summarise
 from gumshoe.decider.contract.samples import DEMO_QUESTIONS, DEMO_STATE
 from tests.decider.fakes import FakeDecider
 
@@ -63,12 +63,6 @@ def test_summarise_each_answer_type(result):
     assert summarise(result.answers["urgency"]).replace(".", "").isdigit()
 
 
-def test_pick_gives_comparable_verdicts(result):
-    assert pick(result.answers["intent"]) == "dialogue"
-    assert pick(result.answers["needs_interrogation"]) == "yes"
-    assert pick(result.answers["urgency"]) == "1"
-
-
 def test_format_result_lists_every_question(result):
     text = format_result(result)
     for name in ("intent", "needs_interrogation", "urgency"):
@@ -89,6 +83,7 @@ def test_comparison_marks_agreement_and_disagreement(result):
     lines = {line.split()[0]: line for line in text.splitlines() if line.strip()}
     assert lines["intent"].rstrip().endswith("NO")
     assert lines["needs_interrogation"].rstrip().endswith("yes")
+    assert lines["urgency"].rstrip().endswith("yes")  # identical scores
     assert "120" in lines["latency_ms"] and "300" in lines["latency_ms"]
 
 
