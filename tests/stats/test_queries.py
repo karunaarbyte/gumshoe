@@ -268,3 +268,17 @@ def test_report_echoes_since_normalised_to_utc():
 
     plus_two = datetime(2026, 10, 1, 11, 0, tzinfo=timezone(timedelta(hours=2)))
     assert build_report([], since=plus_two).since == "2026-10-01T09:00:00.000000+00:00"
+
+
+def test_a_decision_with_no_shared_questions_is_not_counted_as_compared():
+    a = make_record(decision_id="d", backend="jev", answers={"only_jev": choice("x")})
+    b = make_record(
+        decision_id="d",
+        backend="nimble",
+        role="shadow",
+        used=False,
+        answers={"only_nimble": choice("x")},
+    )
+    [node] = build_report([a, b]).nodes
+    assert node.decisions == 1
+    assert node.compared == 0 and node.agreement_rate is None

@@ -116,8 +116,11 @@ def _node_stats(node: str, rows: list[CallRecord], include_cold: bool) -> NodeSt
         if primary is None or shadow is None:
             continue
         assert primary.answers is not None and shadow.answers is not None
+        shared = primary.answers.keys() & shadow.answers.keys()
+        if not shared:  # nothing to compare, so this is not a head-to-head
+            continue
         compared += 1
-        for question in primary.answers.keys() & shadow.answers.keys():
+        for question in shared:
             totals[question] += 1
             agreeing[question] += answers_agree(
                 [primary.answers[question], shadow.answers[question]]
