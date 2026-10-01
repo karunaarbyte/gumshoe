@@ -22,7 +22,11 @@ def test_request_serialises_with_type_tags():
     assert dumped["questions"]["needs_interrogation"]["type"] == "noul"
     assert dumped["questions"]["urgency"]["type"] == "score"
     assert dumped["questions"]["urgency"]["criteria"] == [
-        "Mundane", "Mild", "Tense", "Dramatic", "Climactic",
+        "Mundane",
+        "Mild",
+        "Tense",
+        "Dramatic",
+        "Climactic",
     ]
 
 

@@ -1,17 +1,18 @@
 import json
+from typing import Any
 
 import httpx
 import pytest
 from pydantic import ValidationError
 
 from gumshoe.decider.backends.client import SystemOneClient
+from gumshoe.decider.backends.profile import BackendProfile
 from gumshoe.decider.contract.errors import (
     DeciderAPIError,
     DeciderConfigError,
     DeciderConnectionError,
     DeciderParseError,
 )
-from gumshoe.decider.backends.profile import BackendProfile
 from gumshoe.decider.contract.samples import DEMO_QUESTIONS, DEMO_STATE
 
 
@@ -31,7 +32,7 @@ def test_profile_repr_hides_api_key():
 
 
 async def test_decide_posts_request_and_parses_response(load_fixture):
-    seen = {}
+    seen: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen["url"] = str(request.url)

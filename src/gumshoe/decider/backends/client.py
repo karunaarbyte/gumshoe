@@ -6,6 +6,7 @@ from types import TracebackType
 import httpx
 from pydantic import ValidationError
 
+from gumshoe.decider.backends.profile import BackendProfile
 from gumshoe.decider.contract.errors import (
     DeciderAPIError,
     DeciderConfigError,
@@ -13,7 +14,6 @@ from gumshoe.decider.contract.errors import (
     DeciderParseError,
 )
 from gumshoe.decider.contract.models import DecisionRequest, DecisionResult, Question
-from gumshoe.decider.backends.profile import BackendProfile
 
 
 class SystemOneClient:
@@ -36,9 +36,7 @@ class SystemOneClient:
         self, state: str, questions: Mapping[str, Question], *, node: str = "adhoc"
     ) -> DecisionResult:
         # `node` labels the pipeline stage for wrappers (stats); the wire request has no use for it.
-        request = DecisionRequest(
-            model=self._profile.model, state=state, questions=dict(questions)
-        )
+        request = DecisionRequest(model=self._profile.model, state=state, questions=dict(questions))
         url = self._profile.endpoint
         try:
             response = await self._http.post(url, json=request.model_dump(mode="json"))

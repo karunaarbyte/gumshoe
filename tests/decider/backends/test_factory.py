@@ -1,10 +1,10 @@
 import pytest
 
 from gumshoe.config import Settings
-from gumshoe.decider.contract.base import Decider
 from gumshoe.decider.backends.client import SystemOneClient
-from gumshoe.decider.contract.errors import DeciderConfigError
 from gumshoe.decider.backends.factory import build_profile, make_decider
+from gumshoe.decider.contract.base import Decider
+from gumshoe.decider.contract.errors import DeciderConfigError
 
 
 def test_build_nimble_profile():

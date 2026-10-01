@@ -19,8 +19,10 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "mypy>=2.3.1",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.9",
 ]
 
 [tool.pytest.ini_options]
@@ -30,3 +32,26 @@ testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-m 'not live'"
 markers = ["live: calls real backends (run with: uv run pytest -m live)"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+# E/F pyflakes+pycodestyle, I import order, UP modern syntax, B bugbear, SIM simplify, ASYNC async pitfalls
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+mypy_path = "src"
+files = ["src", "tests"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# Tests use untyped pytest fixtures and mock handlers; keep src strict, tests pragmatic.
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+disallow_incomplete_defs = false
+check_untyped_defs = true

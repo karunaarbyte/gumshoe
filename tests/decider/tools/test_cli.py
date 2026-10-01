@@ -4,10 +4,10 @@ import pytest
 from pydantic import ValidationError
 
 from gumshoe.config import Settings
-from gumshoe.decider.tools import cli
-from gumshoe.decider.tools.cli import build_parser, load_questions, main
 from gumshoe.decider.contract.models import NoulQuestion
 from gumshoe.decider.contract.samples import DEMO_QUESTIONS
+from gumshoe.decider.tools import cli
+from gumshoe.decider.tools.cli import build_parser, load_questions, main
 
 
 def test_parser_ask_with_backend():
@@ -40,7 +40,9 @@ def test_questions_load_from_json_file(tmp_path):
 
 def test_invalid_questions_file_raises(tmp_path):
     path = tmp_path / "q.json"
-    path.write_text(json.dumps({"x": {"type": "choice", "instructions": "?", "criteria": {"a": "1"}}}))
+    path.write_text(
+        json.dumps({"x": {"type": "choice", "instructions": "?", "criteria": {"a": "1"}}})
+    )
     with pytest.raises(ValidationError):
         load_questions(path)
 
@@ -62,7 +64,9 @@ def test_blank_state_prints_a_clean_error_not_a_traceback(nimble_only, capsys):
 
 def test_bad_questions_file_prints_a_clean_error(nimble_only, tmp_path, capsys):
     path = tmp_path / "q.json"
-    path.write_text(json.dumps({"x": {"type": "choice", "instructions": "?", "criteria": {"a": "1"}}}))
+    path.write_text(
+        json.dumps({"x": {"type": "choice", "instructions": "?", "criteria": {"a": "1"}}})
+    )
     assert main(["ask", "hello", "--questions", str(path)]) == 1
     err = capsys.readouterr().err
     assert err.startswith("error: ")

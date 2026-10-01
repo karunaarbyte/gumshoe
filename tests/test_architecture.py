@@ -111,7 +111,9 @@ def make_tree(tmp_path: Path, files: dict[str, str]) -> Path:
 
 
 def test_checker_sees_absolute_submodule_imports(tmp_path):
-    root = make_tree(tmp_path, {"gumshoe/decider/contract/x.py": "import gumshoe.decider.tools.cli\n"})
+    root = make_tree(
+        tmp_path, {"gumshoe/decider/contract/x.py": "import gumshoe.decider.tools.cli\n"}
+    )
     assert imported_modules(root / "gumshoe/decider/contract/x.py", root) >= {
         "gumshoe.decider.tools.cli"
     }
@@ -147,5 +149,7 @@ def test_checker_does_not_flag_plain_names_from_the_public_api(tmp_path):
         tmp_path, {"gumshoe/other.py": "from gumshoe.decider import make_decider, Decider\n"}
     )
     path = root / "gumshoe/other.py"
-    assert imported_modules(path, root) == {"gumshoe.decider"}  # make_decider is a name, not a module
+    assert imported_modules(path, root) == {
+        "gumshoe.decider"
+    }  # make_decider is a name, not a module
     assert violations([path], ("gumshoe.decider.",), root) == []

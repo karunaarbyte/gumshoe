@@ -3,6 +3,7 @@ from pydantic import ValidationError
 
 from gumshoe.config import Settings, get_settings
 
+
 def test_defaults():
     s = Settings(_env_file=None)
     assert s.decider_primary == "jev"

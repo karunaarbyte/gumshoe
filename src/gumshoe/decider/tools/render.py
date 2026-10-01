@@ -2,9 +2,15 @@
 
 from collections.abc import Mapping
 
-from gumshoe.decider.tools.compare import Outcome
 from gumshoe.decider.contract.agreement import answers_agree
-from gumshoe.decider.contract.models import Answer, ChoiceAnswer, DecisionResult, NoulAnswer, ScoreAnswer
+from gumshoe.decider.contract.models import (
+    Answer,
+    ChoiceAnswer,
+    DecisionResult,
+    NoulAnswer,
+    ScoreAnswer,
+)
+from gumshoe.decider.tools.compare import Outcome
 
 COLUMN = 24
 
@@ -31,8 +37,8 @@ def format_comparison(outcomes: Mapping[str, Outcome]) -> str:
     results = {n: o.result for n, o in outcomes.items() if o.result is not None}
 
     questions: list[str] = []
-    for result in results.values():
-        for q in result.answers:
+    for backend_result in results.values():
+        for q in backend_result.answers:
             if q not in questions:
                 questions.append(q)
 

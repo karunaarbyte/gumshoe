@@ -34,7 +34,8 @@ class Settings(BaseSettings):
     def _roles_must_differ(self) -> Self:
         if self.decider_shadow == self.decider_primary:
             raise ValueError(
-                "DECIDER_SHADOW must differ from DECIDER_PRIMARY (leave it blank to disable shadowing)"
+                "DECIDER_SHADOW must differ from DECIDER_PRIMARY "
+                "(leave it blank to disable shadowing)"
             )
         return self
 

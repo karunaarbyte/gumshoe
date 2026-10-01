@@ -38,4 +38,4 @@ async def compare_backends(
     outcomes = await asyncio.gather(
         *(run_one(deciders[name], state, questions, node) for name in names)
     )
-    return dict(zip(names, outcomes))
+    return dict(zip(names, outcomes, strict=True))

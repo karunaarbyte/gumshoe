@@ -9,17 +9,17 @@ from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
 
-from gumshoe.config import get_settings
-from gumshoe.decider.contract.base import Decider
-from gumshoe.decider.tools.compare import Outcome, compare_backends
-from gumshoe.decider.contract.errors import DeciderConfigError, DeciderError
+from gumshoe.config import Backend, get_settings
 from gumshoe.decider.backends.factory import make_decider
+from gumshoe.decider.contract.base import Decider
+from gumshoe.decider.contract.errors import DeciderConfigError, DeciderError
 from gumshoe.decider.contract.models import Question
-from gumshoe.decider.tools.render import format_comparison, format_result
 from gumshoe.decider.contract.samples import DEMO_QUESTIONS
+from gumshoe.decider.tools.compare import Outcome, compare_backends
+from gumshoe.decider.tools.render import format_comparison, format_result
 
 QUESTIONS_ADAPTER = TypeAdapter(dict[str, Question])
-BACKENDS = ("nimble", "jev")
+BACKENDS: tuple[Backend, ...] = ("nimble", "jev")
 
 
 def load_questions(path: Path | None) -> dict[str, Question]:
@@ -40,7 +40,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     compare = sub.add_parser("compare", help="send a state to both backends")
     compare.add_argument("state")
-    compare.add_argument("--questions", type=Path, help="JSON file of questions (default: demo set)")
+    compare.add_argument(
+        "--questions", type=Path, help="JSON file of questions (default: demo set)"
+    )
     compare.set_defaults(handler=_compare)
     return parser
 
@@ -76,7 +78,7 @@ async def _compare(args: argparse.Namespace) -> int:
 
 
 def describe_validation_error(exc: ValidationError) -> str:
-    """One line per problem, e.g. `questions.x.criteria: Dictionary should have at least 2 items`."""
+    """One line per problem, e.g. `x.choice.criteria: Dictionary should have at least 2 items`."""
     return "; ".join(
         f"{'.'.join(str(part) for part in err['loc']) or 'input'}: {err['msg']}"
         for err in exc.errors()
@@ -86,7 +88,8 @@ def describe_validation_error(exc: ValidationError) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        return asyncio.run(args.handler(args))
+        exit_code: int = asyncio.run(args.handler(args))
+        return exit_code
     except DeciderError as exc:
         print(f"error: {exc}", file=sys.stderr)
     except ValidationError as exc:  # bad state or --questions file: the user's input, not a bug

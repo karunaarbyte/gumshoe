@@ -2,11 +2,11 @@ import time
 
 import pytest
 
-from gumshoe.decider.tools.compare import Outcome, compare_backends, run_one
 from gumshoe.decider.contract.errors import DeciderConnectionError
 from gumshoe.decider.contract.models import ChoiceAnswer, DecisionResult
-from gumshoe.decider.tools.render import format_comparison, format_result, summarise
 from gumshoe.decider.contract.samples import DEMO_QUESTIONS, DEMO_STATE
+from gumshoe.decider.tools.compare import Outcome, compare_backends, run_one
+from gumshoe.decider.tools.render import format_comparison, format_result, summarise
 from tests.decider.fakes import FakeDecider
 
 
@@ -19,6 +19,7 @@ async def test_run_one_success_measures_latency(result):
     outcome = await run_one(FakeDecider("a", result=result, delay=0.05), DEMO_STATE, DEMO_QUESTIONS)
     assert outcome.result is result
     assert outcome.error is None
+    assert outcome.latency_ms is not None
     assert outcome.latency_ms >= 40
 
 
@@ -26,6 +27,7 @@ async def test_run_one_captures_decider_errors():
     err = DeciderConnectionError("b", "cannot reach")
     outcome = await run_one(FakeDecider("b", error=err), DEMO_STATE, DEMO_QUESTIONS)
     assert outcome.result is None
+    assert outcome.error is not None
     assert "cannot reach" in outcome.error
 
 
@@ -54,6 +56,7 @@ async def test_one_failure_does_not_hide_the_other(result):
     }
     outcomes = await compare_backends(deciders, DEMO_STATE, DEMO_QUESTIONS)
     assert outcomes["ok"].result is not None
+    assert outcomes["bad"].error is not None
     assert "down" in outcomes["bad"].error
 
 
@@ -73,13 +76,17 @@ def test_format_result_lists_every_question(result):
 def test_comparison_marks_agreement_and_disagreement(result):
     other = result.model_copy(deep=True)
     other.answers["intent"] = ChoiceAnswer(
-        type="choice", choice="action",
-        probabilities={"action": 0.9, "dialogue": 0.1}, confidence=0.8,
+        type="choice",
+        choice="action",
+        probabilities={"action": 0.9, "dialogue": 0.1},
+        confidence=0.8,
     )
-    text = format_comparison({
-        "nimble": Outcome(result=result, latency_ms=120.0),
-        "jev": Outcome(result=other, latency_ms=300.0),
-    })
+    text = format_comparison(
+        {
+            "nimble": Outcome(result=result, latency_ms=120.0),
+            "jev": Outcome(result=other, latency_ms=300.0),
+        }
+    )
     lines = {line.split()[0]: line for line in text.splitlines() if line.strip()}
     assert lines["intent"].rstrip().endswith("NO")
     assert lines["needs_interrogation"].rstrip().endswith("yes")
@@ -88,9 +95,11 @@ def test_comparison_marks_agreement_and_disagreement(result):
 
 
 def test_comparison_shows_errors_and_placeholders(result):
-    text = format_comparison({
-        "nimble": Outcome(result=result, latency_ms=100.0),
-        "jev": Outcome(error="[jev] JEV_API_KEY is not set"),
-    })
+    text = format_comparison(
+        {
+            "nimble": Outcome(result=result, latency_ms=100.0),
+            "jev": Outcome(error="[jev] JEV_API_KEY is not set"),
+        }
+    )
     assert "jev error: [jev] JEV_API_KEY is not set" in text
     assert "-" in text

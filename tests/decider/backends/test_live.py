@@ -6,7 +6,7 @@ so a broken .env can't break collection of the normal suite).
 
 import pytest
 
-from gumshoe.config import Settings
+from gumshoe.config import Backend, Settings
 from gumshoe.decider import make_decider
 from gumshoe.decider.contract.samples import DEMO_QUESTIONS, DEMO_STATE
 
@@ -20,7 +20,7 @@ def live_settings(monkeypatch) -> Settings:
     return Settings()
 
 
-async def _check(settings: Settings, backend: str) -> None:
+async def _check(settings: Settings, backend: Backend) -> None:
     decider = make_decider(settings, backend=backend)
     try:
         result = await decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="live-test")
