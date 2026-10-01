@@ -1,0 +1,154 @@
+"""The single table classifying every model field as skeleton, skin or meta."""
+
+from enum import StrEnum
+
+from pydantic import BaseModel
+
+from gumshoe.cases.model.case import Case
+from gumshoe.cases.model.entities import (
+    Claim,
+    Effect,
+    Event,
+    Fact,
+    Limits,
+    Location,
+    Method,
+    Motive,
+    PackRef,
+    RecordSource,
+    SourceRef,
+    Spec,
+    Start,
+    Suspect,
+    Truth,
+)
+
+
+class FieldRole(StrEnum):
+    SKELETON = "skeleton"  # logic: validated and in the digest
+    SKIN = "skin"  # prose: players read it; an LLM may rewrite it; not in the digest
+    META = "meta"  # bookkeeping: neither
+
+
+S, K, M = FieldRole.SKELETON, FieldRole.SKIN, FieldRole.META
+
+MODEL_CLASSES: tuple[type[BaseModel], ...] = (
+    Effect,
+    Claim,
+    SourceRef,
+    Fact,
+    Suspect,
+    Location,
+    RecordSource,
+    Method,
+    Motive,
+    Event,
+    Truth,
+    Start,
+    Limits,
+    Spec,
+    PackRef,
+    Case,
+)
+
+FIELD_ROLES: dict[str, dict[str, FieldRole]] = {
+    "Effect": {"axis": S, "candidate": S, "kind": S},
+    "Claim": {"kind": S, "actor": S, "slot": S, "place": S, "record_kind": S},
+    "SourceRef": {"kind": S, "target": S, "subject": S},
+    "Fact": {
+        "id": S,
+        "kind": S,
+        "source": S,
+        "requires": S,
+        "effects": S,
+        "topic": S,
+        "claim": S,
+        "truthful": S,
+        "speaker": S,
+        "exposed_by": S,
+        "exposure_hook": S,
+        "timeline_ref": S,
+        "text": K,
+        "contradiction": K,
+    },
+    "Suspect": {
+        "id": S,
+        "label": S,
+        "aliases": S,
+        "role": S,
+        "motive": S,
+        "secret_fact": S,
+        "requires": S,
+        "knows": S,
+        "display_name": K,
+        "description": K,
+        "traits": K,
+        "style": K,
+        "secret_text": K,
+    },
+    "Location": {
+        "id": S,
+        "kind": S,
+        "aliases": S,
+        "requires": S,
+        "decorative": S,
+        "name": K,
+        "description": K,
+    },
+    "RecordSource": {"kind": S, "subject_type": S, "subject": S, "requires": S},
+    "Method": {"id": S, "label": S, "aliases": S, "type": S},
+    "Motive": {"id": S, "label": S, "aliases": S, "type": S},
+    "Event": {"id": S, "slot": S, "actor": S, "place": S, "action": S},
+    "Truth": {"who": S, "how": S, "why": S},
+    "Start": {"locations": S, "suspects": S, "facts": S},
+    "Limits": {
+        "solution_min": S,
+        "solution_max": S,
+        "depth_min": S,
+        "depth_max": S,
+        "actions_min": S,
+        "actions_max": S,
+        "decisive_pct_max": S,
+    },
+    "Spec": {
+        "preset": S,
+        "suspects": S,
+        "methods": S,
+        "motives": S,
+        "locations": S,
+        "record_kinds": S,
+        "slots": S,
+        "source_cap": S,
+        "fairness_tolerance": S,
+        "limits": S,
+    },
+    "PackRef": {"id": S, "skeleton_hash": S},
+    "Case": {
+        "id": M,
+        "seed": M,
+        "schema_version": S,
+        "origin": M,
+        "pack_ref": M,
+        "generator_version": M,
+        "skeleton_algo_version": S,
+        "pack_versions": M,
+        "attempt": M,
+        "stage_attempts": M,
+        "theme": M,
+        "skin_rev": M,
+        "skin_hash": M,
+        "spec": S,
+        "scene_type": S,
+        "truth": S,
+        "start": S,
+        "suspects": S,
+        "locations": S,
+        "record_sources": S,
+        "methods": S,
+        "motives": S,
+        "timeline": S,
+        "facts": S,
+        "intro": K,
+        "smalltalk_allow": K,
+    },
+}
