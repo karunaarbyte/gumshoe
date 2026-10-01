@@ -268,3 +268,29 @@ mutation(
     "HOOK_MISMATCH",
     lambda c: replace_fact(c, "f_lie_anna", exposure_hook=record("ledger", "s_boris")),
 )
+
+
+# ---- group 6: solvability -------------------------------------------------------------------
+
+mutation(
+    "TRUTH_RULED_OUT",
+    lambda c: replace_fact(c, "f_sup_boris", effects=(_effect(WHO, "s_boris", RULES_OUT),)),
+    {"TRUTH_RULED_OUT", "SHAPE_MISMATCH"},
+)
+mutation(
+    "WRONG_SURVIVES",
+    lambda c: replace_fact(c, "f_absent_dagger", effects=()),
+    {"WRONG_SURVIVES", "SHAPE_MISMATCH"},
+)
+mutation(
+    "NO_POSITIVE_EVIDENCE",
+    lambda c: replace_fact(c, "f_trace_poison", effects=()),
+    {"NO_POSITIVE_EVIDENCE", "SHAPE_MISMATCH"},
+)
+mutation(
+    "NO_ROUTE",
+    lambda c: replace_fact(
+        replace_fact(c, "f_trace_poison", effects=()), "f_absent_dagger", effects=()
+    ),
+    {"NO_ROUTE", "WRONG_SURVIVES", "NO_POSITIVE_EVIDENCE", "SHAPE_MISMATCH"},
+)
