@@ -24,6 +24,7 @@ from tests.cases.helpers import (
     drop_fact,
     replace_fact,
     replace_in,
+    replace_limits,
     replace_record_source,
     replace_spec,
     replace_start,
@@ -346,3 +347,19 @@ mutation(
         claim=Claim(kind=ClaimKind.PRESENCE, actor="s_anna", slot=1, place="l_garden"),
     ),
 )
+
+
+# ---- group 8: difficulty --------------------------------------------------------------------
+
+mutation("SOLUTION_SIZE_RANGE", lambda c: replace_limits(c, solution_min=5))
+mutation("DEPTH_RANGE", lambda c: replace_limits(c, depth_min=1))
+mutation("ACTIONS_RANGE", lambda c: replace_limits(c, actions_min=5))
+mutation("DECISIVE_RATIO", lambda c: replace_limits(c, decisive_pct_max=10))
+
+
+def _shared_gate(c: Case) -> Case:
+    c = replace_fact(c, "f_trace_poison", requires=("f_key",))
+    return replace_fact(c, "f_absent_dagger", requires=("f_key",))
+
+
+mutation("SINGLE_POINT_OF_FAILURE", _shared_gate)

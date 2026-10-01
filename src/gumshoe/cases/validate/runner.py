@@ -14,6 +14,7 @@ from gumshoe.cases.validate.groups import (
     g05_lies,
     g06_solvability,
     g07_timeline,
+    g08_difficulty,
 )
 from gumshoe.cases.validate.report import Issue, Profile, Report, Severity
 
@@ -26,6 +27,7 @@ RUNNERS: dict[int, Callable[[Ctx], list[Issue]]] = {
     5: g05_lies.run,
     6: g06_solvability.run,
     7: g07_timeline.run,
+    8: g08_difficulty.run,
 }
 
 REQUIRES: dict[int, frozenset[int]] = {

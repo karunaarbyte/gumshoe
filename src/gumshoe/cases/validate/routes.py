@@ -1,6 +1,7 @@
 """Routes to the truth: a `proves` fact, or the cheapest truthful rule-out per wrong candidate."""
 
 from dataclasses import dataclass
+from itertools import product
 
 from gumshoe.cases.model.enums import Axis, EffectKind
 from gumshoe.cases.model.index import CaseIndex
@@ -49,3 +50,40 @@ def axis_routes(
     if complete:
         routes.append(Route(axis, "elimination", frozenset(union)))
     return tuple(routes)
+
+
+MAX_ROUTES_PER_AXIS = 12  # bounds the combination search: the cheapest few routes per axis
+
+
+@dataclass(frozen=True)
+class Solution:
+    size: int  # distinct facts in the cheapest union of route closures
+    depth: int  # longest gating chain among them
+    actions: int  # distinct sources among them
+    facts: frozenset[str]
+
+
+def best_solution(index: CaseIndex, graph: Graph, reach_facts: frozenset[str]) -> Solution | None:
+    per_axis = [
+        sorted(
+            axis_routes(index, graph, reach_facts, axis),
+            key=lambda r: (len(r.facts), sorted(r.facts)),
+        )[:MAX_ROUTES_PER_AXIS]
+        for axis in Axis
+    ]
+    if any(not routes for routes in per_axis):
+        return None
+    best: frozenset[str] | None = None
+    best_key: tuple[int, tuple[str, ...]] | None = None
+    for combo in product(*per_axis):
+        union = frozenset().union(*(route.facts for route in combo))
+        key = (len(union), tuple(sorted(union)))
+        if best_key is None or key < best_key:
+            best, best_key = union, key
+    assert best is not None
+    return Solution(
+        size=len(best),
+        depth=max(graph.depth[f] for f in best),
+        actions=len({index.facts[f].source for f in best}),
+        facts=best,
+    )
