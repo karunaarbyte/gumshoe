@@ -3,13 +3,15 @@
 from collections import Counter
 
 from gumshoe.cases.core.ids import is_valid_id
-from gumshoe.cases.model.entities import SourceRef
+from gumshoe.cases.model.entities import Method, Motive, SourceRef, Suspect
 from gumshoe.cases.model.enums import Axis, EffectKind, RecordSubjectType, SourceKind
 from gumshoe.cases.validate.context import Ctx
 from gumshoe.cases.validate.report import Issue
 
 MAX_FACTS = 200
 MAX_PER_KIND = 64
+MAX_LIST = 16  # aliases, effects, requires, exposed_by, timeline_ref, knows (per entity)
+MAX_TEXT = 200  # characters in a label or alias
 
 
 def run(ctx: Ctx) -> list[Issue]:
@@ -22,7 +24,11 @@ def run(ctx: Ctx) -> list[Issue]:
         case.record_sources,
         case.timeline,
     )
-    if len(case.facts) > MAX_FACTS or any(len(group) > MAX_PER_KIND for group in sizes):
+    if (
+        len(case.facts) > MAX_FACTS
+        or any(len(group) > MAX_PER_KIND for group in sizes)
+        or _oversized_entity(ctx)
+    ):
         return [ctx.issue("TOO_LARGE", "case", facts=len(case.facts))]
     out: list[Issue] = []
     out += _ids(ctx)
@@ -31,6 +37,23 @@ def run(ctx: Ctx) -> list[Issue]:
     out += _fact_shapes(ctx)
     out += _slots(ctx)
     return out
+
+
+def _oversized_entity(ctx: Ctx) -> bool:
+    """A single entity with an enormous list or label could make later groups slow."""
+    case = ctx.case
+    lists: list[tuple[object, ...]] = []
+    lists += [(f.requires, f.effects, f.exposed_by, f.timeline_ref) for f in case.facts]
+    lists += [(s.aliases, s.requires, s.knows) for s in case.suspects]
+    lists += [(loc.aliases, loc.requires) for loc in case.locations]
+    labelled: list[Suspect | Method | Motive] = [*case.suspects, *case.methods, *case.motives]
+    lists += [(m.aliases,) for m in case.methods]
+    lists += [(m.aliases,) for m in case.motives]
+    lists += [(r.requires,) for r in case.record_sources]
+    if any(len(items) > MAX_LIST for group in lists for items in group):  # type: ignore[arg-type]
+        return True
+    texts = [x.label for x in labelled] + [a for x in labelled for a in x.aliases]
+    return any(len(text) > MAX_TEXT for text in texts)
 
 
 def _ids(ctx: Ctx) -> list[Issue]:

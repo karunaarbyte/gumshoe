@@ -7,12 +7,18 @@ from gumshoe.cases.model.enums import Axis, EffectKind
 from gumshoe.cases.model.index import CaseIndex
 from gumshoe.cases.validate.graph import Graph
 
+MAX_ROUTES_PER_AXIS = 12  # bounds route enumeration and the combination search
+
 
 @dataclass(frozen=True)
 class Route:
     axis: Axis
     kind: str  # "proves" | "elimination"
     facts: frozenset[str]  # the route's facts together with all their ancestors
+
+
+def _route_key(route: Route) -> tuple[int, str, list[str]]:
+    return (len(route.facts), route.kind, sorted(route.facts))
 
 
 def axis_routes(
@@ -49,10 +55,12 @@ def axis_routes(
         union |= {best.id} | graph.anc[best.id]
     if complete:
         routes.append(Route(axis, "elimination", frozenset(union)))
-    return tuple(routes)
-
-
-MAX_ROUTES_PER_AXIS = 12  # bounds the combination search: the cheapest few routes per axis
+    # Cap the proves routes only: a proves route always passes the gate (it is a lead), and the
+    # elimination route is the one the cap must never drop.
+    proves_routes = sorted((r for r in routes if r.kind == "proves"), key=_route_key)
+    others = [r for r in routes if r.kind != "proves"]
+    kept = proves_routes[: MAX_ROUTES_PER_AXIS - len(others)] + others
+    return tuple(sorted(kept, key=_route_key))
 
 
 @dataclass(frozen=True)

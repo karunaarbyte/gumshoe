@@ -135,3 +135,20 @@ def test_a_route_that_fails_the_shared_gate_is_no_route(monkeypatch):
     )
     (issue, *_) = [i for i in g06(build_case()) if i.code == "NO_ROUTE"]
     assert dict(issue.params)["reason"] == "gate"
+
+
+def test_axis_routes_are_capped_per_axis():
+    from gumshoe.cases.model.entities import Effect, Fact
+    from gumshoe.cases.model.enums import EffectKind, FactKind
+    from gumshoe.cases.validate.routes import MAX_ROUTES_PER_AXIS
+    from tests.cases.fixtures import search
+
+    effect = Effect(axis=WHO, candidate="s_boris", kind=EffectKind.PROVES)
+    many = tuple(
+        Fact(id=f"f_p{i}", kind=FactKind.CLUE, source=search("l_study"), effects=(effect,))
+        for i in range(60)
+    )
+    case = build_case().model_copy(update={"facts": (*build_case().facts, *many)})
+    routes = routes_for(case, WHO)
+    assert len(routes) == MAX_ROUTES_PER_AXIS
+    assert "elimination" in {r.kind for r in routes}  # the cap never drops the elimination route

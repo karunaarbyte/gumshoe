@@ -82,3 +82,15 @@ def test_distinctiveness_is_judged_within_the_axis():
     # a motive sharing the word "wine" with a method must not lose its distinctive token
     case = replace_in(build_case(), "motives", "v_debt", label="wine", aliases=())
     assert "NO_DISTINCTIVE_TOKEN" not in report_for(case).codes()
+
+
+def test_alias_collision_check_scales_linearly_with_aliases():
+    import time
+
+    aliases = tuple(f"alias{i}" for i in range(16))
+    case = build_case()
+    for method in ("m_poison", "m_dagger", "m_rope"):
+        case = replace_in(case, "methods", method, aliases=tuple(f"{method}{a}" for a in aliases))
+    started = time.perf_counter()
+    report_for(case)
+    assert time.perf_counter() - started < 1.0

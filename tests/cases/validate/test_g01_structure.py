@@ -124,3 +124,20 @@ def test_an_empty_record_subject_is_a_shape_error():
         source=SourceRef.model_construct(kind=SourceKind.RECORD, target="gate_log", subject=""),
     )
     assert "SOURCE_SHAPE" in codes_of(case)
+
+
+def test_per_entity_list_and_string_caps_stop_all_further_work():
+    base = build_case()
+    many_aliases = replace_in(base, "methods", "m_rope", aliases=tuple(f"a{i}" for i in range(500)))
+    many_effects = replace_fact(
+        base,
+        "f_key",
+        effects=tuple(
+            Effect(axis=Axis.WHO, candidate="s_anna", kind=EffectKind.SUPPORTS) for _ in range(500)
+        ),
+    )
+    many_requires = replace_fact(base, "f_key", requires=tuple(f"f_{i}" for i in range(500)))
+    long_label = replace_in(base, "methods", "m_rope", label="x" * 5000)
+    for case in (many_aliases, many_effects, many_requires, long_label):
+        report = validate(case, profile=Profile.CUSTOM)
+        assert report.codes() == {"TOO_LARGE"} and report.skipped_groups == tuple(range(2, 12))

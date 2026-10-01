@@ -60,18 +60,21 @@ def run(ctx: Ctx) -> list[Issue]:
                 )
             )
 
+    owners: dict[str, set[str]] = {}  # normalised label or alias -> candidates that use it
+    for c in cands:
+        for text in (c.label, *c.aliases):
+            norm = normalise(text)
+            if norm:
+                owners.setdefault(norm, set()).add(c.id)
     seen: set[frozenset[str]] = set()
     for c in cands:
         for alias in c.aliases:
             na = normalise(alias)
-            for o in cands:
-                if o.id == c.id:
-                    continue
-                if na and (na == normalise(o.label) or na in {normalise(x) for x in o.aliases}):
-                    pair = frozenset({c.id, o.id})
-                    if pair not in seen:
-                        seen.add(pair)
-                        out.append(ctx.issue("ALIAS_COLLISION", *sorted(pair), alias=na))
+            for other_id in sorted(owners.get(na, set()) - {c.id}):
+                pair = frozenset({c.id, other_id})
+                if pair not in seen and na:
+                    seen.add(pair)
+                    out.append(ctx.issue("ALIAS_COLLISION", *sorted(pair), alias=na))
 
     suspect_tokens: frozenset[str] = frozenset().union(
         *(token_set(c.label, *c.aliases) for c in cands if c.axis is Axis.WHO)

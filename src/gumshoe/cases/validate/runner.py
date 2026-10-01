@@ -21,7 +21,6 @@ from gumshoe.cases.validate.groups import (
 )
 from gumshoe.cases.validate.report import Issue, Profile, Report, Severity
 
-# Registered by each group task (replace the empty dict entries as groups land).
 RUNNERS: dict[int, Callable[[Ctx], list[Issue]]] = {
     1: g01_structure.run,
     2: g02_labels.run,
