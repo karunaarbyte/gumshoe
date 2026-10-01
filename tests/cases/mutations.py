@@ -399,3 +399,19 @@ mutation(
     lambda c: replace_fact(c, "f_sup_anna", source=search("l_garden")),
 )
 mutation("TRUTH_DEPTH_EXTREME", lambda c: replace_fact(c, "f_trace_poison", requires=("f_key",)))
+
+
+# ---- group 10: persona and secrets ----------------------------------------------------------
+
+mutation("SECRET_FACT_MISSING", lambda c: replace_in(c, "suspects", "s_anna", secret_fact=""))
+mutation(
+    "SECRET_SOURCE_MISMATCH",
+    lambda c: replace_in(c, "suspects", "s_anna", secret_fact="f_secret_boris"),
+)
+mutation(
+    "KNOWS_NOT_SPEAKABLE",
+    lambda c: replace_in(
+        c, "suspects", "s_anna", knows=("f_lie_anna", "f_sup_boris", "f_sup_clara")
+    ),
+)
+mutation("MOTIVE_MAPPING", lambda c: replace_in(c, "suspects", "s_anna", motive="v_debt"))
