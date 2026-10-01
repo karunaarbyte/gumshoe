@@ -5,8 +5,9 @@ from dataclasses import dataclass
 from unittest.mock import patch
 
 from gumshoe.cases.model.case import Case
-from gumshoe.cases.model.entities import Claim, Effect, Event, Fact, SourceRef
+from gumshoe.cases.model.entities import Claim, Effect, Event, Fact, PackRef, SourceRef
 from gumshoe.cases.model.enums import Axis, ClaimKind, EffectKind, FactKind, SourceKind
+from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.spec import PRESETS
 from gumshoe.cases.validate import runner
 from gumshoe.cases.validate.catalogue import CATALOGUE
@@ -43,6 +44,8 @@ class Mutation:
     profile: Profile = Profile.CUSTOM
     strict: bool = False  # start from the strict fixture and validate against the tiny pack
     crash_group: int | None = None  # make this group's runner raise (tests the runner guard)
+    with_pack: bool = True  # strict mutations validate against the pack unless this is False
+    apply_pair: Callable[[Case, Pack], tuple[Case, Pack]] | None = None  # change case AND pack
 
 
 MUTATIONS: dict[str, Mutation] = {}
@@ -56,11 +59,24 @@ def mutation(
     profile: Profile = Profile.CUSTOM,
     strict: bool = False,
     crash_group: int | None = None,
+    with_pack: bool = True,
 ) -> None:
     assert code in CATALOGUE, f"unknown code {code}"
     assert code not in MUTATIONS, f"duplicate mutation for {code}"
     wanted = frozenset(expected if expected is not None else {code})
-    MUTATIONS[code] = Mutation(code, apply, wanted, profile, strict, crash_group)
+    MUTATIONS[code] = Mutation(code, apply, wanted, profile, strict, crash_group, with_pack)
+
+
+def pair_mutation(
+    code: str,
+    apply_pair: Callable[[Case, Pack], tuple[Case, Pack]],
+    expected: set[str] | None = None,
+) -> None:
+    assert code in CATALOGUE and code not in MUTATIONS
+    wanted = frozenset(expected if expected is not None else {code})
+    MUTATIONS[code] = Mutation(
+        code, lambda c: c, wanted, Profile.STRICT, True, None, True, apply_pair
+    )
 
 
 def _boom(ctx: object) -> list[Issue]:
@@ -68,11 +84,13 @@ def _boom(ctx: object) -> list[Issue]:
 
 
 def run_mutation(m: Mutation) -> Report:
-    base = build_strict_case() if m.strict else build_case()
-    case = m.apply(base)
+    case = m.apply(build_strict_case() if m.strict else build_case())
+    pack = build_pack() if m.strict else None
+    if m.apply_pair is not None and pack is not None:
+        case, pack = m.apply_pair(case, pack)
     with patch.dict(runner.RUNNERS, {m.crash_group: _boom} if m.crash_group else {}):
         if m.strict:
-            return runner.validate(case, build_pack(), m.profile, TINY_PRESETS)
+            return runner.validate(case, pack if m.with_pack else None, m.profile, TINY_PRESETS)
         return runner.validate(case, None, m.profile, PRESETS)
 
 
@@ -415,3 +433,89 @@ mutation(
     ),
 )
 mutation("MOTIVE_MAPPING", lambda c: replace_in(c, "suspects", "s_anna", motive="v_debt"))
+
+
+# ---- group 11: pack-bound rules (strict fixture + tiny pack) -------------------------------
+
+
+def _rehash(case: Case, pack: Pack) -> Case:
+    return case.model_copy(
+        update={"pack_ref": PackRef(id=pack.id, skeleton_hash=pack.skeleton_hash())}
+    )
+
+
+mutation("PACK_RULES_SKIPPED", lambda c: c, strict=True, profile=Profile.STRICT, with_pack=False)
+mutation(
+    "PACK_MISMATCH",
+    lambda c: c.model_copy(update={"pack_ref": PackRef(id="tiny", skeleton_hash="0" * 64)}),
+    strict=True,
+    profile=Profile.STRICT,
+)
+mutation(
+    "SPEC_MISMATCH", lambda c: replace_spec(c, source_cap=5), strict=True, profile=Profile.STRICT
+)
+
+
+def _small_pack(case: Case, pack: Pack) -> tuple[Case, Pack]:
+    pack = pack.model_copy(
+        update={"capacity": pack.capacity.model_copy(update={"max_suspects": 2})}
+    )
+    return _rehash(case, pack), pack
+
+
+pair_mutation("PACK_CAPACITY", _small_pack, {"PACK_CAPACITY", "SPEC_MISMATCH"})
+
+
+def _overload_search(case: Case, pack: Pack) -> tuple[Case, Pack]:
+    extra = tuple(_fact(f"f_pad{i}", source=search("l_cellar")) for i in range(3))
+    return case.model_copy(update={"facts": (*case.facts, *extra)}), pack
+
+
+pair_mutation("PACK_SOURCE_KIND_CAPACITY", _overload_search)
+mutation(
+    "SCENE_NOT_IN_PACK",
+    lambda c: c.model_copy(update={"scene_type": "no_such_scene"}),
+    strict=True,
+    profile=Profile.STRICT,
+)
+
+
+def _forbid_poison(case: Case, pack: Pack) -> tuple[Case, Pack]:
+    scene = pack.scene_types[0].model_copy(update={"allowed_methods": ("dagger", "rope")})
+    pack = pack.model_copy(update={"scene_types": (scene,)})
+    return _rehash(case, pack), pack
+
+
+pair_mutation("SCENE_METHOD_NOT_ALLOWED", _forbid_poison)
+mutation(
+    "ROLE_UNKNOWN",
+    lambda c: replace_in(c, "suspects", "s_anna", role="butler"),
+    strict=True,
+    profile=Profile.STRICT,
+)
+
+
+def _steward_no_debt(case: Case, pack: Pack) -> tuple[Case, Pack]:
+    roles = tuple(
+        r.model_copy(update={"motive_types": ("inheritance", "jealousy")})
+        if r.key == "steward"
+        else r
+        for r in pack.roles
+    )
+    pack = pack.model_copy(update={"roles": roles})
+    return _rehash(case, pack), pack
+
+
+pair_mutation("ROLE_MOTIVE_NOT_ALLOWED", _steward_no_debt)
+
+
+def _cook_no_ledger(case: Case, pack: Pack) -> tuple[Case, Pack]:
+    roles = tuple(
+        r.model_copy(update={"record_kinds": ("gate_log",)}) if r.key == "cook" else r
+        for r in pack.roles
+    )
+    pack = pack.model_copy(update={"roles": roles})
+    return _rehash(case, pack), pack
+
+
+pair_mutation("ROLE_RECORD_KIND_NOT_ALLOWED", _cook_no_ledger)
