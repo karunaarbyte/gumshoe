@@ -3,18 +3,6 @@ from pydantic import ValidationError
 
 from gumshoe.config import Settings, get_settings
 
-ENV_VARS = [
-    "DECIDER_PRIMARY", "DECIDER_SHADOW", "JEV_BASE_URL", "JEV_API_KEY", "JEV_MODEL",
-    "NIMBLE_BASE_URL", "NIMBLE_MODEL", "REQUEST_TIMEOUT_S",
-]
-
-
-@pytest.fixture(autouse=True)
-def clean_env(monkeypatch):
-    for var in ENV_VARS:
-        monkeypatch.delenv(var, raising=False)
-
-
 def test_defaults():
     s = Settings(_env_file=None)
     assert s.decider_primary == "jev"
@@ -69,7 +57,8 @@ def test_reads_values_from_env_file(tmp_path):
     assert s.decider_shadow is None
 
 
-def test_get_settings_is_cached():
+def test_get_settings_is_cached(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)  # no .env here, so the developer's real .env is not read
     get_settings.cache_clear()
     assert get_settings() is get_settings()
     get_settings.cache_clear()

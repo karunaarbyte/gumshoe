@@ -16,7 +16,7 @@ from gumshoe.decider.contract.errors import DeciderConfigError, DeciderError
 from gumshoe.decider.backends.factory import make_decider
 from gumshoe.decider.contract.models import Question
 from gumshoe.decider.tools.render import format_comparison, format_result
-from gumshoe.decider.tools.samples import DEMO_QUESTIONS
+from gumshoe.decider.contract.samples import DEMO_QUESTIONS
 
 QUESTIONS_ADAPTER = TypeAdapter(dict[str, Question])
 BACKENDS = ("nimble", "jev")

@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from gumshoe.decider.tools.cli import build_parser, load_questions
 from gumshoe.decider.contract.models import NoulQuestion
-from gumshoe.decider.tools.samples import DEMO_QUESTIONS
+from gumshoe.decider.contract.samples import DEMO_QUESTIONS
 
 
 def test_parser_ask_with_backend():

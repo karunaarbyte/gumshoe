@@ -2,9 +2,9 @@
 
 Layers (imports point one way: tools -> backends -> contract):
 
-    contract/   pure types and the Decider interface; no I/O, no backend knowledge
+    contract/   pure types, the Decider interface, demo samples; no I/O, no backend knowledge
     backends/   profiles, the HTTP client, and the factory that builds a Decider
-    tools/      CLI, comparison, rendering, demo input; nothing else depends on it
+    tools/      CLI, comparison, rendering; nothing else depends on it
 
 Rules (enforced by tests/test_architecture.py):
   * contract/ never imports backends/, tools/, or httpx.

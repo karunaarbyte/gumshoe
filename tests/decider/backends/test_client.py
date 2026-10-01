@@ -11,7 +11,7 @@ from gumshoe.decider.contract.errors import (
     DeciderParseError,
 )
 from gumshoe.decider.backends.profile import BackendProfile
-from gumshoe.decider.tools.samples import DEMO_QUESTIONS, DEMO_STATE
+from gumshoe.decider.contract.samples import DEMO_QUESTIONS, DEMO_STATE
 
 
 def make_client(handler, *, api_key=None, name="nimble", base_url="http://test/v1"):

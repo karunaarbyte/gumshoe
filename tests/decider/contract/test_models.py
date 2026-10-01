@@ -11,7 +11,7 @@ from gumshoe.decider.contract.models import (
     ScoreAnswer,
     ScoreQuestion,
 )
-from gumshoe.decider.tools.samples import DEMO_QUESTIONS, DEMO_STATE
+from gumshoe.decider.contract.samples import DEMO_QUESTIONS, DEMO_STATE
 
 
 def test_request_serialises_with_type_tags():

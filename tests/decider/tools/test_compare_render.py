@@ -6,7 +6,7 @@ from gumshoe.decider.tools.compare import Outcome, compare_backends, run_one
 from gumshoe.decider.contract.errors import DeciderConnectionError
 from gumshoe.decider.contract.models import ChoiceAnswer, DecisionResult
 from gumshoe.decider.tools.render import format_comparison, format_result, pick, summarise
-from gumshoe.decider.tools.samples import DEMO_QUESTIONS, DEMO_STATE
+from gumshoe.decider.contract.samples import DEMO_QUESTIONS, DEMO_STATE
 from tests.decider.fakes import FakeDecider
 
 
