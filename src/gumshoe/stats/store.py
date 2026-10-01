@@ -4,13 +4,14 @@ import asyncio
 import sqlite3
 from collections.abc import Sequence
 from contextlib import closing
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
 from pydantic import TypeAdapter
 
 from gumshoe.decider import Answer, CallRecord
+from gumshoe.stats.timeutil import to_utc_iso
 
 ANSWERS = TypeAdapter(dict[str, Answer])
 
@@ -59,12 +60,6 @@ COLUMNS = (
 INSERT = (
     f"INSERT INTO decision_calls ({', '.join(COLUMNS)}) VALUES ({', '.join('?' for _ in COLUMNS)})"
 )
-
-
-def to_utc_iso(moment: datetime) -> str:
-    """Same fixed format the recorder writes, so string comparison orders by time."""
-    moment = moment.replace(tzinfo=UTC) if moment.tzinfo is None else moment.astimezone(UTC)
-    return moment.isoformat(timespec="microseconds")
 
 
 class SqliteStatsStore:
