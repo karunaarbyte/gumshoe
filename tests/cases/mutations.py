@@ -178,3 +178,15 @@ mutation(
     "NO_DISTINCTIVE_TOKEN",
     lambda c: replace_in(c, "methods", "m_poison", label="dagger rope", aliases=()),
 )
+
+
+# ---- group 3: graph -------------------------------------------------------------------------
+
+mutation(
+    "DEPENDENCY_CYCLE",
+    lambda c: replace_fact(
+        replace_fact(c, "f_absent_dagger", requires=("f_absent_rope",)),
+        "f_absent_rope",
+        requires=("f_absent_dagger",),
+    ),
+)
