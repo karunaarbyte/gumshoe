@@ -41,3 +41,61 @@ class DecisionRequest(BaseModel):
         if not value.strip():
             raise ValueError("state must not be blank")
         return value
+
+
+class ChoiceAnswer(BaseModel):
+    type: Literal["choice"]
+    choice: str
+    probabilities: dict[str, float]
+    confidence: float
+
+
+class NoulAnswer(BaseModel):
+    type: Literal["noul"]
+    noul: float  # probability of "yes", 0..1
+
+    @property
+    def yes(self) -> bool:
+        return self.noul >= 0.5
+
+
+class ScoreAnswer(BaseModel):
+    type: Literal["score"]
+    score: float  # probability-weighted level index (0-based)
+    legend: dict[str, str]
+    probabilities: dict[str, float]
+    confidence: float
+
+
+Answer = Annotated[
+    ChoiceAnswer | NoulAnswer | ScoreAnswer,
+    Field(discriminator="type"),
+]
+
+
+class Usage(BaseModel):
+    input_tokens: int
+    output_tokens: int
+
+
+class DecisionResult(BaseModel):
+    model: str
+    answers: dict[str, Answer]
+    usage: Usage | None = None
+
+    def _get[A: BaseModel](self, name: str, kind: type[A]) -> A:
+        answer = self.answers[name]
+        if not isinstance(answer, kind):
+            raise TypeError(
+                f"question {name!r} has a {answer.type!r} answer, expected {kind.__name__}"
+            )
+        return answer
+
+    def choice(self, name: str) -> ChoiceAnswer:
+        return self._get(name, ChoiceAnswer)
+
+    def noul(self, name: str) -> NoulAnswer:
+        return self._get(name, NoulAnswer)
+
+    def score(self, name: str) -> ScoreAnswer:
+        return self._get(name, ScoreAnswer)
