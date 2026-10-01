@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from gumshoe!")
+"""Gumshoe: a detective game that tries Jev and Nimble as decision models."""

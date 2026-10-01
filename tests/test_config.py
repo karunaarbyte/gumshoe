@@ -62,3 +62,10 @@ def test_get_settings_is_cached(tmp_path, monkeypatch):
     get_settings.cache_clear()
     assert get_settings() is get_settings()
     get_settings.cache_clear()
+
+
+@pytest.mark.parametrize("bad", ["0", "-5", "nan"])
+def test_timeout_must_be_a_positive_number(monkeypatch, bad):
+    monkeypatch.setenv("REQUEST_TIMEOUT_S", bad)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)

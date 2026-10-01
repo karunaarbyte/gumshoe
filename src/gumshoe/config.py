@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Any, Literal, Self
 
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Backend = Literal["jev", "nimble"]
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     nimble_base_url: str = "http://localhost:11434/v1"
     nimble_model: str = "nimble"
 
-    request_timeout_s: float = 30.0
+    request_timeout_s: float = Field(30.0, gt=0, allow_inf_nan=False)
 
     @field_validator("decider_shadow", mode="before")
     @classmethod
