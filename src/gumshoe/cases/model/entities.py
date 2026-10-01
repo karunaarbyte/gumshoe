@@ -4,7 +4,14 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from gumshoe.cases.model.enums import Axis, ClaimKind, EffectKind, FactKind, SourceKind
+from gumshoe.cases.model.enums import (
+    Axis,
+    ClaimKind,
+    EffectKind,
+    FactKind,
+    RecordSubjectType,
+    SourceKind,
+)
 
 
 class Frozen(BaseModel):
@@ -80,3 +87,134 @@ class Fact(Frozen):
     @classmethod
     def _sorted_effects(cls, value: tuple[Effect, ...]) -> tuple[Effect, ...]:
         return tuple(sorted(value, key=lambda e: (e.axis.value, e.candidate, e.kind.value)))
+
+
+class Suspect(Frozen):
+    id: str
+    label: str
+    aliases: tuple[str, ...] = ()
+    role: str
+    motive: str  # id of the motive this suspect's secret realises
+    secret_fact: str  # id of the fact that reveals the secret
+    requires: tuple[str, ...] = ()  # access gate
+    knows: tuple[str, ...] = ()  # facts the suspect can speak
+    # skin
+    display_name: str = ""
+    description: str = ""
+    traits: tuple[str, ...] = ()
+    style: str = ""
+    secret_text: str = ""
+
+    @field_validator("aliases", "requires", "knows", mode="after")
+    @classmethod
+    def _sorted(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return sort_strs(value)
+
+
+class Location(Frozen):
+    id: str
+    kind: str
+    aliases: tuple[str, ...] = ()
+    requires: tuple[str, ...] = ()
+    decorative: bool = False
+    # skin
+    name: str = ""
+    description: str = ""
+
+    @field_validator("aliases", "requires", mode="after")
+    @classmethod
+    def _sorted(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return sort_strs(value)
+
+
+class RecordSource(Frozen):
+    """A record kind about one subject: the unit a `record(kind, subject)` source refers to."""
+
+    kind: str
+    subject_type: RecordSubjectType
+    subject: str
+    requires: tuple[str, ...] = ()
+
+    @field_validator("requires", mode="after")
+    @classmethod
+    def _sorted(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return sort_strs(value)
+
+
+class Method(Frozen):
+    id: str
+    label: str
+    aliases: tuple[str, ...] = ()
+    type: str = ""  # pack method key
+
+    @field_validator("aliases", mode="after")
+    @classmethod
+    def _sorted(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return sort_strs(value)
+
+
+class Motive(Frozen):
+    id: str
+    label: str
+    aliases: tuple[str, ...] = ()
+    type: str = ""  # pack motive key
+
+    @field_validator("aliases", mode="after")
+    @classmethod
+    def _sorted(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return sort_strs(value)
+
+
+class Event(Frozen):
+    id: str
+    slot: int = Field(ge=0)
+    actor: str
+    place: str
+    action: str
+
+
+class Truth(Frozen):
+    who: str
+    how: str
+    why: str
+
+
+class Start(Frozen):
+    locations: tuple[str, ...] = ()
+    suspects: tuple[str, ...] = ()
+    facts: tuple[str, ...] = ()
+
+    @field_validator("locations", "suspects", "facts", mode="after")
+    @classmethod
+    def _sorted(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return sort_strs(value)
+
+
+class Limits(Frozen):
+    """Difficulty window the validator reads from the case itself (integers only)."""
+
+    solution_min: int
+    solution_max: int
+    depth_min: int
+    depth_max: int
+    actions_min: int
+    actions_max: int
+    decisive_pct_max: int
+
+
+class Spec(Frozen):
+    preset: str
+    suspects: int = Field(ge=0)
+    methods: int = Field(ge=0)
+    motives: int = Field(ge=0)
+    locations: int = Field(ge=0)
+    record_kinds: int = Field(ge=0)
+    slots: int = Field(ge=0)
+    source_cap: int = 4
+    fairness_tolerance: int = 1
+    limits: Limits
+
+
+class PackRef(Frozen):
+    id: str
+    skeleton_hash: str
