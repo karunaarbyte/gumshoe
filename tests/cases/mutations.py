@@ -363,3 +363,39 @@ def _shared_gate(c: Case) -> Case:
 
 
 mutation("SINGLE_POINT_OF_FAILURE", _shared_gate)
+
+
+# ---- group 9: fairness ----------------------------------------------------------------------
+
+
+def _extra_who_fact(fact_id: str, candidate: str, source: SourceRef) -> Fact:
+    return _fact(fact_id, source=source, effects=(_effect(WHO, candidate, SUPPORTS),))
+
+
+def _anna_has_more(c: Case) -> Case:
+    c = add_fact(c, _extra_who_fact("f_x1", "s_anna", search("l_garden")))
+    return add_fact(c, _extra_who_fact("f_x2", "s_anna", search("l_garden")))
+
+
+mutation("FACTS_UNEVEN", _anna_has_more, {"FACTS_UNEVEN", "SHAPE_MISMATCH"})
+
+
+def _anna_has_no_lie(c: Case) -> Case:
+    c = drop_fact(c, "f_lie_anna")
+    c = replace_in(c, "suspects", "s_anna", knows=("f_sup_boris",))
+    return replace_spec(c, fairness_tolerance=0)
+
+
+_UNEVEN = {"FACTS_UNEVEN", "LIES_UNEVEN", "EXPOSURES_UNEVEN"}
+mutation("LIES_UNEVEN", _anna_has_no_lie, _UNEVEN)
+mutation("EXPOSURES_UNEVEN", _anna_has_no_lie, _UNEVEN)
+mutation(
+    "CULPRIT_UNIQUE_EXTREME",
+    lambda c: add_fact(c, _extra_who_fact("f_x3", "s_boris", search("l_garden"))),
+    {"CULPRIT_UNIQUE_EXTREME", "SHAPE_MISMATCH"},
+)
+mutation(
+    "SHAPE_MISMATCH",
+    lambda c: replace_fact(c, "f_sup_anna", source=search("l_garden")),
+)
+mutation("TRUTH_DEPTH_EXTREME", lambda c: replace_fact(c, "f_trace_poison", requires=("f_key",)))
