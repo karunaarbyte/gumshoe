@@ -178,3 +178,35 @@ mutation(
 
 mutation("PRESET_UNSUPPORTED", replace('presets = ["tiny"]', 'presets = ["tiny", "huge"]'))
 mutation("PRESET_NOT_MONOTONE", replace('presets = ["tiny"]', 'presets = ["short", "standard"]'))
+
+# ---- stage 7: motive matching ----------------------------------------------------------------
+
+_QUAD = chain(
+    replace("max_suspects = 3", "max_suspects = 4"),
+    replace('presets = ["tiny"]', 'presets = ["quad"]'),
+    append(
+        '[motive_defs.greed]\nlabel = "from greed"\naliases = ["greedy"]\n'
+        'secrets = ["{^who} counts every coin twice."]\n'
+    ),
+    append(
+        '[roles.groom]\nnames = [{ text = "Wat", pronoun = "he", proper = true }]\n'
+        'traits = ["gentle with horses"]\nrecord_kinds = ["ledger"]\n'
+        'motive_types = ["debt", "greed", "inheritance"]\n'
+    ),
+)
+_PAGE = append(
+    '[roles.page]\nnames = [{ text = "Piers", pronoun = "he", proper = true }]\n'
+    'traits = ["fast on his feet"]\nrecord_kinds = ["ledger"]\n'
+    'motive_types = ["debt", "inheritance", "jealousy"]\n'
+)
+
+# a groom is the only role that can take "greed", so in the roster maid+steward+cook+groom the
+# groom always gets it: predictable
+mutation("MOTIVE_TOO_PREDICTABLE", _QUAD)
+# four roles share three motive types: the roster maid+steward+cook+page has no matching, and
+# the rosters with the groom are as predictable as above
+mutation(
+    "NO_PERFECT_MATCHING",
+    chain(_QUAD, _PAGE),
+    {"NO_PERFECT_MATCHING", "MOTIVE_TOO_PREDICTABLE"},
+)
