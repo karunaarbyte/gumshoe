@@ -104,3 +104,29 @@ mutation(
         "{^who} was seen {place.in} when the bell rang.", "{^who} was seen when the bell rang."
     ),
 )
+
+
+# ---- stage 4: hygiene and leak rules ---------------------------------------------------------
+
+mutation(
+    "LABEL_TOKEN_LEAK",
+    replace('traits = ["quiet and watchful"]', 'traits = ["quiet and handy with a dagger"]'),
+)
+mutation(
+    "SECRET_REUSES_LABEL",
+    replace(
+        "{^who.poss} purse has stood empty since the autumn fair.",
+        "{^who.poss} gambling habit is known to the whole kitchen.",
+    ),
+)
+mutation(
+    "TRACE_COUNT_SKEW",
+    replace('  "A frayed length of hemp was found coiled up {place.in} near the door.",\n', ""),
+)
+mutation(
+    "TRACE_LENGTH_SKEW",
+    replace(
+        "in a long arc.",
+        "in a long arc. It was the kind of mark that takes a long and careful look to notice.",
+    ),
+)
