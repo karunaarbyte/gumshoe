@@ -14,6 +14,7 @@ from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.serialize import load_case
 from gumshoe.cases.play import load_session
 from gumshoe.cases.tools.dev import simulate_lines
+from gumshoe.cases.tools.pack_cli import run_pack_check
 from gumshoe.cases.tools.play_cli import run_play
 from gumshoe.cases.validate.catalogue import CATALOGUE
 from gumshoe.cases.validate.report import Profile, Report, Severity
@@ -42,6 +43,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     simulate.add_argument("path", type=Path)
     simulate.set_defaults(handler=_simulate)
+    packs = sub.add_parser("packs", help="work with theme packs")
+    packs_sub = packs.add_subparsers(dest="packs_command", required=True)
+    pack_check = packs_sub.add_parser("check", help="check a pack file and list every issue")
+    pack_check.add_argument("path", type=Path)
+    pack_check.set_defaults(handler=_packs_check)
     return parser
 
 
@@ -137,6 +143,10 @@ def _simulate(args: argparse.Namespace) -> int:
     for line in simulate_lines(loaded[1]):
         print(line)
     return 0
+
+
+def _packs_check(args: argparse.Namespace) -> int:
+    return run_pack_check(args.path)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
