@@ -4,7 +4,13 @@ from collections import Counter
 
 from gumshoe.cases.core.ids import is_valid_id
 from gumshoe.cases.model.entities import Method, Motive, SourceRef, Suspect
-from gumshoe.cases.model.enums import Axis, EffectKind, RecordSubjectType, SourceKind
+from gumshoe.cases.model.enums import (
+    Axis,
+    EffectKind,
+    FactKind,
+    RecordSubjectType,
+    SourceKind,
+)
 from gumshoe.cases.validate.context import Ctx
 from gumshoe.cases.validate.report import Issue
 
@@ -183,6 +189,8 @@ def _fact_shapes(ctx: Ctx) -> list[Issue]:
             out.append(ctx.issue("MULTI_AXIS_PROVES", f.id))
         if f.id in start and proves_axes:
             out.append(ctx.issue("START_PROVES", f.id))
+        if f.trace_kind is not None and f.kind not in (FactKind.TRACE, FactKind.ABSENT_TRACE):
+            out.append(ctx.issue("TRACE_KIND_ON_NON_TRACE", f.id, trace_kind=f.trace_kind))
         for e in f.effects:
             if e.candidate in ix.candidates[e.axis]:
                 continue

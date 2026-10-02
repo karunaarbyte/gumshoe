@@ -95,6 +95,7 @@ def build_facts() -> tuple[Fact, ...]:
         Fact(
             id="f_trace_poison",
             kind=FactKind.TRACE,
+            trace_kind="residue",
             source=search("l_study"),
             effects=(eff(HOW, "m_poison", PROVES),),
             text="Bitter residue in the glass matches the poison kept in the cellar.",
@@ -102,6 +103,7 @@ def build_facts() -> tuple[Fact, ...]:
         Fact(
             id="f_absent_dagger",
             kind=FactKind.ABSENT_TRACE,
+            trace_kind="wound",
             source=search("l_study"),
             effects=(eff(HOW, "m_dagger", RULES_OUT),),
             text="There is no wound on the body.",
@@ -109,6 +111,7 @@ def build_facts() -> tuple[Fact, ...]:
         Fact(
             id="f_absent_rope",
             kind=FactKind.ABSENT_TRACE,
+            trace_kind="fibre",
             source=search("l_study"),
             effects=(eff(HOW, "m_rope", RULES_OUT),),
             text="There are no marks on the neck.",

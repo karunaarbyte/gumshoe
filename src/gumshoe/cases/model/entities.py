@@ -69,6 +69,7 @@ class Fact(Frozen):
     requires: tuple[str, ...] = ()
     effects: tuple[Effect, ...] = ()
     topic: str | None = None
+    trace_kind: str | None = None  # pack trace kind; only on TRACE and ABSENT_TRACE facts
     claim: Claim | None = None
     truthful: bool = True
     speaker: str | None = None

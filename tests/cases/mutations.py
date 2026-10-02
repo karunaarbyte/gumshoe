@@ -138,6 +138,10 @@ mutation(
         effects=(_effect(HOW, "m_poison", PROVES), _effect(WHO, "s_boris", PROVES)),
     ),
 )
+mutation(
+    "TRACE_KIND_ON_NON_TRACE",
+    lambda c: replace_fact(c, "f_key", trace_kind="residue"),
+)
 mutation("START_PROVES", lambda c: replace_start(c, facts=("f_proof_boris",)))
 mutation("SLOTS_TOO_FEW", lambda c: replace_spec(c, slots=3))
 mutation("SLOT_OUT_OF_RANGE", lambda c: replace_in(c, "timeline", "t_anna_2", slot=9))

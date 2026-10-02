@@ -62,6 +62,7 @@ FIELD_ROLES: dict[str, dict[str, FieldRole]] = {
         "requires": S,
         "effects": S,
         "topic": S,
+        "trace_kind": S,
         "claim": S,
         "truthful": S,
         "speaker": S,

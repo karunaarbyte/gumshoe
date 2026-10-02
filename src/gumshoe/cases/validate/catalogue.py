@@ -74,6 +74,13 @@ _ROWS = [
     ),
     _row("MULTI_AXIS_PROVES", 1, F.FACTS, H.REMOVE_EFFECT, "a fact proves on more than one axis"),
     _row("START_PROVES", 1, F.FACTS, H.MOVE_FACT, "a fact known from the start proves something"),
+    _row(
+        "TRACE_KIND_ON_NON_TRACE",
+        1,
+        F.FACTS,
+        H.FIX_REF,
+        "a fact that is not a trace names a trace kind",
+    ),
     _row("SLOTS_TOO_FEW", 1, F.TIMELINE, H.FIX_SPEC, "the spec has fewer than four time slots"),
     _row("SLOT_OUT_OF_RANGE", 1, F.TIMELINE, H.FIX_REF, "a slot is outside 0..spec.slots-1"),
     _row(

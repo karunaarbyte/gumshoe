@@ -13,7 +13,7 @@ E, W, INFO = Severity.ERROR, Severity.WARNING, Severity.INFO
 
 
 def test_catalogue_is_complete_and_consistent():
-    assert len(CATALOGUE) == 73
+    assert len(CATALOGUE) == 74
     assert all(spec.code == code for code, spec in CATALOGUE.items())
     assert {spec.group for spec in CATALOGUE.values()} == set(range(0, 12))
     assert all(
