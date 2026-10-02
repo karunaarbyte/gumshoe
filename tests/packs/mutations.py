@@ -83,3 +83,24 @@ mutation(
     ),
 )
 mutation("DUPLICATE_KEY", replace('key = "noon"', 'key = "dawn"'))
+
+
+# ---- stage 3: templates ----------------------------------------------------------------------
+
+_STUDY = "{^place} smells of ink and cold ash."
+mutation("UNKNOWN_PLACEHOLDER", replace(_STUDY, "{^plce} smells of ink and cold ash."))
+mutation("UNRESOLVED_BRACE", replace("{^place} is damp, low", "{^place} is {damp, low"))
+mutation("DOUBLED_WORD", replace("of ink and cold ash.", "of ink and cold cold ash."))
+mutation("DOUBLE_SPACE", replace("of ink and cold ash.", "of ink  and cold ash."))
+mutation("ARTICLE_MISMATCH", replace("of ink and cold ash.", "of ink and a ash."))
+mutation("MID_SENTENCE_CAPITAL", replace("smells of ink and", "smells of Ink and"))
+mutation(
+    "TOO_FEW_VARIANTS",
+    replace('  "{^who} could not have gone far, being {place.in} at the time.",\n', ""),
+)
+mutation(
+    "CLAIM_SLOT_MISSING",
+    replace(
+        "{^who} was seen {place.in} when the bell rang.", "{^who} was seen when the bell rang."
+    ),
+)

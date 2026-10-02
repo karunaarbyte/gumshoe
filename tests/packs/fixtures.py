@@ -87,7 +87,10 @@ def rich_pack(**changes: Any) -> Pack:
         ),
         "families": (
             FamilyDef(
-                id="alibi", kind="alibi", claim_slots=("who",), variants=("{^who} was seen.",)
+                id="alibi",
+                kind="alibi",
+                claim_slots=("who",),
+                variants=tuple(f"{{^who}} was seen on day{i}." for i in range(5)),
             ),
         ),
     }
