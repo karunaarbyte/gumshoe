@@ -172,3 +172,27 @@ def test_exposer_of_picks_the_smallest_held_exposer():
     ix, _ = setup(case)
     assert exposer_of(ix, "f_lie_anna", frozenset({"f_secret_anna", "f_key"})) == "f_key"
     assert exposer_of(ix, "f_lie_anna", frozenset({"f_secret_anna"})) == "f_secret_anna"
+
+
+def _case_with_event_record():
+    """A fact behind a record about a timeline event: the validator allows it, but a player can
+    only ask about suspects and locations, so it must never count as reachable."""
+    from gumshoe.cases.model.entities import RecordSource
+    from gumshoe.cases.model.enums import RecordSubjectType
+    from tests.cases.helpers import add_fact
+
+    case = build_case()
+    fact = case.facts[0].model_copy(
+        update={"id": "f_event_only", "source": record("ledger", "t_crime"), "requires": ()}
+    )
+    rs = RecordSource(kind="ledger", subject_type=RecordSubjectType.EVENT, subject="t_crime")
+    case = case.model_copy(update={"record_sources": (*case.record_sources, rs)})
+    return add_fact(case, fact)
+
+
+def test_a_record_about_an_event_is_not_a_player_source():
+    ix, state = setup(_case_with_event_record())
+    source = record("ledger", "t_crime")
+    assert source not in all_sources(ix)
+    state, out = use_source(ix, state, source)
+    assert out.status is SourceStatus.UNKNOWN and "f_event_only" not in state.held

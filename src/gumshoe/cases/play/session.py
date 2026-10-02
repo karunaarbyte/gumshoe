@@ -18,6 +18,7 @@ from gumshoe.cases.play.engine import (
     available_facts,
     exposer_of,
     is_open,
+    is_player_source,
     record_kinds,
     source_sort_key,
     use_source,
@@ -146,14 +147,6 @@ class GameSession:
             return self._location_name(subject)
         return "something"  # unreachable for followable sources; never an event's action
 
-    def _followable(self, source: SourceRef) -> bool:
-        """Can a player name this source? Records are asked about suspects and locations
-        only, so a record about a timeline event is never offered (it would name the event)."""
-        subject = source.subject or ""
-        return source.kind is not SourceKind.RECORD or (
-            subject in self._ix.suspects or subject in self._ix.locations
-        )
-
     def _label(self, source: SourceRef) -> str:
         if source.kind is SourceKind.SEARCH:
             return self._location_name(source.target)
@@ -239,7 +232,7 @@ class GameSession:
             status=status,
             new_facts=tuple(self._fact_view(self._ix.facts[i], exposed) for i in sorted(new_ids)),
             contradictions=tuple(self._contradiction_view(c) for c in contradictions),
-            opened=tuple(self._label(s) for s in opened if self._followable(s)),
+            opened=tuple(self._label(s) for s in opened if is_player_source(self._ix, s)),
             kinds=kinds,
         )
 

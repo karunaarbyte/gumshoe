@@ -37,23 +37,27 @@ def source_sort_key(source: SourceRef) -> tuple[str, str, str]:
 
 
 def all_sources(ix: CaseIndex) -> tuple[SourceRef, ...]:
-    """Every source the case holds facts at, in a neutral order."""
-    return tuple(sorted({f.source for f in ix.case.facts}, key=source_sort_key))
+    """Every source a player can use that the case holds facts at, in a neutral order."""
+    return tuple(
+        sorted(
+            {f.source for f in ix.case.facts if is_player_source(ix, f.source)}, key=source_sort_key
+        )
+    )
 
 
 def record_kinds(ix: CaseIndex) -> tuple[str, ...]:
     return tuple(sorted({r.kind for r in ix.case.record_sources}))
 
 
-def _exists(ix: CaseIndex, source: SourceRef) -> bool:
+def is_player_source(ix: CaseIndex, source: SourceRef) -> bool:
+    """Can a player name this source at all? Records are asked about suspects and locations
+    only: a record about a timeline event would name the event, so it is never reachable."""
     if source.kind is SourceKind.SEARCH:
         return source.target in ix.locations
     if source.kind is SourceKind.INTERROGATE:
         return source.target in ix.suspects
     subject = source.subject or ""
-    return source.target in record_kinds(ix) and (
-        subject in ix.suspects or subject in ix.locations or subject in ix.events
-    )
+    return source.target in record_kinds(ix) and (subject in ix.suspects or subject in ix.locations)
 
 
 def is_open(ix: CaseIndex, held: Held, source: SourceRef) -> bool:
@@ -90,7 +94,7 @@ def exposer_of(ix: CaseIndex, lie: str, held: Held) -> str:
 
 
 def source_status(ix: CaseIndex, held: Held, source: SourceRef) -> SourceStatus:
-    if not _exists(ix, source):
+    if not is_player_source(ix, source):
         return SourceStatus.UNKNOWN
     if source.kind is SourceKind.RECORD and (
         (source.target, source.subject or "") not in ix.record_sources
