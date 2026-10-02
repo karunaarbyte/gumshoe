@@ -130,3 +130,46 @@ mutation(
         "in a long arc. It was the kind of mark that takes a long and careful look to notice.",
     ),
 )
+
+# ---- stage 5: plausibility (a failure here also skips stages 6 and 7) ------------------------
+
+mutation("ROLE_NO_RECORD_KIND", replace('record_kinds = ["ledger"]', "record_kinds = []"))
+mutation(
+    "ROLE_TOO_FEW_MOTIVES",
+    replace(
+        'motive_types = ["debt", "inheritance", "jealousy"]',
+        'motive_types = ["debt", "inheritance"]',
+    ),
+)
+mutation(
+    "MOTIVE_UNREACHABLE",
+    append('[motive_defs.greed]\nlabel = "from greed"\naliases = ["greedy"]\nsecrets = []\n'),
+)
+mutation("SCENE_NO_CRIME_LOCATION", replace('location_kinds = ["study"]', "location_kinds = []"))
+mutation(
+    "METHOD_TOO_RARE",
+    replace(
+        '[scene_types.garden_murder]\nlocation_kinds = ["garden"]\n'
+        'allowed_methods = ["dagger", "poison", "rope"]',
+        '[scene_types.garden_murder]\nlocation_kinds = ["garden"]\n'
+        'allowed_methods = ["dagger", "poison"]',
+    ),
+)
+mutation(
+    "SCENE_METHOD_IMPOSSIBLE",
+    replace(
+        '[scene_types.garden_murder]\nlocation_kinds = ["garden"]\n'
+        'allowed_methods = ["dagger", "poison", "rope"]\n'
+        'allowed_trace_kinds = ["fibre", "residue", "wound"]',
+        '[scene_types.garden_murder]\nlocation_kinds = ["garden"]\n'
+        'allowed_methods = ["dagger", "poison", "rope"]\n'
+        'allowed_trace_kinds = ["fibre", "residue"]',
+    ),
+)
+mutation(
+    "SLOT_DEFS_TOO_FEW",
+    replace(
+        '[[slot_defs]]\nkey = "night"\nat = "at midnight"\nduring = "during the night watch"\n',
+        "",
+    ),
+)

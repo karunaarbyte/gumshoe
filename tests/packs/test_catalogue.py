@@ -50,4 +50,7 @@ def test_did_you_mean_is_deterministic_and_lists_the_known_names():
 
 
 def test_the_runner_on_a_valid_rich_pack_returns_a_tuple():
-    assert check_pack(rich_pack()) == ()
+    got = check_pack(rich_pack())
+    assert isinstance(got, tuple)
+    # the tiny pack is structurally sound; only stage 5 plausibility rules fire on it
+    assert {i.stage for i in got} == {5}
