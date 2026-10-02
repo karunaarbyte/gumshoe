@@ -419,3 +419,11 @@ def test_player_surface_checker_accepts_the_public_face(tmp_path):
 
 def test_real_cases_player_surface():
     assert cases_player_surface_problems(SRC) == []
+
+
+def test_simulate_does_not_import_validate():
+    # the simulator is an independent oracle for the validator: it may not borrow its code
+    # (spec 6.1 would allow it; declared deviation in plan 2b)
+    simulate = sources(CASES / "simulate")
+    assert simulate
+    assert violations(simulate, ("gumshoe.cases.validate",)) == []
