@@ -5,7 +5,7 @@ agent loop sends `prompt.questions` through its own Decider and passes the resul
 """
 
 import string
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from gumshoe.cases.core.canonical import canonical_json
@@ -39,14 +39,21 @@ def _criteria(ix: CaseIndex, axis: Axis, candidate: str) -> str:
 
 
 def accusation_questions(
-    ix: CaseIndex, handle_of: Callable[[str], str], n_accusations: int, player_text: str
+    ix: CaseIndex,
+    handle_of: Callable[[str], str],
+    n_accusations: int,
+    player_text: str,
+    allowed: Mapping[Axis, frozenset[str]] | None = None,
 ) -> AccusationPrompt:
     """Three choice questions, one per axis; option letters are shuffled deterministically from
-    (case id, accusations so far) so the layout changes each attempt but replays exactly."""
+    (case id, accusations so far) so the layout changes each attempt but replays exactly.
+    With `allowed`, an axis offers only those candidates (plus unclear), so the prompt never
+    names one the player may not; an axis with none is not asked, and reads as no pick."""
     questions: dict[str, ChoiceQuestion] = {}
     keys: dict[str, dict[str, str | None]] = {}
     for axis in Axis:
-        items: list[str | None] = [*ix.candidates[axis], None]
+        pool = ix.candidates[axis] if allowed is None else allowed[axis]
+        items: list[str | None] = [*(c for c in ix.candidates[axis] if c in pool), None]
 
         def shuffle_key(item: str | None, axis: Axis = axis) -> str:
             return domain_digest(
@@ -54,8 +61,11 @@ def accusation_questions(
                 canonical_json([ix.case.id, n_accusations, axis.value, item]),
             )
 
+        if len(items) < 2:
+            continue  # nothing nameable on this axis: there is nothing to ask Jev
         ordered = sorted(items, key=shuffle_key)
-        assert len(ordered) <= len(string.ascii_uppercase), "more options than option letters"
+        if len(ordered) > len(string.ascii_uppercase):
+            raise ValueError("more options than option letters")
         criteria: dict[str, str] = {}
         keymap: dict[str, str | None] = {}
         for letter, item in zip(string.ascii_uppercase, ordered, strict=False):
@@ -88,7 +98,10 @@ def interpret(prompt: AccusationPrompt, result: DecisionResult) -> dict[Axis, st
     out: dict[Axis, str | None] = {}
     for axis in Axis:
         answer = result.answers.get(axis.value)
+        keymap = prompt.keys.get(axis.value)
         out[axis] = (
-            _pick(prompt.keys[axis.value], answer) if isinstance(answer, ChoiceAnswer) else None
+            _pick(keymap, answer)
+            if keymap is not None and isinstance(answer, ChoiceAnswer)
+            else None
         )
     return out

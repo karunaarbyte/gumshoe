@@ -383,21 +383,29 @@ class GameSession:
         nameable = {c.handle for c in self.nameable(axis.value).options}
         return handle if handle in nameable else None
 
+    def _namable_ids(self, axis: Axis) -> frozenset[str]:
+        """Candidates a typed or asked-about name may resolve to: every suspect (they are public)
+        and the how and why candidates the gate has opened."""
+        return frozenset(
+            c
+            for c in self._ix.candidates[axis]
+            if axis is Axis.WHO or gate.permission(self._ix, self._state.held, axis, c).allowed
+        )
+
     def match_label(self, axis: str, text: str) -> str | None:
         """Typed-text path: the handle of the one candidate the text names, else None (also for
         a how or why candidate the player may not name yet)."""
         ax = Axis(axis)
-        allowed = frozenset(
-            c
-            for c in self._ix.candidates[ax]
-            if ax is Axis.WHO or gate.permission(self._ix, self._state.held, ax, c).allowed
-        )
-        found = match_label_ids(self._ix, ax, text, allowed)
+        found = match_label_ids(self._ix, ax, text, self._namable_ids(ax))
         return None if found is None else self._handles[found]
 
     def accusation_prompt(self, player_text: str) -> AccusationPrompt:
         return accusation_questions(
-            self._ix, self._handles.__getitem__, len(self._state.accusations), player_text
+            self._ix,
+            self._handles.__getitem__,
+            len(self._state.accusations),
+            player_text,
+            {axis: self._namable_ids(axis) for axis in Axis},
         )
 
     def interpret(self, prompt: AccusationPrompt, result: DecisionResult) -> ParsedAccusation:

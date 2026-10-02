@@ -98,5 +98,5 @@ def test_more_options_than_letters_is_a_programming_error():
         for i in range(26)
     )
     ix = CaseIndex.of(build_case().model_copy(update={"methods": many}))
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError, match="option letters"):
         accusation_questions(ix, handle_of, 0, "x")

@@ -231,23 +231,19 @@ def test_a_hidden_how_or_why_handle_is_described_and_refused_like_an_unknown_one
     assert s.attempts_left == 3
 
 
-def test_jev_naming_a_hidden_candidate_is_read_as_unclear_until_the_gate_opens():
+def test_a_hidden_candidate_is_not_an_option_until_the_gate_opens():
     s = fresh_with_study()
     rope, _ = hidden_handles()
-
-    def jev_says_rope():
-        prompt = s.accusation_prompt("he strangled him with a rope")
-        keymap = prompt.keys["how"]
-        letter = next(k for k, v in keymap.items() if v == rope)
-        other = next(k for k in keymap if k != letter)
-        answer = ChoiceAnswer(
-            type="choice", choice=letter, probabilities={letter: 0.95, other: 0.0}, confidence=0.95
-        )
-        return s.interpret(prompt, DecisionResult(model="fake", answers={"how": answer}))
-
-    assert jev_says_rope().how is None
+    assert rope not in s.accusation_prompt("he strangled him with a rope").keys["how"].values()
     s.check_records(next(x.handle for x in s.brief().locations if x.name == "The garden"))
-    assert jev_says_rope().how == rope
+    prompt = s.accusation_prompt("he strangled him with a rope")
+    keymap = prompt.keys["how"]
+    letter = next(k for k, v in keymap.items() if v == rope)
+    other = next(k for k in keymap if k != letter)
+    answer = ChoiceAnswer(
+        type="choice", choice=letter, probabilities={letter: 0.95, other: 0.0}, confidence=0.95
+    )
+    assert s.interpret(prompt, DecisionResult(model="fake", answers={"how": answer})).how == rope
 
 
 def handles_now(s):
@@ -262,3 +258,13 @@ def test_a_hidden_candidate_in_the_text_does_not_change_the_answer():
     poison = next(o.handle for o in s.nameable("how").options if o.name.startswith("poisoned"))
     assert s.match_label("how", "poison xyzzy") == poison
     assert s.match_label("how", "poison rope") == poison
+
+
+def test_the_accusation_prompt_never_lists_a_hidden_candidate():
+    """The prompt is public API: it must not name a how or why the gate has not opened."""
+    s = fresh_with_study()
+    prompt = s.accusation_prompt("it was the rope, out of jealousy")
+    text = " ".join(c for q in prompt.questions.values() for c in q.criteria.values()).lower()
+    assert "poison" in text  # the permitted method is still offered
+    assert "rope" not in text and "strangl" not in text and "jealous" not in text
+    assert "why" not in prompt.questions  # no motive is nameable yet: nothing to ask
