@@ -51,3 +51,35 @@ mutation("TOML_SYNTAX", append("[[[bad"))
 mutation("UNKNOWN_KEY", replace('kind = "wound"\n', 'kind = "wound"\ncolour = "red"\n'))
 mutation("WRONG_TYPE", replace("max_suspects = 3", 'max_suspects = "three"'))
 mutation("MISSING_FIELD", replace('label = "stabbed with a dagger"\n', ""))
+
+# ---- stage 2: closed references (they stop the later stages) ---------------------------------
+
+mutation(
+    "UNKNOWN_LOCATION_KIND", replace('location_kinds = ["study"]', 'location_kinds = ["crypt"]')
+)
+mutation(
+    "UNKNOWN_RECORD_KIND",
+    replace('record_kinds = ["ledger"]', 'record_kinds = ["diary"]'),
+)
+mutation(
+    "UNKNOWN_TRACE_KIND",
+    replace(
+        'allowed_trace_kinds = ["fibre", "residue", "wound"]',
+        'allowed_trace_kinds = ["fibre", "residue", "blood"]',
+    ),
+)
+mutation(
+    "UNKNOWN_METHOD",
+    replace(
+        'allowed_methods = ["dagger", "poison", "rope"]',
+        'allowed_methods = ["dagger", "poison", "axe"]',
+    ),
+)
+mutation(
+    "UNKNOWN_MOTIVE_TYPE",
+    replace(
+        'motive_types = ["debt", "inheritance", "jealousy"]',
+        'motive_types = ["debt", "inheritance", "greed"]',
+    ),
+)
+mutation("DUPLICATE_KEY", replace('key = "noon"', 'key = "dawn"'))
