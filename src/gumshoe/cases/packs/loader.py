@@ -49,14 +49,14 @@ def reshape(raw: dict[str, Any]) -> dict[str, Any]:
             continue
         if name in KEYED and isinstance(value, dict):
             out[name] = [
-                {"key": key, **item} if isinstance(item, dict) else item
+                {**item, "key": key} if isinstance(item, dict) else item
                 for key, item in value.items()
             ]
         else:
             out[name] = value
-    defs = out.get("record_defs")
-    if isinstance(defs, list):
-        out["record_kinds"] = sorted(d["key"] for d in defs if isinstance(d, dict) and "key" in d)
+    defs = raw.get("record_defs")
+    if isinstance(defs, dict):
+        out["record_kinds"] = sorted(defs)
     return out
 
 
@@ -108,6 +108,8 @@ def load_pack(data: bytes, presets: Mapping[str, PresetDef] = PRESETS) -> LoadRe
         raw = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         return LoadResult(None, (make("TOML_SYNTAX", "file", reason=str(exc)),))
+    except RecursionError:
+        return LoadResult(None, (make("TOML_SYNTAX", "file", reason="nested too deeply"),))
     issues = [
         make("UNKNOWN_KEY", name, did_you_mean(name, SECTIONS), key=name)
         for name in sorted(raw)

@@ -82,3 +82,15 @@ def test_a_section_of_the_wrong_shape_is_a_wrong_type_not_a_crash():
     )
     text = "capacity = 5\n" + replace(block, "")(BASE_TOML)
     assert codes_and_paths(text) == [("WRONG_TYPE", "capacity")]
+
+
+def test_a_key_field_inside_a_keyed_table_never_crashes_and_the_table_key_wins():
+    text = replace("[record_defs.gate_log]\n", "[record_defs.gate_log]\nkey = 5\n")(BASE_TOML)
+    result = load(text)
+    assert result.pack is not None
+    assert result.pack.record_kinds == ("gate_log", "ledger")
+
+
+def test_deeply_nested_input_is_a_toml_syntax_issue_not_a_recursion_error():
+    result = load_pack(b"x = " + b"[" * 5000, TEST_PRESETS)
+    assert result.pack is None and [i.code for i in result.issues] == ["TOML_SYNTAX"]
