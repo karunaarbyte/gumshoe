@@ -84,6 +84,11 @@ def available_facts(ix: CaseIndex, held: Held, source: SourceRef) -> tuple[Fact,
     )
 
 
+def exposer_of(ix: CaseIndex, lie: str, held: Held) -> str:
+    """The held fact credited with exposing this lie: the smallest held exposer id."""
+    return min((e for e in ix.facts[lie].exposed_by if e in held), default=lie)
+
+
 def source_status(ix: CaseIndex, held: Held, source: SourceRef) -> SourceStatus:
     if not _exists(ix, source):
         return SourceStatus.UNKNOWN
@@ -96,25 +101,34 @@ def source_status(ix: CaseIndex, held: Held, source: SourceRef) -> SourceStatus:
     return SourceStatus.OK if available_facts(ix, held, source) else SourceStatus.NOTHING_NEW
 
 
+def gather(ix: CaseIndex, held: Held, source: SourceRef) -> Held:
+    """What is held after one sitting at this source: its available facts, again and again,
+    until nothing new appears there (a fact may need another found in the same sitting).
+    Facts at other sources are never chained. Cheap: no status, contradiction or lead work."""
+    while True:
+        new = frozenset(f.id for f in available_facts(ix, held, source))
+        if not new:
+            return held
+        held = held | new
+
+
 def use_source(ix: CaseIndex, state: PlayState, source: SourceRef) -> tuple[PlayState, Outcome]:
-    """Use a source: returns ALL newly available facts. Idempotent; facts only accumulate."""
+    """Use a source once: ALL facts it yields in one sitting (see `gather`), the lies they newly
+    expose, and the other sources that had nothing available before and do now (the used
+    source is exhausted, so never among them). Idempotent; facts only accumulate."""
     held = state.held
     status = source_status(ix, held, source)
     if status is not SourceStatus.OK:
         return state, Outcome(status)
-    new = tuple(f.id for f in available_facts(ix, held, source))
-    after = held | frozenset(new)
+    after = gather(ix, held, source)
+    new = tuple(sorted(after - held))
     newly_exposed = sorted(gate.exposed(ix, after) - gate.exposed(ix, held))
     contradictions = tuple(
-        Contradiction(
-            lie=lie,
-            exposer=min((e for e in ix.facts[lie].exposed_by if e in after), default=lie),
-        )
-        for lie in newly_exposed
+        Contradiction(lie=lie, exposer=exposer_of(ix, lie, after)) for lie in newly_exposed
     )
     opened = tuple(
         s
         for s in all_sources(ix)
-        if not available_facts(ix, held, s) and available_facts(ix, after, s)
+        if s != source and not available_facts(ix, held, s) and available_facts(ix, after, s)
     )
     return state.with_facts(new), Outcome(SourceStatus.OK, new, contradictions, opened)

@@ -91,7 +91,13 @@ def test_public_api_exports():
         "load_session",
     ):
         assert hasattr(cases, name), name
-    assert set(cases.__all__) >= {"Case", "validate_case", "load_case"}
+    assert set(cases.__all__) >= {
+        "Case",
+        "validate_case",
+        "load_case",
+        "GameSession",
+        "load_session",
+    }
 
 
 def test_parser_knows_play_and_simulate():
@@ -123,3 +129,18 @@ def test_play_refuses_a_structurally_broken_case(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("game started"))
     assert main(["play", str(broken), "--salt", "s"]) == 2
     assert "DANGLING_REF" in capsys.readouterr().err
+
+
+def test_simulate_refuses_a_structurally_broken_case(tmp_path, capsys):
+    broken = tmp_path / "broken.json"
+    broken.write_bytes(dump_case(MUTATIONS["DANGLING_REF"].apply(build_case())))
+    assert main(["simulate", str(broken)]) == 2
+    captured = capsys.readouterr()
+    assert "DANGLING_REF" in captured.err and captured.out == ""
+
+
+def test_a_handle_collision_makes_play_exit_two(good, capsys, monkeypatch):
+    monkeypatch.setattr("gumshoe.cases.play.session.make_id", lambda *parts: "h_same")
+    monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("game started"))
+    assert main(["play", str(good), "--salt", "s"]) == 2
+    assert "handle collision" in capsys.readouterr().err

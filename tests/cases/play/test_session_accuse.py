@@ -67,15 +67,17 @@ def test_a_plan_with_an_unresolved_part_lists_what_may_be_named_and_cannot_confi
     assert all(p.options == () for p in plan.problems)
 
 
-def test_a_blocked_part_is_reported_as_not_permitted_with_the_nameable_options():
+def test_a_blocked_who_is_reported_as_not_permitted_with_the_nameable_options():
     s = GameSession(build_case(), "salt")
     study = next(x.handle for x in s.brief().locations if x.name == "The study")
     s.search(study)
     full = s_all()
-    triple = handles(full)  # handles for the *other* session share the salt, so they match
+    triple = handles(full, who="Anna")  # the other session shares the salt, so handles match
     plan = s.describe_accusation(triple)
     assert not plan.can_confirm
-    assert {p.axis: p.reason for p in plan.problems} == {"why": "not_permitted"}
+    # who is public, so a blocked suspect says so; a blocked motive looks like no answer
+    assert {p.axis: p.reason for p in plan.problems} == {"who": "not_permitted", "why": "unclear"}
+    assert [o.name for o in plan.problems[0].options] == ["Boris"]
 
 
 def test_unconfirmed_blocked_repeat_and_half_filled_accusations_cost_nothing():
@@ -154,3 +156,101 @@ def test_no_accusation_view_names_the_truth_unless_the_player_chose_it():
         + s.nameable("how").model_dump_json()
     )
     assert "poison" not in blob and "debt" not in blob
+
+
+def test_a_warned_but_permitted_accusation_reaches_resolved():
+    s = s_all()
+    anna = handles(s, who="Anna")
+    assert s.describe_accusation(anna).warnings
+    result = s.accuse(anna, confirmed=True)
+    assert result.status == "resolved" and result.correct == 2 and s.attempts_left == 2
+
+
+@pytest.mark.parametrize("misses", [1, 2])
+def test_the_truth_on_attempt_two_or_three_wins(misses):
+    s = s_all()
+    wrong = [
+        handles(s, who="Anna", how="stabbed with a dagger", why="out of jealousy"),
+        handles(s, who="Clara", how="strangled with a rope", why="to claim an inheritance"),
+    ]
+    for parsed in wrong[:misses]:
+        s.accuse(parsed, confirmed=True)
+    win = s.accuse(handles(s), confirmed=True)
+    assert win.status == "resolved" and win.correct == 3 and s.status == "won"
+    assert s.attempts_left == 3 - (misses + 1)
+
+
+# -- hidden how/why candidates are indistinguishable from nonsense (no probing) -------------
+
+
+def fresh_with_study():
+    """Only the study searched: Boris and the poison are nameable, no motive is."""
+    s = GameSession(build_case(), "salt")
+    s.search(next(x.handle for x in s.brief().locations if x.name == "The study"))
+    return s
+
+
+def hidden_handles():
+    """Handles of the rope and the debt, read from a session where they are nameable (same
+    salt, so the same handles): a player could only have them by probing."""
+    full = s_all()
+    rope = next(o.handle for o in full.nameable("how").options if o.name.startswith("strangled"))
+    debt = next(o.handle for o in full.nameable("why").options if o.name.endswith("debt"))
+    return rope, debt
+
+
+def test_typed_hidden_how_and_why_names_answer_like_nonsense_until_the_gate_opens():
+    s = fresh_with_study()
+    rope, debt = hidden_handles()
+    for axis, text in (("how", "the rope"), ("why", "the debt")):
+        assert s.match_label(axis, text) is None
+        assert s.match_label(axis, "xyzzy") is None
+    garden = next(x.handle for x in s.brief().locations if x.name == "The garden")
+    study = next(x.handle for x in s.brief().locations if x.name == "The study")
+    s.check_records(garden)  # the gate log supports the rope: now it may be named
+    s.check_records(study)  # ... and the moneylender's note the debt
+    assert s.match_label("how", "the rope") == rope
+    assert s.match_label("why", "the debt") == debt
+
+
+def test_a_hidden_how_or_why_handle_is_described_and_refused_like_an_unknown_one():
+    s = fresh_with_study()
+    rope, debt = hidden_handles()
+    boris, poison = handles_now(s)
+    for hidden, bogus in (
+        (ParsedAccusation(who=boris, how=rope), ParsedAccusation(who=boris, how="h_bogus")),
+        (
+            ParsedAccusation(who=boris, how=poison, why=debt),
+            ParsedAccusation(who=boris, how=poison, why="h_bogus"),
+        ),
+    ):
+        assert s.describe_accusation(hidden) == s.describe_accusation(bogus)
+        assert s.accuse(hidden, confirmed=True) == s.accuse(bogus, confirmed=True)
+    plan = s.describe_accusation(ParsedAccusation(who=boris, how=poison, why=debt))
+    assert {p.axis: p.reason for p in plan.problems} == {"why": "unclear"}
+    assert s.attempts_left == 3
+
+
+def test_jev_naming_a_hidden_candidate_is_read_as_unclear_until_the_gate_opens():
+    s = fresh_with_study()
+    rope, _ = hidden_handles()
+
+    def jev_says_rope():
+        prompt = s.accusation_prompt("he strangled him with a rope")
+        keymap = prompt.keys["how"]
+        letter = next(k for k, v in keymap.items() if v == rope)
+        other = next(k for k in keymap if k != letter)
+        answer = ChoiceAnswer(
+            type="choice", choice=letter, probabilities={letter: 0.95, other: 0.0}, confidence=0.95
+        )
+        return s.interpret(prompt, DecisionResult(model="fake", answers={"how": answer}))
+
+    assert jev_says_rope().how is None
+    s.check_records(next(x.handle for x in s.brief().locations if x.name == "The garden"))
+    assert jev_says_rope().how == rope
+
+
+def handles_now(s):
+    who = next(o.handle for o in s.nameable("who").options if o.name == "Boris")
+    how = next(o.handle for o in s.nameable("how").options if o.name == "poisoned in the wine")
+    return who, how

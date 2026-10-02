@@ -109,7 +109,8 @@ class ResolvedPart(View):
 
 
 class AxisProblem(View):
-    """reason: unclear (no clear candidate) | not_permitted (the gate does not allow it yet)."""
+    """reason: unclear (no clear candidate; also a how/why candidate the gate has not opened,
+    so hidden ones cannot be probed) | not_permitted (a suspect the gate does not allow yet)."""
 
     axis: str
     reason: str
@@ -126,7 +127,7 @@ class AccusationPlan(View):
 
 
 class AccusationResult(View):
-    """status: needs_confirmation | not_permitted | repeat | resolved | game_over."""
+    """status: needs_confirmation | not_permitted | repeat | resolved."""
 
     status: str
     correct: int | None

@@ -12,7 +12,7 @@ from gumshoe.cases.core.canonical import canonical_json
 from gumshoe.cases.core.hashing import domain_digest
 from gumshoe.cases.model.enums import Axis
 from gumshoe.cases.model.index import CaseIndex
-from gumshoe.cases.play.labels import candidate_forms
+from gumshoe.cases.play.labels import jev_forms
 from gumshoe.decider import ChoiceAnswer, ChoiceQuestion, DecisionResult
 
 TOP_MIN = 0.6  # the best option must be more likely than this ...
@@ -33,7 +33,7 @@ class AccusationPrompt:
 
 
 def _criteria(ix: CaseIndex, axis: Axis, candidate: str) -> str:
-    label, *others = candidate_forms(ix, axis, candidate)
+    label, *others = jev_forms(ix, axis, candidate)
     extra = f" (also called: {', '.join(dict.fromkeys(others))})" if others else ""
     return f"The player affirmatively accuses this candidate: {label}{extra}."
 
@@ -55,6 +55,7 @@ def accusation_questions(
             )
 
         ordered = sorted(items, key=shuffle_key)
+        assert len(ordered) <= len(string.ascii_uppercase), "more options than option letters"
         criteria: dict[str, str] = {}
         keymap: dict[str, str | None] = {}
         for letter, item in zip(string.ascii_uppercase, ordered, strict=False):

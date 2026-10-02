@@ -1,7 +1,12 @@
+import random
+import time
+
 import pytest
 
 from gumshoe.cases.model.enums import Axis
 from gumshoe.cases.model.index import CaseIndex
+from gumshoe.cases.play.engine import all_sources, gather, use_source
+from gumshoe.cases.play.state import new_state
 from gumshoe.cases.simulate.oracle import (
     SearchLimitExceeded,
     axis_decidable,
@@ -14,6 +19,7 @@ from gumshoe.cases.simulate.oracle import (
 from tests.cases.fixtures import build_case
 from tests.cases.helpers import drop_fact
 from tests.cases.mutations import MUTATIONS
+from tests.cases.reference import random_gates
 
 
 def test_reading_everything_finds_every_fact_of_the_fixture():
@@ -50,7 +56,8 @@ def test_losing_a_rule_out_breaks_the_single_survivor_check_but_not_a_proof():
 def test_a_truthful_rule_out_of_the_truth_makes_the_axis_undecidable():
     broken = MUTATIONS["TRUTH_RULED_OUT"].apply(build_case())
     verdict = judge(broken)
-    assert not verdict.single_survivor and len(verdict.decidable_axes) < 3
+    # the truthful f_sup_boris now rules out Boris, the truth: who is lost, how and why stand
+    assert not verdict.single_survivor and verdict.decidable_axes == (Axis.HOW, Axis.WHY)
 
 
 def test_min_sources_of_the_fixture_is_two():
@@ -72,5 +79,55 @@ def test_the_search_limit_is_a_distinct_error():
 def test_spof_axes_of_the_fixture_are_empty_for_every_non_start_fact():
     case = build_case()
     assert {f.id: spof_axes(case, f.id) for f in case.facts if f.id not in case.start.facts} == {
-        f.id: frozenset() for f in case.facts
+        f.id: frozenset() for f in case.facts if f.id not in case.start.facts
     }
+
+
+def test_spof_axes_of_the_shared_gate_mutation_is_how_through_the_key():
+    # f_trace_poison (the proof of poison) and f_absent_dagger (the dagger's rule-out) both
+    # require f_key. Without f_key: no proof of poison and the dagger survives, so how cannot
+    # be decided; who (f_proof_boris) and why (f_secret_boris) are proved without the key.
+    # Dropping either gated fact alone leaves the other route to poison standing.
+    case = MUTATIONS["SINGLE_POINT_OF_FAILURE"].apply(build_case())
+    found = {
+        f.id: axes
+        for f in case.facts
+        if f.id not in case.start.facts and (axes := spof_axes(case, f.id))
+    }
+    assert found == {"f_key": frozenset({Axis.HOW})}
+
+
+def _assert_parity(case, limit: int, label: str) -> None:
+    """Walk the states use_source reaches (breadth first, up to `limit`); at every step the BFS
+    step engine.gather must land on the very same held set."""
+    ix = CaseIndex.of(case)
+    sources = all_sources(ix)
+    start = new_state(case)
+    seen, queue = {start.held}, [start]
+    while queue and len(seen) < limit:
+        state = queue.pop(0)
+        for source in sources:
+            nxt, _ = use_source(ix, state, source)
+            assert gather(ix, state.held, source) == nxt.held, label
+            if nxt.held not in seen:
+                seen.add(nxt.held)
+                queue.append(nxt)
+
+
+def test_the_bfs_step_reaches_exactly_the_states_use_source_reaches():
+    # 400 of the fixture's 1536 reachable states and 30 of each mutation (time budget)
+    _assert_parity(build_case(), 400, "fixture")
+    for code, m in sorted(MUTATIONS.items()):
+        if not (m.strict or m.crash_group or m.apply_pair):
+            _assert_parity(m.apply(build_case()), 30, code)
+
+
+def test_min_sources_is_quick_on_a_random_layout():
+    # layout 17 of seed 5 was the slowest of the agreement test's 80 (0.5 s with use_source)
+    rng = random.Random(5)
+    for _ in range(17):
+        random_gates(build_case(), rng)
+    case = random_gates(build_case(), rng)
+    started = time.perf_counter()
+    assert min_sources(case) == 4
+    assert time.perf_counter() - started < 0.3

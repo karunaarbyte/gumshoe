@@ -4,6 +4,7 @@ When a test here fails, do NOT weaken it: find which side is wrong (read the two
 the plain rule in the spec), fix that side test-first, and record the finding in the commit."""
 
 import random
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 from gumshoe.cases.model.case import Case
@@ -51,7 +52,7 @@ def crashed(report: Report) -> bool:
     return any(i.code == "INTERNAL_ERROR" for i in report.issues)
 
 
-def mutated_cases():
+def mutated_cases() -> Iterator[tuple[str, Case]]:
     for code, m in sorted(MUTATIONS.items()):
         if m.strict or m.crash_group or m.apply_pair:
             continue  # strict/pack/crash mutations exercise the validator machinery, not play
@@ -70,7 +71,9 @@ def assert_agree(case: Case, label: str, tally: Tally, *, check_spof: bool = Tru
     # (1) reachability: play engine == validator fixpoint == naive reference
     assert held == compute_reach(ix).facts == naive_reach(case), f"{label}: reachability"
     verdict = judge(case)
-    # (2) solvability: the validator's group 6 verdict == honest deduction by the oracle
+    # (2) solvability: the validator's group 6 verdict == honest deduction by the oracle.
+    # Group 6 is compared with single_survivor only: decidable_axes also credits `proves`
+    # facts, which group 6 does not judge, so the two are not the same question.
     if 6 not in report.skipped_groups:
         tally.compared_solvable += 1
         validator_ok = not ({i.code for i in report.issues} & SOLVABILITY_CODES)
@@ -137,8 +140,11 @@ def test_the_cheapest_play_is_never_dearer_than_the_validators_cheapest_solution
     assert min_sources(build_case()) == 2 <= best.actions
 
 
-def test_on_random_layouts_a_play_never_needs_more_uses_than_the_solution_has_facts():
-    # (a fact chain inside one source can need two uses of it, so compare against fact count)
+def test_on_random_layouts_a_play_never_needs_more_uses_than_the_solution_has_sources():
+    # one use of a source gathers a whole fact chain inside it (spec 5.3), so a play costs at
+    # most one use per distinct source of the validator's cheapest solution. (A chain that
+    # leaves a source and comes back, A -> B -> A, would need A twice; no layout from this seed
+    # has one. If this ever fails, look for such a chain before suspecting either side.)
     rng = random.Random(5)
     checked = 0
     for _ in range(80):
@@ -153,5 +159,5 @@ def test_on_random_layouts_a_play_never_needs_more_uses_than_the_solution_has_fa
             continue
         if fewest is not None:
             checked += 1
-            assert fewest <= best.size
+            assert fewest <= best.actions, (fewest, best)
     assert checked > 10

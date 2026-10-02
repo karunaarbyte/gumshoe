@@ -14,7 +14,7 @@ from gumshoe.cases.model.entities import SourceRef
 from gumshoe.cases.model.enums import Axis, SourceKind
 from gumshoe.cases.model.index import CaseIndex
 from gumshoe.cases.play.engine import available_facts
-from gumshoe.cases.play.labels import candidate_forms
+from gumshoe.cases.play.labels import typed_forms
 from gumshoe.cases.play.state import PlayState
 from gumshoe.cases.play.views import ReplyCheck, ReplyViolation
 
@@ -22,7 +22,7 @@ from gumshoe.cases.play.views import ReplyCheck, ReplyViolation
 def _distinctive(ix: CaseIndex) -> dict[tuple[Axis, str], frozenset[str]]:
     """Per candidate: its label/alias tokens minus any token another candidate also has."""
     own = {
-        (axis, c): frozenset(t for form in candidate_forms(ix, axis, c) for t in tokens(form))
+        (axis, c): frozenset(t for form in typed_forms(ix, axis, c) for t in tokens(form))
         for axis in Axis
         for c in ix.candidates[axis]
     }

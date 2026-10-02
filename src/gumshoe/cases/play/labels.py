@@ -22,11 +22,11 @@ CONTRACTIONS = frozenset(
 )  # fmt: skip
 
 
-def candidate_forms(ix: CaseIndex, axis: Axis, candidate: str) -> tuple[str, ...]:
-    """Everything a player may call this candidate: label, aliases and (suspects) display name."""
+def jev_forms(ix: CaseIndex, axis: Axis, candidate: str) -> tuple[str, ...]:
+    """The label and aliases: the only text Jev sees for a candidate (spec)."""
     if axis is Axis.WHO:
         s = ix.suspects[candidate]
-        forms = (s.label, *s.aliases, s.display_name)
+        forms = (s.label, *s.aliases)
     elif axis is Axis.HOW:
         m = ix.methods[candidate]
         forms = (m.label, *m.aliases)
@@ -34,6 +34,15 @@ def candidate_forms(ix: CaseIndex, axis: Axis, candidate: str) -> tuple[str, ...
         v = ix.motives[candidate]
         forms = (v.label, *v.aliases)
     return tuple(f for f in forms if f.strip())
+
+
+def typed_forms(ix: CaseIndex, axis: Axis, candidate: str) -> tuple[str, ...]:
+    """Everything a player may type for this candidate: the Jev forms and, for a suspect, the
+    display name the game shows."""
+    forms = jev_forms(ix, axis, candidate)
+    if axis is Axis.WHO and ix.suspects[candidate].display_name.strip():
+        forms = (*forms, ix.suspects[candidate].display_name)
+    return forms
 
 
 def hedged(text: str) -> bool:
@@ -57,6 +66,6 @@ def match_label(ix: CaseIndex, axis: Axis, text: str) -> str | None:
     hits = [
         c
         for c in ix.candidates[axis]
-        if any(_contains(words, tokens(form)) for form in candidate_forms(ix, axis, c))
+        if any(_contains(words, tokens(form)) for form in typed_forms(ix, axis, c))
     ]
     return hits[0] if len(hits) == 1 else None

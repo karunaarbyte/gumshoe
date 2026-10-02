@@ -54,6 +54,14 @@ def _loop(session: GameSession, read: Read, write: Write) -> int:
     return 0
 
 
+def _number(raw: str, count: int) -> int | None:
+    """A menu number 1..count as a zero-based index, else None. ASCII digits only: '²' passes
+    isdigit() and then int() raises, and '١' would int() to 1."""
+    if raw.isascii() and raw.isdecimal() and 1 <= int(raw) <= count:
+        return int(raw) - 1
+    return None
+
+
 def _pick(read: Read, write: Write, title: str, labels: list[str]) -> int | None:
     """A numbered menu: returns the zero-based choice, or None for blank/0/invalid-then-blank."""
     write(title)
@@ -63,8 +71,9 @@ def _pick(read: Read, write: Write, title: str, labels: list[str]) -> int | None
         raw = read("Number (blank to go back): ").strip()
         if raw in ("", "0"):
             return None
-        if raw.isdigit() and 1 <= int(raw) <= len(labels):
-            return int(raw) - 1
+        picked = _number(raw, len(labels))
+        if picked is not None:
+            return picked
         write("Pick one of the numbers above.")
 
 
@@ -156,8 +165,9 @@ def _collect(session: GameSession, read: Read, write: Write) -> ParsedAccusation
             raw = read("Number or name (blank to cancel): ").strip()
             if not raw:
                 return None
-            if raw.isdigit() and 1 <= int(raw) <= len(options):
-                chosen[axis] = options[int(raw) - 1].handle
+            picked = _number(raw, len(options))
+            if picked is not None:
+                chosen[axis] = options[picked].handle
                 break
             handle = session.match_label(axis, raw)
             if handle is not None and handle in {o.handle for o in options}:

@@ -1,5 +1,10 @@
-import pytest
+import json
 
+import pytest
+from pydantic import ValidationError
+
+from gumshoe.cases.model.entities import Fact, RecordSource
+from gumshoe.cases.model.enums import FactKind, RecordSubjectType
 from gumshoe.cases.model.serialize import dump_case
 from gumshoe.cases.play.session import (
     FALLBACK_CONTRADICTION,
@@ -9,8 +14,8 @@ from gumshoe.cases.play.session import (
     load_session,
 )
 from gumshoe.cases.play.state import PlayState
-from tests.cases.fixtures import build_case
-from tests.cases.helpers import replace_fact
+from tests.cases.fixtures import build_case, record
+from tests.cases.helpers import replace_fact, replace_record_source
 
 
 def session(case=None, salt="salt-1"):
@@ -219,3 +224,85 @@ def test_a_contradiction_found_by_records_then_interrogation_is_one_notebook_ent
     ]
     lies = [f for sec in book.sections for f in sec.facts if f.contradicted]
     assert [f.text for f in lies] == ["I was down in the cellar all evening."]
+
+
+def event_record_case():
+    """The cellar's fact moved onto a gate log about the crime EVENT, gated by the key."""
+    case = build_case()
+    event_log = RecordSource(
+        kind="gate_log",
+        subject_type=RecordSubjectType.EVENT,
+        subject="t_crime",
+        requires=("f_key",),
+    )
+    case = case.model_copy(update={"record_sources": (*case.record_sources, event_log)})
+    return replace_fact(case, "f_clara_keys", source=record("gate_log", "t_crime"))
+
+
+def test_an_event_record_source_is_never_offered_as_a_lead_or_named():
+    s = session(event_record_case())
+    garden = handle_of(s.brief().locations, "The garden")
+    result = s.search(garden)
+    assert [f.text for f in result.new_facts][-1] == "A brass key lies under the garden bench."
+    assert all("crime" not in label for label in result.opened)
+    assert result.opened == ()  # the cellar is empty now, and the event log cannot be followed
+    blobs = [result.model_dump_json()]
+    brief = s.brief()
+    for loc in brief.locations:
+        blobs.append(s.search(loc.handle).model_dump_json())
+    for sus in brief.suspects:
+        blobs.append(s.interrogate(sus.handle).model_dump_json())
+    for subject in (*brief.locations, *brief.suspects):
+        blobs.append(s.check_records(subject.handle).model_dump_json())
+    blobs += [s.notebook().model_dump_json(), s.brief().model_dump_json()]
+    assert "crime" not in "\n".join(blobs)
+
+
+def test_check_records_without_a_kind_never_reports_a_source_it_just_exhausted():
+    # a gate log about Boris holds the fact that opens his ledger; both are read in one call
+    case = build_case()
+    note = Fact(
+        id="f_note_boris",
+        kind=FactKind.CLUE,
+        source=record("gate_log", "s_boris"),
+        text="Boris signed out the ledger key.",
+    )
+    log = RecordSource(kind="gate_log", subject_type=RecordSubjectType.SUSPECT, subject="s_boris")
+    case = case.model_copy(
+        update={"facts": (*case.facts, note), "record_sources": (*case.record_sources, log)}
+    )
+    case = replace_record_source(case, "ledger", "s_boris", requires=("f_note_boris",))
+    s = session(case)
+    boris = handle_of(s.brief().suspects, "Boris")
+    result = s.check_records(boris)
+    assert result.kinds == ("gate log", "ledger")
+    assert "The ledger shows Boris owes a ruinous gambling debt." in [
+        f.text for f in result.new_facts
+    ]
+    assert result.opened == ()
+
+
+def test_an_inconsistent_save_is_rejected():
+    data = dump_case(build_case())
+    digest = PlayState.model_validate_json(session().state_json()).case_digest
+    bad_saves = [
+        {"case_digest": digest, "attempts": 3, "status": "playing"},  # out of attempts, playing
+        {"case_digest": digest, "attempts": 1},  # an attempt with no accusation behind it
+        {"case_digest": digest, "status": "won"},  # won without a winning accusation
+        {
+            "case_digest": digest,
+            "attempts": 1,
+            "accusations": [{"triple": {"who": "a", "how": "b", "why": "c"}, "correct": 1}],
+            "status": "won",
+        },
+    ]
+    for save in bad_saves:
+        with pytest.raises(ValidationError):
+            load_session(data, "salt-1", json.dumps(save))
+
+
+def test_a_saved_ghost_fact_is_dropped_on_load():
+    digest = PlayState.model_validate_json(session().state_json()).case_digest
+    state = PlayState(case_digest=digest, discovered=("f_ghost", "f_key"))
+    s = GameSession(build_case(), "salt-1", state)
+    assert json.loads(s.state_json())["discovered"] == ["f_key"]

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from gumshoe.cases.model.case import Case
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.serialize import load_case
 from gumshoe.cases.play import load_session
@@ -95,15 +96,16 @@ def _read_case_bytes(path: Path) -> bytes | None:
         return None
 
 
-def _play(args: argparse.Namespace) -> int:
-    data = _read_case_bytes(args.path)
+def _load_playable(path: Path) -> tuple[bytes, Case] | None:
+    """Read and parse a case, refusing (with the code on stderr) one group 1 calls broken."""
+    data = _read_case_bytes(path)
     if data is None:
-        return 2
+        return None
     try:
         case = load_case(data)
     except ValidationError as exc:
         print(f"error: not a valid case file ({exc.errors()[0]['msg']})", file=sys.stderr)
-        return 2
+        return None
     structural = [
         i
         for i in validate(case, None, Profile.CUSTOM).issues
@@ -111,9 +113,16 @@ def _play(args: argparse.Namespace) -> int:
     ]
     if structural:
         print(f"error: the case is structurally broken ({structural[0].code})", file=sys.stderr)
+        return None
+    return data, case
+
+
+def _play(args: argparse.Namespace) -> int:
+    loaded = _load_playable(args.path)
+    if loaded is None:
         return 2
-    try:
-        session = load_session(data, args.salt or secrets.token_hex(8))
+    try:  # a handle collision, or (pydantic's ValidationError is one) a bad state
+        session = load_session(loaded[0], args.salt or secrets.token_hex(8))
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -121,15 +130,10 @@ def _play(args: argparse.Namespace) -> int:
 
 
 def _simulate(args: argparse.Namespace) -> int:
-    data = _read_case_bytes(args.path)
-    if data is None:
+    loaded = _load_playable(args.path)
+    if loaded is None:
         return 2
-    try:
-        case = load_case(data)
-    except ValidationError as exc:
-        print(f"error: not a valid case file ({exc.errors()[0]['msg']})", file=sys.stderr)
-        return 2
-    for line in simulate_lines(case):
+    for line in simulate_lines(loaded[1]):
         print(line)
     return 0
 

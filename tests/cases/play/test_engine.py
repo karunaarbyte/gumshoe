@@ -4,6 +4,7 @@ from gumshoe.cases.play.engine import (
     SourceStatus,
     all_sources,
     available_facts,
+    exposer_of,
     record_kinds,
     use_source,
 )
@@ -144,3 +145,30 @@ def test_a_duplicated_lie_fact_with_no_held_exposer_does_not_crash_use_source():
     for source in all_sources(ix):
         state, _ = use_source(ix, state, source)
         state, _ = use_source(ix, state, source)
+
+
+def test_a_chain_inside_one_source_is_gathered_in_a_single_use():
+    # spec 5.3: one use returns ALL newly available facts, even one that needs another fact
+    # found in the same sitting
+    case = replace_fact(build_case(), "f_sup_boris", requires=("f_lie_anna",))
+    ix, state = setup(case)
+    state, first = use_source(ix, state, ask("s_anna"))
+    assert first.status is SourceStatus.OK
+    assert first.new_facts == ("f_lie_anna", "f_sup_boris")
+    assert ask("s_anna") not in first.opened  # exhausted by the call, never "opened" for itself
+    again, second = use_source(ix, state, ask("s_anna"))
+    assert second.status is SourceStatus.NOTHING_NEW and again == state
+
+
+def test_a_chain_does_not_reach_into_other_sources():
+    # f_key (garden) frees the cellar, but the cellar is another source: reported, not read
+    ix, state = setup()
+    state, garden = use_source(ix, state, search("l_garden"))
+    assert "f_clara_keys" not in garden.new_facts and garden.opened == (search("l_cellar"),)
+
+
+def test_exposer_of_picks_the_smallest_held_exposer():
+    case = replace_fact(build_case(), "f_lie_anna", exposed_by=("f_secret_anna", "f_key"))
+    ix, _ = setup(case)
+    assert exposer_of(ix, "f_lie_anna", frozenset({"f_secret_anna", "f_key"})) == "f_key"
+    assert exposer_of(ix, "f_lie_anna", frozenset({"f_secret_anna"})) == "f_secret_anna"

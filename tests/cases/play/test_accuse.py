@@ -138,3 +138,24 @@ def test_give_up_loses_and_reveal_is_refused_until_the_game_is_over():
     over = give_up(state)
     assert over.status is Status.LOST and give_up(over) == over
     assert reveal(ix, over).who == "s_boris"
+
+
+def test_a_warned_but_permitted_accusation_resolves_when_confirmed():
+    ix, state = everything()
+    anna = Triple(who="s_anna", how="m_poison", why="v_debt")
+    assert check_accusation(ix, state, anna).warned == (WHO,)
+    after, result = accuse(ix, state, anna, confirmed=True)
+    assert result.kind is AccuseKind.RESOLVED and result.correct == 2 and after.attempts == 1
+
+
+@pytest.mark.parametrize("misses", [1, 2])
+def test_the_truth_on_a_later_attempt_still_wins(misses):
+    ix, state = everything()
+    wrong = [
+        Triple(who="s_anna", how="m_dagger", why="v_jealousy"),
+        Triple(who="s_clara", how="m_rope", why="v_inheritance"),
+    ]
+    for triple in wrong[:misses]:
+        state, _ = accuse(ix, state, triple, confirmed=True)
+    after, result = accuse(ix, state, TRUTH, confirmed=True)
+    assert result.correct == 3 and after.status is Status.WON and after.attempts == misses + 1

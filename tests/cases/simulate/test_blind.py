@@ -1,3 +1,4 @@
+import time
 from fractions import Fraction
 
 from gumshoe.cases.simulate.blind import blind_guess_win_probability, guess_win_probability
@@ -32,3 +33,24 @@ def test_two_by_two_by_two_with_count_only_feedback():
 def test_the_fixture_read_through_then_guessed_wins_four_ninths_of_the_time():
     # every candidate holds a lead after reading everything, so all 27 triples are permitted
     assert blind_guess_win_probability(build_case()) == Fraction(4, 9)
+
+
+def test_renaming_candidates_does_not_change_the_result():
+    pools = [["a", "x", "y"], ["b", "z"], ["c", "w", "v", "u"]]
+    renamed = [["q9", "a1", "zz"], ["m", "b0"], ["k", "c", "j", "e"]]
+    assert guess_win_probability(pools, ("a", "b", "c")) == guess_win_probability(
+        renamed, ("q9", "b0", "e")
+    )
+    # and a truth outside one axis's pool, under two namings
+    assert guess_win_probability(pools, ("a", "nope", "c")) == guess_win_probability(
+        renamed, ("zz", "b9", "j")
+    )
+
+
+def test_a_long_size_pool_is_computed_quickly():
+    # 7 x 5 x 7 = 245 permitted triples (the `long` preset): took 14.5 s before canonicalising
+    pools = [[f"w{i}" for i in range(7)], [f"h{i}" for i in range(5)], [f"y{i}" for i in range(7)]]
+    started = time.perf_counter()
+    p = guess_win_probability(pools, ("w3", "h1", "y6"))
+    assert time.perf_counter() - started < 2
+    assert p == Fraction(12, 245)  # the value the old exhaustive calculation gave

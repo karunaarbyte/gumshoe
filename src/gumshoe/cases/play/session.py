@@ -15,6 +15,8 @@ from gumshoe.cases.play.accuse import reveal as engine_reveal
 from gumshoe.cases.play.engine import (
     Contradiction,
     SourceStatus,
+    available_facts,
+    exposer_of,
     is_open,
     record_kinds,
     source_sort_key,
@@ -24,7 +26,7 @@ from gumshoe.cases.play.labels import match_label as match_label_ids
 from gumshoe.cases.play.parse import AccusationPrompt, accusation_questions
 from gumshoe.cases.play.parse import interpret as interpret_answers
 from gumshoe.cases.play.reply_check import reply_check
-from gumshoe.cases.play.state import MAX_ATTEMPTS, PlayState, Status, Triple
+from gumshoe.cases.play.state import MAX_ATTEMPTS, PlayState, Status, Triple, new_state
 from gumshoe.cases.play.views import (
     AccusationPlan,
     AccusationResult,
@@ -90,13 +92,15 @@ def _make_handles(case: Case, salt: str) -> dict[str, str]:
 
 class GameSession:
     def __init__(self, case: Case, salt: str, state: PlayState | None = None) -> None:
-        digest = skeleton_digest(case)
         if state is None:
-            known = {f.id for f in case.facts}
-            start = tuple(f for f in case.start.facts if f in known)
-            state = PlayState(case_digest=digest, discovered=start)
-        elif state.case_digest != digest:
+            state = new_state(case)
+        elif state.case_digest != skeleton_digest(case):
             raise StateMismatch("this save belongs to a different case")
+        else:  # a hand-edited save may name facts the case does not have
+            known = {f.id for f in case.facts}
+            state = state.model_copy(
+                update={"discovered": tuple(f for f in state.discovered if f in known)}
+            )
         self._ix = CaseIndex.of(case)
         self._state = state
         self._handles = _make_handles(case, salt)
@@ -113,6 +117,8 @@ class GameSession:
         return MAX_ATTEMPTS - self._state.attempts
 
     def state_json(self) -> str:
+        """The save, for the player's own device or the server's store. It is spoiler-bearing
+        (raw fact and candidate ids, the accusations tried): never hand it to an agent tool."""
         return self._state.model_dump_json()
 
     def give_up(self) -> None:
@@ -138,8 +144,15 @@ class GameSession:
             return self._suspect_name(subject)
         if subject in self._ix.locations:
             return self._location_name(subject)
-        event = self._ix.events.get(subject)
-        return event.action if event else "something"
+        return "something"  # unreachable for followable sources; never an event's action
+
+    def _followable(self, source: SourceRef) -> bool:
+        """Can a player name this source? Records are asked about suspects and locations
+        only, so a record about a timeline event is never offered (it would name the event)."""
+        subject = source.subject or ""
+        return source.kind is not SourceKind.RECORD or (
+            subject in self._ix.suspects or subject in self._ix.locations
+        )
 
     def _label(self, source: SourceRef) -> str:
         if source.kind is SourceKind.SEARCH:
@@ -226,7 +239,7 @@ class GameSession:
             status=status,
             new_facts=tuple(self._fact_view(self._ix.facts[i], exposed) for i in sorted(new_ids)),
             contradictions=tuple(self._contradiction_view(c) for c in contradictions),
-            opened=tuple(self._label(s) for s in opened),
+            opened=tuple(self._label(s) for s in opened if self._followable(s)),
             kinds=kinds,
         )
 
@@ -282,6 +295,8 @@ class GameSession:
             opened |= set(out.opened)
             if out.status is SourceStatus.OK:
                 contributed.append(_humanise(k))
+        # a kind read later in this call may have exhausted a source an earlier kind opened
+        still_open = {s for s in opened if available_facts(self._ix, self._state.held, s)}
         if SourceStatus.OK in statuses:
             status = SourceStatus.OK
         elif SourceStatus.LOCKED in statuses:
@@ -294,7 +309,7 @@ class GameSession:
             status.value,
             tuple(new_ids),
             tuple(contradictions),
-            tuple(sorted(opened, key=source_sort_key)),
+            tuple(sorted(still_open, key=source_sort_key)),
             tuple(contributed),
         )
 
@@ -335,12 +350,7 @@ class GameSession:
             )
         )
         contradictions = tuple(
-            self._contradiction_view(
-                Contradiction(
-                    lie=lie,
-                    exposer=min((e for e in ix.facts[lie].exposed_by if e in held), default=lie),
-                )
-            )
+            self._contradiction_view(Contradiction(lie=lie, exposer=exposer_of(ix, lie, held)))
             for lie in sorted(exposed)
         )
         return NotebookView(sections=sections, contradictions=contradictions)
@@ -372,10 +382,19 @@ class GameSession:
         options.sort(key=lambda c: (c.name, c.handle))
         return AxisOptions(axis=axis, options=tuple(options))
 
+    def _visible(self, axis: Axis, handle: str | None) -> str | None:
+        """How and why candidates the gate has not opened look exactly like non-candidates,
+        so their existence cannot be probed. Suspects are public and pass through."""
+        if handle is None or axis is Axis.WHO:
+            return handle
+        nameable = {c.handle for c in self.nameable(axis.value).options}
+        return handle if handle in nameable else None
+
     def match_label(self, axis: str, text: str) -> str | None:
-        """Typed-text path: the handle of the one candidate the text names, else None."""
+        """Typed-text path: the handle of the one candidate the text names, else None (also for
+        a how or why candidate the player may not name yet)."""
         found = match_label_ids(self._ix, Axis(axis), text)
-        return None if found is None else self._handles[found]
+        return self._visible(Axis(axis), None if found is None else self._handles[found])
 
     def accusation_prompt(self, player_text: str) -> AccusationPrompt:
         return accusation_questions(
@@ -383,7 +402,9 @@ class GameSession:
         )
 
     def interpret(self, prompt: AccusationPrompt, result: DecisionResult) -> ParsedAccusation:
-        picks = interpret_answers(prompt, result)
+        picks = {
+            axis: self._visible(axis, h) for axis, h in interpret_answers(prompt, result).items()
+        }
         return ParsedAccusation(who=picks[Axis.WHO], how=picks[Axis.HOW], why=picks[Axis.WHY])
 
     def _candidate_id(self, axis: Axis, handle: str | None) -> str | None:
@@ -419,10 +440,11 @@ class GameSession:
                 continue
             permission = gate.permission(self._ix, held, axis, candidate)
             if not permission.allowed:
+                # a hidden how/why candidate must look like no answer at all (no probing)
                 problems.append(
                     AxisProblem(
                         axis=axis.value,
-                        reason="not_permitted",
+                        reason="not_permitted" if axis is Axis.WHO else "unclear",
                         options=self.nameable(axis.value).options,
                     )
                 )
@@ -470,7 +492,11 @@ class GameSession:
         consumes an attempt, and the answer is a count and nothing else."""
         self._require_playing()
         triple = self._triple(parsed)
-        if triple is None:
+        held = self._state.held
+        if triple is None or any(
+            not gate.permission(self._ix, held, axis, triple.on(axis)).allowed
+            for axis in (Axis.HOW, Axis.WHY)
+        ):  # a hidden how/why candidate gets the very answer an unknown handle gets
             return self._answer("not_permitted", "Name one candidate for who, how and why.")
         self._state, result = engine_accuse(self._ix, self._state, triple, confirmed=confirmed)
         if result.kind is AccuseKind.NOT_PERMITTED:

@@ -2,24 +2,34 @@ import pytest
 
 from gumshoe.cases.model.enums import Axis
 from gumshoe.cases.model.index import CaseIndex
-from gumshoe.cases.play.labels import candidate_forms, hedged, match_label
+from gumshoe.cases.play.labels import hedged, jev_forms, match_label, typed_forms
 from tests.cases.fixtures import build_case
+from tests.cases.helpers import replace_in
 
 IX = CaseIndex.of(build_case())
 
 
-def test_forms_are_label_aliases_and_the_display_name_for_suspects():
-    assert candidate_forms(IX, Axis.WHO, "s_boris") == (
+def test_typed_forms_are_label_aliases_and_the_display_name_for_suspects():
+    assert typed_forms(IX, Axis.WHO, "s_boris") == (
         "Boris the steward",
         "Boris",
         "the steward",
         "Boris",
     )
-    assert candidate_forms(IX, Axis.HOW, "m_poison") == (
+    assert typed_forms(IX, Axis.HOW, "m_poison") == (
         "poisoned in the wine",
         "laced wine",
         "poison",
     )
+
+
+def test_jev_forms_are_label_and_aliases_only():
+    # spec: the label and aliases are the only text Jev sees; the display name is typed-only
+    case = replace_in(build_case(), "suspects", "s_boris", display_name="Bobby")
+    ix = CaseIndex.of(case)
+    assert jev_forms(ix, Axis.WHO, "s_boris") == ("Boris the steward", "Boris", "the steward")
+    assert "Bobby" in typed_forms(ix, Axis.WHO, "s_boris")
+    assert match_label(ix, Axis.WHO, "Bobby did it") == "s_boris"
 
 
 @pytest.mark.parametrize(

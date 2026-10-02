@@ -11,7 +11,7 @@ from gumshoe.cases.model.enums import Axis, EffectKind
 from gumshoe.cases.model.index import CaseIndex
 from gumshoe.cases.model.types import Held
 from gumshoe.cases.play.accuse import AccuseKind, accuse
-from gumshoe.cases.play.engine import all_sources, use_source
+from gumshoe.cases.play.engine import all_sources, gather, use_source
 from gumshoe.cases.play.state import PlayState, Triple, new_state
 from gumshoe.cases.rules import gate
 
@@ -115,19 +115,21 @@ def min_sources(case: Case, *, node_limit: int = 20_000) -> int | None:
     full = read_everything(ix).held
     if not all(axis_decidable(ix, full, axis) for axis in Axis):
         return None
-    start = new_state(case)
     sources = all_sources(ix)
-    seen = {start.discovered}
-    queue: deque[tuple[PlayState, int]] = deque([(start, 0)])
+    # the BFS steps with engine.gather (the held set use_source would reach, without its
+    # contradiction and lead work); read_everything above keeps the full use_source path
+    start = new_state(case).held
+    seen = {start}
+    queue: deque[tuple[Held, int]] = deque([(start, 0)])
     while queue:
-        state, depth = queue.popleft()
-        if all(axis_decidable(ix, state.held, axis) for axis in Axis):
+        held, depth = queue.popleft()
+        if all(axis_decidable(ix, held, axis) for axis in Axis):
             return depth
         for source in sources:
-            nxt, _ = use_source(ix, state, source)
-            if nxt.discovered not in seen:
+            nxt = gather(ix, held, source)
+            if nxt not in seen:
                 if len(seen) >= node_limit:
                     raise SearchLimitExceeded(node_limit)
-                seen.add(nxt.discovered)
+                seen.add(nxt)
                 queue.append((nxt, depth + 1))
     return None

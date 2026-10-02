@@ -1,8 +1,11 @@
+import pytest
+
 from gumshoe.cases.model.enums import Axis
 from gumshoe.cases.model.index import CaseIndex
 from gumshoe.cases.play.parse import accusation_questions, interpret
 from gumshoe.decider import ChoiceAnswer, DecisionResult
 from tests.cases.fixtures import build_case
+from tests.cases.helpers import replace_in
 
 IX = CaseIndex.of(build_case())
 
@@ -80,3 +83,20 @@ def test_a_missing_or_foreign_answer_is_none():
     p = prompt()
     r = DecisionResult(model="fake", answers={"who": answer("Z", {"Z": 0.99, "Y": 0.0})})
     assert interpret(p, r) == {Axis.WHO: None, Axis.HOW: None, Axis.WHY: None}
+
+
+def test_jev_criteria_never_carry_the_display_name():
+    case = replace_in(build_case(), "suspects", "s_boris", display_name="Bobby")
+    p = accusation_questions(CaseIndex.of(case), handle_of, 0, "Bobby did it")
+    criteria = " ".join(p.questions["who"].criteria.values())
+    assert "Boris the steward" in criteria and "Bobby" not in criteria
+
+
+def test_more_options_than_letters_is_a_programming_error():
+    many = tuple(
+        build_case().methods[0].model_copy(update={"id": f"m_{i}", "label": f"way {i}"})
+        for i in range(26)
+    )
+    ix = CaseIndex.of(build_case().model_copy(update={"methods": many}))
+    with pytest.raises(AssertionError):
+        accusation_questions(ix, handle_of, 0, "x")

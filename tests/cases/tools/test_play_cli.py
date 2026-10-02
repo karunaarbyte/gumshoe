@@ -107,3 +107,20 @@ def test_warnings_print_before_the_confirmation_prompt():
     run_play(session, read, out.append)
     ask = out.index("(y/n) ")
     assert any("You hold an alibi or clue against Anna" in line for line in out[:ask])
+
+
+def test_non_ascii_digits_re_prompt_instead_of_crashing():
+    # '²'.isdigit() is True but int('²') raises; '١' (Arabic-Indic one) int()s to 1
+    code, text = play(["1", "²", "١", "", "5", "q"])
+    assert code == 0 and text.count("Pick one of the numbers above.") == 2
+    code, text = play(["1", "3", "3", "5", "1", "5", "²", "١", "", "q"])
+    assert code == 0 and text.count("I can't tell which you mean") == 2
+
+
+def test_a_typed_method_the_player_may_not_name_yet_re_prompts():
+    # after only the study search the rope is a real method but not nameable: typing it must
+    # look like nonsense; the poison, which is nameable, resolves
+    code, text = play(["1", "3", "5", "Boris", "the rope", "poison", "q"])
+    assert code == 0
+    assert text.count("I can't tell which you mean") == 1
+    assert 'enough to name anyone for "Why was it done?"' in text
