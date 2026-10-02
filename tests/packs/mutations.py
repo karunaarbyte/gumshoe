@@ -173,3 +173,8 @@ mutation(
         "",
     ),
 )
+
+# ---- stage 6: capacity and presets -----------------------------------------------------------
+
+mutation("PRESET_UNSUPPORTED", replace('presets = ["tiny"]', 'presets = ["tiny", "huge"]'))
+mutation("PRESET_NOT_MONOTONE", replace('presets = ["tiny"]', 'presets = ["short", "standard"]'))
