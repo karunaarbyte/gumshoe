@@ -378,10 +378,9 @@ class GameSession:
     def _visible(self, axis: Axis, handle: str | None) -> str | None:
         """How and why candidates the gate has not opened look exactly like non-candidates,
         so their existence cannot be probed. Suspects are public and pass through."""
-        if handle is None or axis is Axis.WHO:
-            return handle
-        nameable = {c.handle for c in self.nameable(axis.value).options}
-        return handle if handle in nameable else None
+        if handle is None or self._ids.get(handle) not in self._namable_ids(axis):
+            return None
+        return handle
 
     def _namable_ids(self, axis: Axis) -> frozenset[str]:
         """Candidates a typed or asked-about name may resolve to: every suspect (they are public)

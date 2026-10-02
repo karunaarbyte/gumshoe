@@ -1,4 +1,5 @@
-"""`python -m gumshoe.cases validate case.json`: a developer report. Never shown to players."""
+"""`python -m gumshoe.cases validate|simulate|play`: validate and simulate are developer reports,
+never shown to players; play is the player surface and reads only what a player may see."""
 
 import argparse
 import secrets
