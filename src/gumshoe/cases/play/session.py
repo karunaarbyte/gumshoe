@@ -23,6 +23,7 @@ from gumshoe.cases.play.engine import (
 from gumshoe.cases.play.labels import match_label as match_label_ids
 from gumshoe.cases.play.parse import AccusationPrompt, accusation_questions
 from gumshoe.cases.play.parse import interpret as interpret_answers
+from gumshoe.cases.play.reply_check import reply_check
 from gumshoe.cases.play.state import MAX_ATTEMPTS, PlayState, Status, Triple
 from gumshoe.cases.play.views import (
     AccusationPlan,
@@ -39,6 +40,8 @@ from gumshoe.cases.play.views import (
     ParsedAccusation,
     PlayerCaseView,
     RecordKindView,
+    ReplyCheck,
+    ReplyViolation,
     ResolvedPart,
     RevealView,
     SourceResult,
@@ -483,6 +486,14 @@ class GameSession:
         elif self._state.status is Status.LOST:
             message += " That was your last attempt. The case goes cold."
         return self._answer("resolved", message, correct)
+
+    def check_reply(self, suspect_handle: str, player_text: str, reply: str) -> ReplyCheck:
+        suspect = self._ids.get(suspect_handle, "")
+        if suspect not in self._ix.suspects:
+            return ReplyCheck(
+                ok=False, violations=(ReplyViolation(category="unknown_suspect", count=1),)
+            )
+        return reply_check(self._ix, self._state, suspect, player_text, reply)
 
     def reveal(self) -> RevealView:
         truth = engine_reveal(self._ix, self._state)  # raises GameNotOver while playing

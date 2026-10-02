@@ -52,7 +52,7 @@ def run(seed: int) -> tuple[list[str], GameSession]:
                 ["search"] * 3
                 + ["ask"] * 3
                 + ["records"] * 3
-                + ["accuse", "accuse_ok", "accuse_ok", "describe", "notebook"]
+                + ["accuse", "accuse_ok", "accuse_ok", "describe", "notebook", "reply"]
                 + ["give_up"] * (1 if rng.random() < 0.15 else 0)
             )
             if action == "search":
@@ -64,6 +64,12 @@ def run(seed: int) -> tuple[list[str], GameSession]:
                     rng.choice(places + people), rng.choice([None, "ledger", "x"])
                 )
                 blobs.append(result.model_dump_json())
+            elif action == "reply":
+                check = s.check_reply(
+                    rng.choice(people), "Tell me.", rng.choice(["I was home.", "It was poison."])
+                )
+                assert s.state_json() == before
+                blobs.append(check.model_dump_json())
             elif action == "give_up":
                 s.give_up()
             elif action in ("accuse", "accuse_ok", "describe"):
@@ -186,7 +192,8 @@ def play_through(case) -> None:
     s.describe_accusation(parsed)
     s.accuse(parsed)
     s.accuse(parsed, confirmed=True)
-    s.accuse(ParsedAccusation(who="h_bogus"))
+    if s.status == "playing":
+        s.accuse(ParsedAccusation(who="h_bogus"))
     s.accusation_prompt("anything")
     if s.status == "playing":
         s.give_up()

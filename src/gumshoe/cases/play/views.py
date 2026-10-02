@@ -140,3 +140,13 @@ class RevealView(View):
     method: str
     motive: str
     secret: str
+
+
+class ReplyViolation(View):
+    category: str  # who | how | why | unknown_suspect: a category and a count, never the word
+    count: int
+
+
+class ReplyCheck(View):
+    ok: bool
+    violations: tuple[ReplyViolation, ...]
