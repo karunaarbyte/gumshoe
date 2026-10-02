@@ -523,3 +523,56 @@ def _cook_no_ledger(case: Case, pack: Pack) -> tuple[Case, Pack]:
 
 
 pair_mutation("ROLE_RECORD_KIND_NOT_ALLOWED", _cook_no_ledger)
+
+mutation(
+    "LOCATION_KIND_NOT_IN_PACK",
+    lambda c: replace_in(c, "locations", "l_cellar", kind="dungeon"),
+    strict=True,
+    profile=Profile.STRICT,
+)
+mutation(
+    "LOCATION_KIND_NOT_IN_SCENE",
+    lambda c: replace_in(c, "locations", "l_study", kind="garden"),
+    strict=True,
+    profile=Profile.STRICT,
+)
+mutation(
+    "TRACE_KIND_NOT_ALLOWED",
+    lambda c: replace_fact(c, "f_trace_poison", trace_kind="blood"),
+    strict=True,
+    profile=Profile.STRICT,
+)
+mutation(
+    "TRACE_KIND_MISSING",
+    lambda c: replace_fact(c, "f_trace_poison", trace_kind=None),
+    strict=True,
+    profile=Profile.STRICT,
+)
+
+
+def _drop_ledger(case: Case, pack: Pack) -> tuple[Case, Pack]:
+    pack = pack.model_copy(
+        update={
+            "record_kinds": ("gate_log",),
+            "record_defs": tuple(d for d in pack.record_defs if d.key != "ledger"),
+        }
+    )
+    return _rehash(case, pack), pack
+
+
+pair_mutation("RECORD_KIND_NOT_IN_PACK", _drop_ledger)
+
+
+def _ledger_claim(case: Case, pack: Pack) -> tuple[Case, Pack]:
+    claim = Claim(kind=ClaimKind.RECORD_REF, actor="s_anna", slot=2, record_kind="ledger")
+    # a bare fact: no effects, no timeline_ref; l_cellar is the one search source under the cap
+    case = add_fact(case, _fact("f_ledger_claim", claim=claim, source=search("l_cellar")))
+    defs = tuple(
+        d.model_copy(update={"subject": "location"}) if d.key == "ledger" else d
+        for d in pack.record_defs
+    )
+    pack = pack.model_copy(update={"record_defs": defs})
+    return _rehash(case, pack), pack
+
+
+pair_mutation("CLAIM_SUBJECT_MISMATCH", _ledger_claim)

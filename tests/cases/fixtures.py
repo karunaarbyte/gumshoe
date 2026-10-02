@@ -27,7 +27,16 @@ from gumshoe.cases.model.enums import (
     RecordSubjectType,
     SourceKind,
 )
-from gumshoe.cases.model.pack import Capacity, Pack, RoleDef, SceneType
+from gumshoe.cases.model.pack import (
+    Capacity,
+    LocationDef,
+    MethodDef,
+    Pack,
+    RecordDef,
+    RoleDef,
+    SceneType,
+    TraceDef,
+)
 from gumshoe.cases.model.spec import PresetDef, SizeRange
 
 RULES_OUT, SUPPORTS, PROVES = EffectKind.RULES_OUT, EffectKind.SUPPORTS, EffectKind.PROVES
@@ -248,6 +257,7 @@ def build_facts() -> tuple[Fact, ...]:
         Fact(
             id="f_sup_poison",
             kind=FactKind.TRACE,
+            trace_kind="residue",
             source=record("gate_log", "l_garden"),
             effects=(eff(HOW, "m_poison", SUPPORTS),),
             text="Wine was carried up from the cellar.",
@@ -425,15 +435,25 @@ TINY_PRESETS = {
 
 def build_pack() -> Pack:
     motive_types = ("debt", "inheritance", "jealousy")
+    all_places = ("cellar", "garden", "study")
+
+    def method(key: str, label: str, kind: str) -> MethodDef:
+        return MethodDef(
+            key=key,
+            label=label,
+            traces=(TraceDef(kind=kind, location_kinds=all_places),),
+        )
+
     return Pack(
         id="tiny",
         capacity=Capacity(max_suspects=3, max_locations=3, max_methods=3, max_record_kinds=2),
+        presets=("tiny",),
         scene_types=(
             SceneType(
                 key="study_murder",
                 location_kinds=("study",),
                 allowed_methods=("dagger", "poison", "rope"),
-                allowed_trace_kinds=("residue",),
+                allowed_trace_kinds=("fibre", "residue", "wound"),
             ),
         ),
         roles=(
@@ -442,6 +462,16 @@ def build_pack() -> Pack:
             RoleDef(key="cook", record_kinds=("ledger",), motive_types=motive_types),
         ),
         record_kinds=("gate_log", "ledger"),
+        location_defs=tuple(LocationDef(key=k) for k in all_places),
+        record_defs=(
+            RecordDef(key="gate_log", subject="location", medium="written"),
+            RecordDef(key="ledger", subject="suspect", medium="written"),
+        ),
+        method_defs=(
+            method("dagger", "stabbed with a dagger", "wound"),
+            method("poison", "poisoned in the wine", "residue"),
+            method("rope", "strangled with a rope", "fibre"),
+        ),
     )
 
 

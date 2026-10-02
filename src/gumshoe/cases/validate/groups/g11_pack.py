@@ -1,6 +1,7 @@
 """Group 11: the only rules that need a Pack."""
 
-from gumshoe.cases.model.enums import Origin, SourceKind
+from gumshoe.cases.model.enums import ClaimKind, FactKind, Origin, SourceKind
+from gumshoe.cases.model.pack import SceneType
 from gumshoe.cases.model.spec import UnsupportedPreset, derive_spec
 from gumshoe.cases.validate.catalogue import CATALOGUE
 from gumshoe.cases.validate.context import Ctx
@@ -87,4 +88,72 @@ def run(ctx: Ctx) -> list[Issue]:
             out.append(
                 ctx.issue("ROLE_RECORD_KIND_NOT_ALLOWED", s.id, record_kind=secret.source.target)
             )
+    out += _cross_references(ctx, scene)
+    return out
+
+
+def _cross_references(ctx: Ctx, scene: SceneType | None) -> list[Issue]:
+    case, pack = ctx.case, ctx.pack
+    assert pack is not None
+    out: list[Issue] = []
+    location_kinds = {d.key for d in pack.location_defs}
+    for loc in case.locations:
+        if loc.kind not in location_kinds:
+            out.append(ctx.issue("LOCATION_KIND_NOT_IN_PACK", loc.id, kind=loc.kind))
+    out += _crime_location(ctx, scene)
+    out += _trace_kinds(ctx, scene)
+    out += _record_kinds(ctx)
+    return out
+
+
+def _crime_location(ctx: Ctx, scene: SceneType | None) -> list[Issue]:
+    crime = next((e for e in ctx.case.timeline if e.action == "crime"), None)
+    place = ctx.index.locations.get(crime.place) if crime is not None else None
+    if scene is None or place is None or place.kind in scene.location_kinds:
+        return []
+    return [ctx.issue("LOCATION_KIND_NOT_IN_SCENE", place.id, scene=scene.key, kind=place.kind)]
+
+
+def _trace_kinds(ctx: Ctx, scene: SceneType | None) -> list[Issue]:
+    pack, ix = ctx.pack, ctx.index
+    assert pack is not None
+    places: dict[str, set[str]] = {}
+    for method in pack.method_defs:
+        for trace in method.traces:
+            places.setdefault(trace.kind, set()).update(trace.location_kinds)
+    out: list[Issue] = []
+    for f in ctx.case.facts:
+        if f.kind not in (FactKind.TRACE, FactKind.ABSENT_TRACE):
+            continue
+        if f.trace_kind is None:
+            out.append(ctx.issue("TRACE_KIND_MISSING", f.id))
+            continue
+        where = places.get(f.trace_kind)
+        found_at = ix.locations.get(f.source.target) if f.source.kind is SourceKind.SEARCH else None
+        if (
+            where is None
+            or (scene is not None and f.trace_kind not in scene.allowed_trace_kinds)
+            or (found_at is not None and found_at.kind not in where)
+        ):
+            out.append(ctx.issue("TRACE_KIND_NOT_ALLOWED", f.id, trace_kind=f.trace_kind))
+    return out
+
+
+def _record_kinds(ctx: Ctx) -> list[Issue]:
+    pack = ctx.pack
+    assert pack is not None
+    known = pack.known_record_kinds
+    subject = {d.key: d.subject for d in pack.record_defs}
+    out: list[Issue] = []
+    for kind in sorted({rs.kind for rs in ctx.case.record_sources}):
+        if kind not in known:
+            out.append(ctx.issue("RECORD_KIND_NOT_IN_PACK", kind))
+    for f in ctx.case.facts:
+        claim = f.claim
+        if claim is None or claim.kind is not ClaimKind.RECORD_REF or claim.record_kind is None:
+            continue
+        if claim.record_kind not in known:
+            out.append(ctx.issue("RECORD_KIND_NOT_IN_PACK", f.id, kind=claim.record_kind))
+        elif subject.get(claim.record_kind, "suspect") != "suspect":
+            out.append(ctx.issue("CLAIM_SUBJECT_MISMATCH", f.id, kind=claim.record_kind))
     return out

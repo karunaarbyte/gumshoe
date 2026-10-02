@@ -32,6 +32,12 @@ def test_a_generated_case_without_a_pack_is_never_silently_clean_under_strict():
         "ROLE_UNKNOWN",
         "ROLE_MOTIVE_NOT_ALLOWED",
         "ROLE_RECORD_KIND_NOT_ALLOWED",
+        "LOCATION_KIND_NOT_IN_PACK",
+        "LOCATION_KIND_NOT_IN_SCENE",
+        "TRACE_KIND_NOT_ALLOWED",
+        "TRACE_KIND_MISSING",
+        "RECORD_KIND_NOT_IN_PACK",
+        "CLAIM_SUBJECT_MISMATCH",
     }
 
 
