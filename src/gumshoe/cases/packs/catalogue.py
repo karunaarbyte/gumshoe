@@ -83,6 +83,7 @@ _ROWS = (
     ),
     # stage 5: plausibility
     _row("ROLE_NO_RECORD_KIND", 5, "the role has no record kind"),
+    _row("ROLE_NO_SUSPECT_RECORD", 5, "the role has no record kind about a suspect"),
     _row(
         "ROLE_TOO_FEW_MOTIVES",
         5,

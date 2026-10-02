@@ -20,11 +20,14 @@ def _placeable(method: MethodDef, scene: SceneType) -> bool:
 
 def check(pack: Pack) -> list[PackIssue]:
     out: list[PackIssue] = []
+    about_suspect = {d.key for d in pack.record_defs if d.subject == "suspect"}
     allowed = {m for role in pack.roles for m in role.motive_types}
     for role in pack.roles:
         base = f"roles.{role.key}"
         if not role.record_kinds:
             out.append(make("ROLE_NO_RECORD_KIND", f"{base}.record_kinds"))
+        elif not about_suspect.intersection(role.record_kinds):
+            out.append(make("ROLE_NO_SUSPECT_RECORD", f"{base}.record_kinds"))
         distinct = len(set(role.motive_types))
         if distinct < MIN_ROLE_MOTIVES:
             out.append(

@@ -27,6 +27,7 @@
 | METHOD_TOO_RARE | 5 | error | the method is allowed in {count} scene types; needs at least {needed} |
 | MOTIVE_UNREACHABLE | 5 | error | no role allows this motive type |
 | ROLE_NO_RECORD_KIND | 5 | error | the role has no record kind |
+| ROLE_NO_SUSPECT_RECORD | 5 | error | the role has no record kind about a suspect |
 | ROLE_TOO_FEW_MOTIVES | 5 | error | the role allows {count} motive types; needs at least {needed} |
 | SCENE_METHOD_IMPOSSIBLE | 5 | error | no trace of method {method!r} can be placed at scene type {scene!r} |
 | SCENE_NO_CRIME_LOCATION | 5 | error | the scene type has no location kind for the crime |

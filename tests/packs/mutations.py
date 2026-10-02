@@ -135,6 +135,10 @@ mutation(
 
 mutation("ROLE_NO_RECORD_KIND", replace('record_kinds = ["ledger"]', "record_kinds = []"))
 mutation(
+    "ROLE_NO_SUSPECT_RECORD",
+    replace('record_kinds = ["ledger"]', 'record_kinds = ["gate_log"]'),
+)
+mutation(
     "ROLE_TOO_FEW_MOTIVES",
     replace(
         'motive_types = ["debt", "inheritance", "jealousy"]',

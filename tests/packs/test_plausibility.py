@@ -1,4 +1,4 @@
-from gumshoe.cases.model.pack import Pack, RoleDef, SceneType, SlotDef
+from gumshoe.cases.model.pack import Pack, RecordDef, RoleDef, SceneType, SlotDef
 from gumshoe.cases.packs.check import plausibility
 from tests.packs.fixtures import CAPACITY, rich_pack
 
@@ -23,6 +23,39 @@ def test_every_role_needs_three_motive_types_and_a_record_kind():
     got = found(rich_pack(roles=(role,)))
     assert ("ROLE_NO_RECORD_KIND", "roles.r.record_kinds") in got
     assert ("ROLE_TOO_FEW_MOTIVES", "roles.r.motive_types") in got  # two entries, one distinct
+
+
+def _gate_log():
+    return RecordDef(key="gate_log", subject="location", medium="written")
+
+
+def _role_with(*kinds):
+    return RoleDef(key="r", record_kinds=kinds, motive_types=("debt", "a", "b"))
+
+
+def _record_pack(*kinds):
+    base = rich_pack()
+    return rich_pack(roles=(_role_with(*kinds),), record_defs=(*base.record_defs, _gate_log()))
+
+
+def test_a_role_with_only_location_records_has_no_suspect_record():
+    got = found(_record_pack("gate_log"))
+    assert ("ROLE_NO_SUSPECT_RECORD", "roles.r.record_kinds") in got
+
+
+def test_a_suspect_record_plus_a_location_record_is_enough():
+    assert "ROLE_NO_SUSPECT_RECORD" not in [c for c, _ in found(_record_pack("ledger", "gate_log"))]
+
+
+def test_a_role_with_no_record_kinds_reports_only_the_missing_kind():
+    codes = [c for c, _ in found(_record_pack())]
+    assert "ROLE_NO_RECORD_KIND" in codes
+    assert "ROLE_NO_SUSPECT_RECORD" not in codes
+
+
+def test_an_undefined_record_kind_is_not_about_a_suspect():
+    got = found(_record_pack("nowhere"))
+    assert ("ROLE_NO_SUSPECT_RECORD", "roles.r.record_kinds") in got
 
 
 def test_a_motive_type_no_role_allows_is_unreachable():
