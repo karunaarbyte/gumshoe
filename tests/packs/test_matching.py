@@ -2,7 +2,7 @@ import time
 
 from gumshoe.cases.model.pack import Capacity, MotiveDef, Pack, RoleDef
 from gumshoe.cases.packs.check import matching
-from tests.packs.fixtures import CAPACITY, TEST_PRESETS, rich_pack
+from tests.packs.fixtures import CAPACITY, TEST_PRESETS, rich_pack, scenes
 
 
 def test_matchings_enumerates_distinct_assignments_in_sorted_order():
@@ -19,6 +19,7 @@ def _pack(allowed: dict[str, tuple[str, ...]], preset="tiny", suspects=3):
         capacity=Capacity(
             max_suspects=suspects, max_locations=3, max_methods=3, max_record_kinds=2
         ),
+        scene_types=scenes(3),
         roles=tuple(
             RoleDef(key=k, record_kinds=("ledger",), motive_types=v) for k, v in allowed.items()
         ),

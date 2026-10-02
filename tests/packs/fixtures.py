@@ -22,6 +22,21 @@ from tests.cases.fixtures import LIMITS
 CAPACITY = Capacity(max_suspects=3, max_locations=3, max_methods=3, max_record_kinds=2)
 
 
+def scenes(
+    count: int, methods: tuple[str, ...] = ("dagger", "poison", "rope")
+) -> tuple[SceneType, ...]:
+    """`count` scene types that each allow every given method, for capacity tests."""
+    return tuple(
+        SceneType(
+            key=f"scene{i}",
+            location_kinds=("study",),
+            allowed_methods=methods,
+            allowed_trace_kinds=("residue",),
+        )
+        for i in range(count)
+    )
+
+
 def rich_pack(**changes: Any) -> Pack:
     """A small pack with one of every table, for model tests (not guaranteed check-clean)."""
     fields: dict[str, Any] = {
@@ -247,6 +262,11 @@ allowed_trace_kinds = ["fibre", "residue", "wound"]
 
 [scene_types.garden_murder]
 location_kinds = ["garden"]
+allowed_methods = ["dagger", "poison", "rope"]
+allowed_trace_kinds = ["fibre", "residue", "wound"]
+
+[scene_types.cellar_murder]
+location_kinds = ["cellar"]
 allowed_methods = ["dagger", "poison", "rope"]
 allowed_trace_kinds = ["fibre", "residue", "wound"]
 

@@ -8,6 +8,7 @@ from gumshoe.cases.model.spec import PRESET_ORDER, PresetDef, UnsupportedPreset,
 from gumshoe.cases.packs.catalogue import make
 from gumshoe.cases.packs.issues import PackIssue
 
+MIN_HOSTING_SCENES = 3  # scene types able to carry a preset's method count, else it is one place
 SIZES = ("suspects", "methods", "locations", "record_kinds", "slots")
 
 
@@ -28,6 +29,12 @@ def _preset_problems(
         problems.append(f"roles={len(pack.roles)} (needs at least {spec.suspects})")
     if spec.suspects > len(pack.motive_defs):
         problems.append(f"motive types={len(pack.motive_defs)} (needs at least {spec.suspects})")
+    hosting = sum(1 for s in pack.scene_types if len(set(s.allowed_methods)) >= spec.methods)
+    if hosting < MIN_HOSTING_SCENES:
+        problems.append(
+            f"scene types allowing {spec.methods} methods={hosting}"
+            f" (needs at least {MIN_HOSTING_SCENES})"
+        )
     return (None, "; ".join(problems)) if problems else (spec, "")
 
 

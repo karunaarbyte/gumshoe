@@ -152,11 +152,19 @@ mutation(
 mutation("SCENE_NO_CRIME_LOCATION", replace('location_kinds = ["study"]', "location_kinds = []"))
 mutation(
     "METHOD_TOO_RARE",
-    replace(
-        '[scene_types.garden_murder]\nlocation_kinds = ["garden"]\n'
-        'allowed_methods = ["dagger", "poison", "rope"]',
-        '[scene_types.garden_murder]\nlocation_kinds = ["garden"]\n'
-        'allowed_methods = ["dagger", "poison"]',
+    chain(
+        replace(
+            '[scene_types.garden_murder]\nlocation_kinds = ["garden"]\n'
+            'allowed_methods = ["dagger", "poison", "rope"]',
+            '[scene_types.garden_murder]\nlocation_kinds = ["garden"]\n'
+            'allowed_methods = ["dagger", "poison"]',
+        ),
+        replace(
+            '[scene_types.cellar_murder]\nlocation_kinds = ["cellar"]\n'
+            'allowed_methods = ["dagger", "poison", "rope"]',
+            '[scene_types.cellar_murder]\nlocation_kinds = ["cellar"]\n'
+            'allowed_methods = ["dagger", "poison"]',
+        ),
     ),
 )
 mutation(
