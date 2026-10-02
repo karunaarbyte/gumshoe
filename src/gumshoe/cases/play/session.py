@@ -1,0 +1,335 @@
+"""GameSession: the only door to a game. It keeps the skeleton Case and the PlayState
+server-side and hands out views, never ids, truth or effect kinds."""
+
+from typing import Literal
+
+from gumshoe.cases.core.ids import make_id
+from gumshoe.cases.model.case import Case
+from gumshoe.cases.model.entities import Fact, SourceRef
+from gumshoe.cases.model.enums import Axis, SourceKind
+from gumshoe.cases.model.index import CaseIndex
+from gumshoe.cases.model.serialize import load_case, skeleton_digest
+from gumshoe.cases.play.accuse import GameNotOver, give_up
+from gumshoe.cases.play.engine import (
+    Contradiction,
+    SourceStatus,
+    is_open,
+    record_kinds,
+    source_sort_key,
+    use_source,
+)
+from gumshoe.cases.play.state import MAX_ATTEMPTS, PlayState, Status
+from gumshoe.cases.play.views import (
+    ContradictionView,
+    FactView,
+    LocationView,
+    NotebookFact,
+    NotebookSection,
+    NotebookView,
+    PlayerCaseView,
+    RecordKindView,
+    SourceResult,
+    SuspectView,
+)
+from gumshoe.cases.rules import gate
+
+FALLBACK_CONTRADICTION = 'That statement does not hold up against what you have found: "{text}"'
+
+__all__ = [
+    "FALLBACK_CONTRADICTION",
+    "GameNotOver",
+    "GameOver",
+    "GameSession",
+    "StateMismatch",
+    "load_session",
+]
+
+
+class GameOver(Exception):
+    """The game has ended: no more actions."""
+
+
+class StateMismatch(ValueError):
+    """The play state belongs to a different case."""
+
+
+def _humanise(key: str) -> str:
+    return key.replace("_", " ")
+
+
+def _make_handles(case: Case, salt: str) -> dict[str, str]:
+    ids = [
+        *(x.id for x in case.suspects),
+        *(x.id for x in case.locations),
+        *(x.id for x in case.methods),
+        *(x.id for x in case.motives),
+        *(x.id for x in case.facts),
+    ]
+    handles = {entity: make_id("h", salt, entity) for entity in ids}
+    if len(set(handles.values())) != len(handles):
+        raise ValueError("handle collision: use another salt")
+    return handles
+
+
+class GameSession:
+    def __init__(self, case: Case, salt: str, state: PlayState | None = None) -> None:
+        digest = skeleton_digest(case)
+        if state is None:
+            known = {f.id for f in case.facts}
+            start = tuple(f for f in case.start.facts if f in known)
+            state = PlayState(case_digest=digest, discovered=start)
+        elif state.case_digest != digest:
+            raise StateMismatch("this save belongs to a different case")
+        self._ix = CaseIndex.of(case)
+        self._state = state
+        self._handles = _make_handles(case, salt)
+        self._ids = {handle: entity for entity, handle in self._handles.items()}
+
+    # -- state ------------------------------------------------------------------------------
+
+    @property
+    def status(self) -> str:
+        return self._state.status.value
+
+    @property
+    def attempts_left(self) -> int:
+        return MAX_ATTEMPTS - self._state.attempts
+
+    def state_json(self) -> str:
+        return self._state.model_dump_json()
+
+    def give_up(self) -> None:
+        self._require_playing()
+        self._state = give_up(self._state)
+
+    def _require_playing(self) -> None:
+        if self._state.status is not Status.PLAYING:
+            raise GameOver("the game has ended")
+
+    # -- names and labels -------------------------------------------------------------------
+
+    def _suspect_name(self, suspect_id: str) -> str:
+        s = self._ix.suspects[suspect_id]
+        return s.display_name or s.label
+
+    def _location_name(self, location_id: str) -> str:
+        loc = self._ix.locations[location_id]
+        return loc.name or loc.kind
+
+    def _subject_name(self, subject: str) -> str:
+        if subject in self._ix.suspects:
+            return self._suspect_name(subject)
+        if subject in self._ix.locations:
+            return self._location_name(subject)
+        event = self._ix.events.get(subject)
+        return event.action if event else "something"
+
+    def _label(self, source: SourceRef) -> str:
+        if source.kind is SourceKind.SEARCH:
+            return self._location_name(source.target)
+        if source.kind is SourceKind.INTERROGATE:
+            return self._suspect_name(source.target)
+        subject = self._subject_name(source.subject or "")
+        return f"{_humanise(source.target).capitalize()}: {subject}"
+
+    # -- views ------------------------------------------------------------------------------
+
+    def _fact_view(self, fact: Fact, exposed: frozenset[str]) -> FactView:
+        speaker = fact.speaker if fact.speaker in self._ix.suspects else None
+        return FactView(
+            handle=self._handles[fact.id],
+            text=fact.text,
+            speaker=self._suspect_name(speaker) if speaker else None,
+            source=self._label(fact.source),
+            contradicted=fact.id in exposed,
+        )
+
+    def _contradiction_view(self, item: Contradiction) -> ContradictionView:
+        lie = self._ix.facts[item.lie]
+        return ContradictionView(
+            lie=self._handles[item.lie],
+            exposer=self._handles[item.exposer],
+            text=lie.contradiction or FALLBACK_CONTRADICTION.format(text=lie.text),
+        )
+
+    def brief(self) -> PlayerCaseView:
+        held = self._state.held
+        case = self._ix.case
+        locations = sorted(case.locations, key=lambda x: (self._location_name(x.id), x.id))
+        suspects = sorted(case.suspects, key=lambda x: (self._suspect_name(x.id), x.id))
+        return PlayerCaseView(
+            intro=case.intro,
+            locations=tuple(
+                LocationView(
+                    number=n,
+                    handle=self._handles[loc.id],
+                    name=self._location_name(loc.id),
+                    description=loc.description,
+                    locked=not is_open(
+                        self._ix, held, SourceRef(kind=SourceKind.SEARCH, target=loc.id)
+                    ),
+                )
+                for n, loc in enumerate(locations, start=1)
+            ),
+            suspects=tuple(
+                SuspectView(
+                    number=n,
+                    handle=self._handles[sus.id],
+                    name=self._suspect_name(sus.id),
+                    description=sus.description,
+                    locked=not is_open(
+                        self._ix, held, SourceRef(kind=SourceKind.INTERROGATE, target=sus.id)
+                    ),
+                )
+                for n, sus in enumerate(suspects, start=1)
+            ),
+            record_kinds=tuple(
+                RecordKindView(key=k, label=_humanise(k)) for k in record_kinds(self._ix)
+            ),
+            attempts_left=self.attempts_left,
+            status=self.status,
+        )
+
+    # -- using sources ----------------------------------------------------------------------
+
+    def _result(
+        self,
+        kind: Literal["search", "interrogate", "records"],
+        label: str,
+        status: str,
+        new_ids: tuple[str, ...] = (),
+        contradictions: tuple[Contradiction, ...] = (),
+        opened: tuple[SourceRef, ...] = (),
+        kinds: tuple[str, ...] = (),
+    ) -> SourceResult:
+        exposed = gate.exposed(self._ix, self._state.held)
+        return SourceResult(
+            kind=kind,
+            label=label,
+            status=status,
+            new_facts=tuple(self._fact_view(self._ix.facts[i], exposed) for i in sorted(new_ids)),
+            contradictions=tuple(self._contradiction_view(c) for c in contradictions),
+            opened=tuple(self._label(s) for s in opened),
+            kinds=kinds,
+        )
+
+    def _single(
+        self, kind: Literal["search", "interrogate"], source_kind: SourceKind, handle: str
+    ) -> SourceResult:
+        self._require_playing()
+        target = self._ids.get(handle, "")
+        known = self._ix.locations if source_kind is SourceKind.SEARCH else self._ix.suspects
+        if target not in known:
+            return self._result(kind, "", SourceStatus.UNKNOWN.value)
+        source = SourceRef(kind=source_kind, target=target)
+        label = self._label(source)
+        self._state, out = use_source(self._ix, self._state, source)
+        return self._result(
+            kind, label, out.status.value, out.new_facts, out.contradictions, out.opened
+        )
+
+    def search(self, location_handle: str) -> SourceResult:
+        return self._single("search", SourceKind.SEARCH, location_handle)
+
+    def interrogate(self, suspect_handle: str) -> SourceResult:
+        return self._single("interrogate", SourceKind.INTERROGATE, suspect_handle)
+
+    def check_records(self, subject_handle: str, kind: str | None = None) -> SourceResult:
+        """Records about a suspect or a location: one kind, or every kind declared about them."""
+        self._require_playing()
+        subject = self._ids.get(subject_handle, "")
+        if subject not in self._ix.suspects and subject not in self._ix.locations:
+            return self._result("records", "", SourceStatus.UNKNOWN.value)
+        if kind is not None and kind not in record_kinds(self._ix):
+            return self._result("records", "", SourceStatus.UNKNOWN.value)
+        wanted = (
+            (kind,)
+            if kind is not None
+            else tuple(
+                sorted({r.kind for r in self._ix.case.record_sources if r.subject == subject})
+            )
+        )
+        name = self._subject_name(subject)
+        label = f"{_humanise(kind).capitalize()}: {name}" if kind else f"Records: {name}"
+        statuses: list[SourceStatus] = []
+        new_ids: list[str] = []
+        contradictions: list[Contradiction] = []
+        opened: set[SourceRef] = set()
+        contributed: list[str] = []
+        for k in wanted:
+            source = SourceRef(kind=SourceKind.RECORD, target=k, subject=subject)
+            self._state, out = use_source(self._ix, self._state, source)
+            statuses.append(out.status)
+            new_ids += out.new_facts
+            contradictions += out.contradictions
+            opened |= set(out.opened)
+            if out.status is SourceStatus.OK:
+                contributed.append(_humanise(k))
+        if SourceStatus.OK in statuses:
+            status = SourceStatus.OK
+        elif SourceStatus.LOCKED in statuses:
+            status = SourceStatus.LOCKED
+        else:
+            status = SourceStatus.NOTHING_NEW
+        return self._result(
+            "records",
+            label,
+            status.value,
+            tuple(new_ids),
+            tuple(contradictions),
+            tuple(sorted(opened, key=source_sort_key)),
+            tuple(contributed),
+        )
+
+    # -- the notebook -----------------------------------------------------------------------
+
+    def notebook(self) -> NotebookView:
+        ix, held = self._ix, self._state.held
+        exposed = gate.exposed(ix, held)
+        groups: dict[SourceRef, list[Fact]] = {}
+        for fact in ix.case.facts:
+            if fact.id in held:
+                groups.setdefault(fact.source, []).append(fact)
+
+        def relates(fact: Fact) -> tuple[str, ...]:
+            names = {
+                self._suspect_name(e.candidate)
+                for e in fact.effects
+                if e.axis is Axis.WHO and e.candidate in ix.suspects
+            }
+            return tuple(sorted(names))
+
+        sections = tuple(
+            NotebookSection(
+                source=self._label(source),
+                facts=tuple(
+                    NotebookFact(
+                        handle=self._handles[f.id],
+                        text=f.text,
+                        speaker=self._suspect_name(f.speaker) if f.speaker in ix.suspects else None,
+                        relates_to=relates(f),
+                        contradicted=f.id in exposed,
+                    )
+                    for f in facts
+                ),
+            )
+            for source, facts in sorted(
+                groups.items(), key=lambda kv: (self._label(kv[0]), source_sort_key(kv[0]))
+            )
+        )
+        contradictions = tuple(
+            self._contradiction_view(
+                Contradiction(
+                    lie=lie,
+                    exposer=min((e for e in ix.facts[lie].exposed_by if e in held), default=lie),
+                )
+            )
+            for lie in sorted(exposed)
+        )
+        return NotebookView(sections=sections, contradictions=contradictions)
+
+
+def load_session(data: bytes, salt: str, state_json: str | None = None) -> GameSession:
+    """Build a session from case JSON bytes (and optionally a saved PlayState JSON)."""
+    state = PlayState.model_validate_json(state_json) if state_json is not None else None
+    return GameSession(load_case(data), salt, state)
