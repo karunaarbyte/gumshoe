@@ -358,3 +358,64 @@ def test_real_cases_determinism():
 def test_code_outside_cases_uses_only_the_cases_public_api():
     outside = [p for p in sources(SRC / "gumshoe") if CASES not in p.parents]
     assert violations(outside, ("gumshoe.cases.",)) == []
+
+
+# --- the player surface (plan 2b) ---------------------------------------------------------
+
+PLAYER_SURFACE = ("tools/play_cli.py",)
+PLAYER_ALLOWED = {"gumshoe.cases.play", "gumshoe.cases.play.session", "gumshoe.cases.play.views"}
+
+
+def cases_player_surface_problems(root: Path) -> list[str]:
+    """Player-facing code sees only the play package's public face; views import no gumshoe code."""
+    cases_root = root / "gumshoe" / "cases"
+    problems: list[str] = []
+    for rel in PLAYER_SURFACE:
+        path = cases_root / rel
+        if not path.exists():
+            continue
+        problems += [
+            f"{path.relative_to(root)} imports {module}"
+            for module in sorted(imported_modules(path, root))
+            if module.startswith("gumshoe.cases") and module not in PLAYER_ALLOWED
+        ]
+    views = cases_root / "play" / "views.py"
+    if views.exists():
+        problems += [
+            f"{views.relative_to(root)} imports {module}"
+            for module in sorted(imported_modules(views, root))
+            if module.startswith("gumshoe")
+        ]
+    return problems
+
+
+def test_player_surface_checker_flags_skeleton_imports(tmp_path):
+    root = make_cases_tree(
+        tmp_path,
+        {
+            "tools/play_cli.py": "from gumshoe.cases.model.case import Case\n"
+            "from gumshoe.cases.play import GameSession\n"
+            "from gumshoe.cases.play.engine import use_source\n",
+            "play/views.py": "from gumshoe.cases.model.case import Case\nimport pydantic\n",
+        },
+    )
+    assert cases_player_surface_problems(root) == [
+        "gumshoe/cases/tools/play_cli.py imports gumshoe.cases.model.case",
+        "gumshoe/cases/tools/play_cli.py imports gumshoe.cases.play.engine",
+        "gumshoe/cases/play/views.py imports gumshoe.cases.model.case",
+    ]
+
+
+def test_player_surface_checker_accepts_the_public_face(tmp_path):
+    root = make_cases_tree(
+        tmp_path,
+        {
+            "tools/play_cli.py": "from gumshoe.cases.play import GameSession, views\n",
+            "play/views.py": "from pydantic import BaseModel\n",
+        },
+    )
+    assert cases_player_surface_problems(root) == []
+
+
+def test_real_cases_player_surface():
+    assert cases_player_surface_problems(SRC) == []
