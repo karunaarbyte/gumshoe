@@ -393,8 +393,14 @@ class GameSession:
     def match_label(self, axis: str, text: str) -> str | None:
         """Typed-text path: the handle of the one candidate the text names, else None (also for
         a how or why candidate the player may not name yet)."""
-        found = match_label_ids(self._ix, Axis(axis), text)
-        return self._visible(Axis(axis), None if found is None else self._handles[found])
+        ax = Axis(axis)
+        allowed = frozenset(
+            c
+            for c in self._ix.candidates[ax]
+            if ax is Axis.WHO or gate.permission(self._ix, self._state.held, ax, c).allowed
+        )
+        found = match_label_ids(self._ix, ax, text, allowed)
+        return None if found is None else self._handles[found]
 
     def accusation_prompt(self, player_text: str) -> AccusationPrompt:
         return accusation_questions(

@@ -58,14 +58,19 @@ def _contains(haystack: tuple[str, ...], needle: tuple[str, ...]) -> bool:
     return n > 0 and any(haystack[i : i + n] == needle for i in range(len(haystack) - n + 1))
 
 
-def match_label(ix: CaseIndex, axis: Axis, text: str) -> str | None:
-    """The one candidate the text affirmatively names, or None (hedged, none or several match)."""
+def match_label(
+    ix: CaseIndex, axis: Axis, text: str, allowed: frozenset[str] | None = None
+) -> str | None:
+    """The one candidate the text affirmatively names, or None (hedged, none or several match).
+    With `allowed`, only those candidates count, so a barred one cannot even make a match
+    ambiguous."""
     if hedged(text):
         return None
     words = tokens(text)
     hits = [
         c
         for c in ix.candidates[axis]
-        if any(_contains(words, tokens(form)) for form in typed_forms(ix, axis, c))
+        if (allowed is None or c in allowed)
+        and any(_contains(words, tokens(form)) for form in typed_forms(ix, axis, c))
     ]
     return hits[0] if len(hits) == 1 else None

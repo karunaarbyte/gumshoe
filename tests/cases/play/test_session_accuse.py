@@ -254,3 +254,11 @@ def handles_now(s):
     who = next(o.handle for o in s.nameable("who").options if o.name == "Boris")
     how = next(o.handle for o in s.nameable("how").options if o.name == "poisoned in the wine")
     return who, how
+
+
+def test_a_hidden_candidate_in_the_text_does_not_change_the_answer():
+    """ "poison rope" must answer like "poison xyzzy": a hidden rope cannot make it ambiguous."""
+    s = fresh_with_study()
+    poison = next(o.handle for o in s.nameable("how").options if o.name.startswith("poisoned"))
+    assert s.match_label("how", "poison xyzzy") == poison
+    assert s.match_label("how", "poison rope") == poison
