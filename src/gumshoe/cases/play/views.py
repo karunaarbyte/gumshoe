@@ -82,3 +82,61 @@ class NotebookSection(View):
 class NotebookView(View):
     sections: tuple[NotebookSection, ...]
     contradictions: tuple[ContradictionView, ...]
+
+
+class ParsedAccusation(View):
+    """Candidate handles per part; None = the player has not (clearly) named one."""
+
+    who: str | None = None
+    how: str | None = None
+    why: str | None = None
+
+
+class Candidate(View):
+    handle: str
+    name: str
+    warned: bool = False  # the player holds a rule-out against this candidate
+
+
+class AxisOptions(View):
+    axis: str  # who | how | why
+    options: tuple[Candidate, ...]
+
+
+class ResolvedPart(View):
+    axis: str
+    name: str
+
+
+class AxisProblem(View):
+    """reason: unclear (no clear candidate) | not_permitted (the gate does not allow it yet)."""
+
+    axis: str
+    reason: str
+    options: tuple[Candidate, ...]  # what may be named right now
+
+
+class AccusationPlan(View):
+    resolved: tuple[ResolvedPart, ...]
+    problems: tuple[AxisProblem, ...]
+    warnings: tuple[str, ...]
+    repeat: bool
+    can_confirm: bool
+    confirmation: str  # empty unless can_confirm
+
+
+class AccusationResult(View):
+    """status: needs_confirmation | not_permitted | repeat | resolved | game_over."""
+
+    status: str
+    correct: int | None
+    attempts_left: int
+    game: str  # playing | won | lost
+    message: str
+
+
+class RevealView(View):
+    culprit: str
+    method: str
+    motive: str
+    secret: str

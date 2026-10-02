@@ -206,3 +206,16 @@ def test_give_up_after_the_game_ended_raises_game_over():
     with pytest.raises(GameOver):
         s.give_up()
     assert s.status == "lost"
+
+
+def test_a_contradiction_found_by_records_then_interrogation_is_one_notebook_entry():
+    s = session()
+    anna = handle_of(s.brief().suspects, "Anna")
+    s.check_records(anna, "ledger")
+    s.interrogate(anna)
+    book = s.notebook()
+    assert [c.text for c in book.contradictions] == [
+        "Anna says the cellar, but the ledger places her in the garden."
+    ]
+    lies = [f for sec in book.sections for f in sec.facts if f.contradicted]
+    assert [f.text for f in lies] == ["I was down in the cellar all evening."]

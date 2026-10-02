@@ -9,7 +9,9 @@ from gumshoe.cases.model.entities import Fact, SourceRef
 from gumshoe.cases.model.enums import Axis, SourceKind
 from gumshoe.cases.model.index import CaseIndex
 from gumshoe.cases.model.serialize import load_case, skeleton_digest
-from gumshoe.cases.play.accuse import GameNotOver, give_up
+from gumshoe.cases.play.accuse import AccuseKind, GameNotOver, give_up
+from gumshoe.cases.play.accuse import accuse as engine_accuse
+from gumshoe.cases.play.accuse import reveal as engine_reveal
 from gumshoe.cases.play.engine import (
     Contradiction,
     SourceStatus,
@@ -18,20 +20,32 @@ from gumshoe.cases.play.engine import (
     source_sort_key,
     use_source,
 )
-from gumshoe.cases.play.state import MAX_ATTEMPTS, PlayState, Status
+from gumshoe.cases.play.labels import match_label as match_label_ids
+from gumshoe.cases.play.parse import AccusationPrompt, accusation_questions
+from gumshoe.cases.play.parse import interpret as interpret_answers
+from gumshoe.cases.play.state import MAX_ATTEMPTS, PlayState, Status, Triple
 from gumshoe.cases.play.views import (
+    AccusationPlan,
+    AccusationResult,
+    AxisOptions,
+    AxisProblem,
+    Candidate,
     ContradictionView,
     FactView,
     LocationView,
     NotebookFact,
     NotebookSection,
     NotebookView,
+    ParsedAccusation,
     PlayerCaseView,
     RecordKindView,
+    ResolvedPart,
+    RevealView,
     SourceResult,
     SuspectView,
 )
 from gumshoe.cases.rules import gate
+from gumshoe.decider import DecisionResult
 
 FALLBACK_CONTRADICTION = 'That statement does not hold up against what you have found: "{text}"'
 
@@ -327,6 +341,158 @@ class GameSession:
             for lie in sorted(exposed)
         )
         return NotebookView(sections=sections, contradictions=contradictions)
+
+    # -- accusation -------------------------------------------------------------------------
+
+    def _candidate_name(self, axis: Axis, candidate: str) -> str:
+        if axis is Axis.WHO:
+            return self._suspect_name(candidate)
+        if axis is Axis.HOW:
+            return self._ix.methods[candidate].label
+        return self._ix.motives[candidate].label
+
+    def nameable(self, axis: str) -> AxisOptions:
+        """The candidates the gate lets the player name right now, with a warning flag."""
+        ax = Axis(axis)
+        held = self._state.held
+        options = []
+        for candidate in self._ix.candidates[ax]:
+            permission = gate.permission(self._ix, held, ax, candidate)
+            if permission.allowed:
+                options.append(
+                    Candidate(
+                        handle=self._handles[candidate],
+                        name=self._candidate_name(ax, candidate),
+                        warned=permission.warn,
+                    )
+                )
+        options.sort(key=lambda c: (c.name, c.handle))
+        return AxisOptions(axis=axis, options=tuple(options))
+
+    def match_label(self, axis: str, text: str) -> str | None:
+        """Typed-text path: the handle of the one candidate the text names, else None."""
+        found = match_label_ids(self._ix, Axis(axis), text)
+        return None if found is None else self._handles[found]
+
+    def accusation_prompt(self, player_text: str) -> AccusationPrompt:
+        return accusation_questions(
+            self._ix, self._handles.__getitem__, len(self._state.accusations), player_text
+        )
+
+    def interpret(self, prompt: AccusationPrompt, result: DecisionResult) -> ParsedAccusation:
+        picks = interpret_answers(prompt, result)
+        return ParsedAccusation(who=picks[Axis.WHO], how=picks[Axis.HOW], why=picks[Axis.WHY])
+
+    def _candidate_id(self, axis: Axis, handle: str | None) -> str | None:
+        candidate = self._ids.get(handle or "")
+        return candidate if candidate in self._ix.candidates[axis] else None
+
+    def _triple(self, parsed: ParsedAccusation) -> Triple | None:
+        who = self._candidate_id(Axis.WHO, parsed.who)
+        how = self._candidate_id(Axis.HOW, parsed.how)
+        why = self._candidate_id(Axis.WHY, parsed.why)
+        if who is None or how is None or why is None:
+            return None
+        return Triple(who=who, how=how, why=why)
+
+    def describe_accusation(self, parsed: ParsedAccusation) -> AccusationPlan:
+        """Resolve what was said into names, say what is missing or not yet allowed (and what
+        may be named instead), collect soft warnings, and build the one confirmation line."""
+        held = self._state.held
+        resolved: list[ResolvedPart] = []
+        problems: list[AxisProblem] = []
+        warnings: list[str] = []
+        ids: dict[Axis, str] = {}
+        for axis in Axis:
+            candidate = self._candidate_id(axis, getattr(parsed, axis.value))
+            if candidate is None:
+                problems.append(
+                    AxisProblem(
+                        axis=axis.value,
+                        reason="unclear",
+                        options=self.nameable(axis.value).options,
+                    )
+                )
+                continue
+            permission = gate.permission(self._ix, held, axis, candidate)
+            if not permission.allowed:
+                problems.append(
+                    AxisProblem(
+                        axis=axis.value,
+                        reason="not_permitted",
+                        options=self.nameable(axis.value).options,
+                    )
+                )
+                continue
+            name = self._candidate_name(axis, candidate)
+            ids[axis] = candidate
+            resolved.append(ResolvedPart(axis=axis.value, name=name))
+            if permission.warn:
+                warnings.append(
+                    f"You hold an alibi or clue against {name}. Name them anyway?"
+                    if axis is Axis.WHO
+                    else f'You hold a clue against "{name}". Name it anyway?'
+                )
+        repeat = False
+        if len(ids) == len(Axis):
+            triple = Triple(who=ids[Axis.WHO], how=ids[Axis.HOW], why=ids[Axis.WHY])
+            repeat = any(r.triple == triple for r in self._state.accusations)
+        can_confirm = not problems and not repeat and self._state.status is Status.PLAYING
+        confirmation = (
+            f"Your accusation: {' / '.join(p.name for p in resolved)}. "
+            f"This uses one of your {self.attempts_left} remaining attempts. Confirm?"
+            if can_confirm
+            else ""
+        )
+        return AccusationPlan(
+            resolved=tuple(resolved),
+            problems=tuple(problems),
+            warnings=tuple(warnings),
+            repeat=repeat,
+            can_confirm=can_confirm,
+            confirmation=confirmation,
+        )
+
+    def _answer(self, status: str, message: str, correct: int | None = None) -> AccusationResult:
+        return AccusationResult(
+            status=status,
+            correct=correct,
+            attempts_left=self.attempts_left,
+            game=self.status,
+            message=message,
+        )
+
+    def accuse(self, parsed: ParsedAccusation, *, confirmed: bool = False) -> AccusationResult:
+        """Rechecks the gate and the repeat rule now; only a confirmed, permitted, new triple
+        consumes an attempt, and the answer is a count and nothing else."""
+        self._require_playing()
+        triple = self._triple(parsed)
+        if triple is None:
+            return self._answer("not_permitted", "Name one candidate for who, how and why.")
+        self._state, result = engine_accuse(self._ix, self._state, triple, confirmed=confirmed)
+        if result.kind is AccuseKind.NOT_PERMITTED:
+            return self._answer("not_permitted", "You cannot name that yet.")
+        if result.kind is AccuseKind.REPEAT:
+            return self._answer("repeat", "You already tried that. It cost nothing.")
+        if result.kind is AccuseKind.NEEDS_CONFIRMATION:
+            return self._answer("needs_confirmation", "Please confirm your accusation.")
+        correct = result.correct or 0
+        message = f"{correct} of {len(Axis)} right."
+        if self._state.status is Status.WON:
+            message += " You solved the case!"
+        elif self._state.status is Status.LOST:
+            message += " That was your last attempt. The case goes cold."
+        return self._answer("resolved", message, correct)
+
+    def reveal(self) -> RevealView:
+        truth = engine_reveal(self._ix, self._state)  # raises GameNotOver while playing
+        culprit = self._ix.suspects[truth.who]
+        return RevealView(
+            culprit=self._suspect_name(truth.who),
+            method=self._ix.methods[truth.how].label,
+            motive=self._ix.motives[truth.why].label,
+            secret=culprit.secret_text,
+        )
 
 
 def load_session(data: bytes, salt: str, state_json: str | None = None) -> GameSession:
