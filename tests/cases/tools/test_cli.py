@@ -87,6 +87,39 @@ def test_public_api_exports():
         "dump_case",
         "skeleton_digest",
         "skin_hash",
+        "GameSession",
+        "load_session",
     ):
         assert hasattr(cases, name), name
     assert set(cases.__all__) >= {"Case", "validate_case", "load_case"}
+
+
+def test_parser_knows_play_and_simulate():
+    args = build_parser().parse_args(["play", "c.json", "--salt", "s"])
+    assert args.salt == "s"
+    assert build_parser().parse_args(["simulate", "c.json"]).command == "simulate"
+
+
+def test_simulate_command_prints_the_report(good, capsys):
+    assert main(["simulate", str(good)]) == 0
+    assert "blind-guess win rate" in capsys.readouterr().out
+
+
+def test_play_command_runs_a_session_on_scripted_input(good, capsys, monkeypatch):
+    answers = iter(["q"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    assert main(["play", str(good), "--salt", "s"]) == 0
+    assert "Goodbye" in capsys.readouterr().out
+
+
+def test_play_and_simulate_report_unreadable_input_with_exit_two(tmp_path, capsys):
+    assert main(["play", str(tmp_path / "missing.json")]) == 2
+    assert main(["simulate", str(tmp_path / "missing.json")]) == 2
+
+
+def test_play_refuses_a_structurally_broken_case(tmp_path, capsys, monkeypatch):
+    broken = tmp_path / "broken.json"
+    broken.write_bytes(dump_case(MUTATIONS["DANGLING_REF"].apply(build_case())))
+    monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("game started"))
+    assert main(["play", str(broken), "--salt", "s"]) == 2
+    assert "DANGLING_REF" in capsys.readouterr().err

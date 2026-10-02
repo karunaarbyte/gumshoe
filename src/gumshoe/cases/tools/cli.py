@@ -1,6 +1,7 @@
 """`python -m gumshoe.cases validate case.json`: a developer report. Never shown to players."""
 
 import argparse
+import secrets
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -9,8 +10,11 @@ from pydantic import ValidationError
 
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.serialize import load_case
+from gumshoe.cases.play import load_session
+from gumshoe.cases.tools.dev import simulate_lines
+from gumshoe.cases.tools.play_cli import run_play
 from gumshoe.cases.validate.catalogue import CATALOGUE
-from gumshoe.cases.validate.report import Profile, Report
+from gumshoe.cases.validate.report import Profile, Report, Severity
 from gumshoe.cases.validate.runner import validate
 
 
@@ -27,6 +31,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--dev", action="store_true", help="also show spoiler issues (they name the truth)"
     )
     check.set_defaults(handler=_validate)
+    play = sub.add_parser("play", help="play a case in the terminal")
+    play.add_argument("path", type=Path)
+    play.add_argument("--salt", help="seed for the opaque handles (random by default)")
+    play.set_defaults(handler=_play)
+    simulate = sub.add_parser(
+        "simulate", help="developer report: solvability, cheapest play, blind guess"
+    )
+    simulate.add_argument("path", type=Path)
+    simulate.set_defaults(handler=_simulate)
     return parser
 
 
@@ -72,6 +85,53 @@ def _validate(args: argparse.Namespace) -> int:
         else f"{sum(1 for i in report.issues if i.severity.value == 'error')} error(s)"
     )
     return 0 if report.ok else 1
+
+
+def _read_case_bytes(path: Path) -> bytes | None:
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        print(f"error: cannot read {exc.filename}: {exc.strerror}", file=sys.stderr)
+        return None
+
+
+def _play(args: argparse.Namespace) -> int:
+    data = _read_case_bytes(args.path)
+    if data is None:
+        return 2
+    try:
+        case = load_case(data)
+    except ValidationError as exc:
+        print(f"error: not a valid case file ({exc.errors()[0]['msg']})", file=sys.stderr)
+        return 2
+    structural = [
+        i
+        for i in validate(case, None, Profile.CUSTOM).issues
+        if i.group == 1 and i.severity is Severity.ERROR
+    ]
+    if structural:
+        print(f"error: the case is structurally broken ({structural[0].code})", file=sys.stderr)
+        return 2
+    try:
+        session = load_session(data, args.salt or secrets.token_hex(8))
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    return run_play(session, input, print)
+
+
+def _simulate(args: argparse.Namespace) -> int:
+    data = _read_case_bytes(args.path)
+    if data is None:
+        return 2
+    try:
+        case = load_case(data)
+    except ValidationError as exc:
+        print(f"error: not a valid case file ({exc.errors()[0]['msg']})", file=sys.stderr)
+        return 2
+    for line in simulate_lines(case):
+        print(line)
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:

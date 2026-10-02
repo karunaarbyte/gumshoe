@@ -48,6 +48,17 @@ uv run python -m gumshoe.cases validate tests/cases/golden/manor_small.json --pr
 Validates a detective case against the rule groups (add `--dev` to show spoiler issues and
 `--pack pack.json` for the pack-bound rules). Exit code 0 is clean, 1 has errors, 2 is unreadable input.
 
+```bash
+uv run python -m gumshoe.cases play tests/cases/golden/manor_small.json      # play it in the terminal
+uv run python -m gumshoe.cases simulate tests/cases/golden/manor_small.json  # dev report
+```
+
+`play` is menu-driven (numbers, or typed names when you accuse) and shows only what a player may
+see; you get three accusation attempts with count-only feedback. It refuses a structurally broken
+case (exit 2). `simulate` is a developer report: whether the case is solvable by deduction, the
+fewest source uses that decide it, and the exact win rate of a player who reads everything and
+then guesses. Note: `import gumshoe.cases` now pulls in the decider stack (through `play/parse.py`).
+
 ## Checks (run all four before committing)
 
 ```bash
