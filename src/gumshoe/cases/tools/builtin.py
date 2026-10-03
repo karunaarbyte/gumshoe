@@ -11,9 +11,12 @@ class BuiltinPackError(Exception):
 
 
 def load_builtin_pack(name: str) -> Pack:
+    # a plain identifier only: a path such as "../x" or "/abs/x" must never reach the lookup
+    if not (isinstance(name, str) and name.isidentifier()):
+        raise BuiltinPackError(f"{name!r} is not a bundled pack name (a plain identifier)")
     try:
         data = files("gumshoe.cases.packs").joinpath(f"{name}.toml").read_bytes()
-    except (FileNotFoundError, OSError) as exc:
+    except OSError as exc:
         raise BuiltinPackError(f"no bundled pack named {name!r}") from exc
     result = load_pack(data)
     if not result.ok or result.pack is None:

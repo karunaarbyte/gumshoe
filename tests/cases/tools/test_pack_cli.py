@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from gumshoe.cases.tools.builtin import BuiltinPackError, load_builtin_pack
@@ -61,3 +63,21 @@ def test_a_missing_subcommand_is_a_usage_error():
 def test_an_unknown_builtin_pack_name_is_a_clear_error():
     with pytest.raises(BuiltinPackError, match="no bundled pack named 'nope'"):
         load_builtin_pack("nope")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "",
+        "../packs/castle",
+        "castle.toml",
+        str(Path(__file__).resolve().parents[3] / "src/gumshoe/cases/packs/castle"),
+    ],
+)
+def test_a_builtin_pack_name_that_is_not_a_plain_identifier_is_refused(name):
+    with pytest.raises(BuiltinPackError, match="not a bundled pack name"):
+        load_builtin_pack(name)
+
+
+def test_a_valid_builtin_pack_name_still_loads():
+    assert load_builtin_pack("castle").id == "castle"
