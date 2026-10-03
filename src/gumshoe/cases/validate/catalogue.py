@@ -488,6 +488,14 @@ _ROWS = [
         "a record claim is about a suspect but the pack's record kind has another subject",
         pack=True,
     ),
+    _row(
+        "RECORD_SUBJECT_MISMATCH",
+        11,
+        F.FACTS,
+        H.FIX_PACK,
+        "a record source's subject type does not match the pack's record kind",
+        pack=True,
+    ),
 ]
 
 CATALOGUE: dict[str, IssueSpec] = {row.code: row for row in _ROWS}

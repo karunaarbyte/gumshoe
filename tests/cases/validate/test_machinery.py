@@ -13,7 +13,7 @@ E, W, INFO = Severity.ERROR, Severity.WARNING, Severity.INFO
 
 
 def test_catalogue_is_complete_and_consistent():
-    assert len(CATALOGUE) == 80
+    assert len(CATALOGUE) == 81
     assert all(spec.code == code for code, spec in CATALOGUE.items())
     assert {spec.group for spec in CATALOGUE.values()} == set(range(0, 12))
     assert all(
@@ -67,6 +67,7 @@ def test_pack_bound_codes_are_flagged():
         "TRACE_KIND_MISSING",
         "RECORD_KIND_NOT_IN_PACK",
         "CLAIM_SUBJECT_MISMATCH",
+        "RECORD_SUBJECT_MISMATCH",
     }
 
 

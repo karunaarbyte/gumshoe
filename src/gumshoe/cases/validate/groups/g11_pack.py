@@ -147,7 +147,20 @@ def _record_kinds(ctx: Ctx) -> list[Issue]:
     out: list[Issue] = []
     for kind in sorted({rs.kind for rs in ctx.case.record_sources}):
         if kind not in known:
-            out.append(ctx.issue("RECORD_KIND_NOT_IN_PACK", kind))
+            out.append(ctx.issue("RECORD_KIND_NOT_IN_PACK", kind, kind=kind))
+    for rs in ctx.case.record_sources:
+        expected = subject.get(rs.kind)  # a kind the pack does not define is reported above
+        if expected is not None and rs.subject_type.value != expected:
+            out.append(
+                ctx.issue(
+                    "RECORD_SUBJECT_MISMATCH",
+                    rs.kind,
+                    rs.subject,
+                    kind=rs.kind,
+                    subject_type=rs.subject_type.value,
+                    pack_subject=expected,
+                )
+            )
     for f in ctx.case.facts:
         claim = f.claim
         if claim is None or claim.kind is not ClaimKind.RECORD_REF or claim.record_kind is None:

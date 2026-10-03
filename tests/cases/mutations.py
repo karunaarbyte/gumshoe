@@ -619,4 +619,21 @@ def _ledger_claim(case: Case, pack: Pack) -> tuple[Case, Pack]:
     return _rehash(case, pack), pack
 
 
-pair_mutation("CLAIM_SUBJECT_MISMATCH", _ledger_claim)
+# the pack edit also makes the fixture's three ledger sources (about suspects) mismatch the
+# pack's ledger subject, so RECORD_SUBJECT_MISMATCH is a real cascade here
+pair_mutation(
+    "CLAIM_SUBJECT_MISMATCH", _ledger_claim, {"CLAIM_SUBJECT_MISMATCH", "RECORD_SUBJECT_MISMATCH"}
+)
+
+
+def _gate_log_about_events(case: Case, pack: Pack) -> tuple[Case, Pack]:
+    """The fixture's two gate_log sources are about locations; the pack now says events."""
+    defs = tuple(
+        d.model_copy(update={"subject": "event"}) if d.key == "gate_log" else d
+        for d in pack.record_defs
+    )
+    pack = pack.model_copy(update={"record_defs": defs})
+    return _rehash(case, pack), pack
+
+
+pair_mutation("RECORD_SUBJECT_MISMATCH", _gate_log_about_events)

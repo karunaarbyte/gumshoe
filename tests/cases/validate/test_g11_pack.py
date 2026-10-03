@@ -38,6 +38,7 @@ def test_a_generated_case_without_a_pack_is_never_silently_clean_under_strict():
         "TRACE_KIND_MISSING",
         "RECORD_KIND_NOT_IN_PACK",
         "CLAIM_SUBJECT_MISMATCH",
+        "RECORD_SUBJECT_MISMATCH",
     }
 
 
@@ -91,3 +92,37 @@ def test_the_per_kind_check_uses_integer_arithmetic_at_the_boundary():
     assert not validate(build_strict_case(), build_pack(), Profile.STRICT, TINY_PRESETS).of_code(
         "PACK_SOURCE_KIND_CAPACITY"
     )
+
+
+def test_record_kind_not_in_pack_names_the_kind_at_the_source_site():
+    report = run_mutation(MUTATIONS["RECORD_KIND_NOT_IN_PACK"])
+    (issue,) = report.of_code("RECORD_KIND_NOT_IN_PACK")
+    assert issue.subjects == ("ledger",) and dict(issue.params) == {"kind": "ledger"}
+
+
+def test_record_kind_not_in_pack_names_the_kind_at_the_claim_site():
+    add_claim = MUTATIONS["CLAIM_SUBJECT_MISMATCH"].apply_pair
+    assert add_claim is not None
+    case, pack = add_claim(build_strict_case(), build_pack())
+    pack = pack.model_copy(
+        update={
+            "record_kinds": ("gate_log",),
+            "record_defs": tuple(d for d in pack.record_defs if d.key != "ledger"),
+        }
+    )
+    issues = strict(case, pack).of_code("RECORD_KIND_NOT_IN_PACK")
+    assert {(i.subjects, dict(i.params)["kind"]) for i in issues} == {
+        (("ledger",), "ledger"),
+        (("f_ledger_claim",), "ledger"),
+    }
+
+
+def test_record_subject_mismatch_names_each_source_and_both_subject_types():
+    report = run_mutation(MUTATIONS["RECORD_SUBJECT_MISMATCH"])
+    issues = report.of_code("RECORD_SUBJECT_MISMATCH")
+    assert [i.subjects for i in issues] == [("gate_log", "l_garden"), ("gate_log", "l_study")]
+    assert dict(issues[0].params) == {
+        "kind": "gate_log",
+        "subject_type": "location",
+        "pack_subject": "event",
+    }
