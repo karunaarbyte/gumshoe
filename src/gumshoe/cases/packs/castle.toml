@@ -1,0 +1,518 @@
+[meta]
+id = "castle"
+skeleton_rev = 1
+skin_rev = 1
+slots = 4
+presets = ["long", "short", "standard"]
+
+[capacity]
+max_suspects = 8
+max_locations = 7
+max_methods = 6
+max_record_kinds = 3
+
+[[slot_defs]]
+key = "matins"
+at = "at matins"
+during = "during matins"
+
+[[slot_defs]]
+key = "noon"
+at = "at noon"
+during = "during the noon meal"
+
+[[slot_defs]]
+key = "vespers"
+at = "at vespers"
+during = "during vespers"
+
+[[slot_defs]]
+key = "compline"
+at = "at compline"
+during = "during compline"
+
+[location_defs.great_hall]
+names = [{ text = "Great Hall", article = "the" }]
+descriptions = [
+  "{^place} echoes with voices and the scrape of benches.",
+  "{^place} is lit by a hearth the size of a cart.",
+]
+
+[location_defs.chapel]
+names = [{ text = "Chapel of Saint Anne", article = "the" }]
+descriptions = [
+  "{^place} smells of old stone and incense.",
+  "{^place} is hushed, with narrow windows of coloured glass.",
+]
+
+[location_defs.keep]
+names = [{ text = "Keep", article = "the" }]
+descriptions = [
+  "{^place} is bare stone, with narrow stairs in tight turns.",
+  "{^place} holds the lord's strongroom behind a heavy locked door.",
+]
+
+[location_defs.kitchen]
+names = [{ text = "Kitchen", article = "the" }]
+descriptions = [
+  "{^place} is warm and loud with the clang of pots and ladles.",
+  "{^place} smells of onions and smoke.",
+]
+
+[location_defs.undercroft]
+names = [{ text = "Undercroft", article = "the" }]
+descriptions = [
+  "{^place} is cold, with low arches and long rows of shelves.",
+  "{^place} is dark at the back, where the oldest stores are kept.",
+]
+
+[location_defs.gatehouse]
+names = [{ text = "Gatehouse", article = "the" }]
+descriptions = [
+  "{^place} sits over the portcullis, draughty and cramped.",
+  "{^place} rings with the shouts of the guards at their post.",
+]
+
+[location_defs.herb_garden]
+names = [{ text = "Herb Garden", article = "the" }]
+descriptions = [
+  "{^place} is laid out in neat beds behind a low wall.",
+  "{^place} smells of damp earth and cut grass.",
+]
+
+[record_defs.visitor_ledger]
+subject = "suspect"
+medium = "written"
+presence = [
+  "The visitor ledger listed {who} {place.in} {time.at}.",
+  "According to the visitor ledger, {who} was {place.in} {time.at}.",
+]
+
+[record_defs.gate_log]
+subject = "location"
+medium = "written"
+presence = [
+  "The gate log showed {who} {place.in} {time.at}.",
+  "By the gate log, {who} was {place.in} {time.at}.",
+]
+
+[record_defs.chapel_register]
+subject = "suspect"
+medium = "written"
+presence = [
+  "The chapel register named {who} {place.in} {time.at}.",
+  "An entry in the chapel register placed {who} {place.in} {time.at}.",
+]
+
+[roles.bard]
+names = [
+  { text = "Thomas", pronoun = "he", proper = true },
+  { text = "Wynne", pronoun = "she", proper = true },
+]
+traits = ["lean and bright-eyed", "carrying a worn lute"]
+record_kinds = ["visitor_ledger", "chapel_register"]
+motive_types = ["ambition", "blackmail", "faith", "inheritance", "jealousy"]
+
+[roles.clerk]
+names = [
+  { text = "Osric", pronoun = "he", proper = true },
+  { text = "Maud", pronoun = "she", proper = true },
+]
+traits = ["ink-stained and neat", "thin and stooped"]
+record_kinds = ["visitor_ledger", "gate_log", "chapel_register"]
+motive_types = ["ambition", "blackmail", "debt", "fear", "inheritance"]
+
+[roles.cook]
+names = [
+  { text = "Berta", pronoun = "she", proper = true },
+  { text = "Gilbert", pronoun = "he", proper = true },
+]
+traits = ["broad and ruddy", "forever smelling of onions"]
+record_kinds = ["chapel_register", "gate_log"]
+motive_types = ["debt", "faith", "fear", "jealousy", "revenge"]
+
+[roles.falconer]
+names = [
+  { text = "Hawise", pronoun = "she", proper = true },
+  { text = "Piers", pronoun = "he", proper = true },
+]
+traits = ["weathered and wiry", "always with a glove on one hand"]
+record_kinds = ["chapel_register", "gate_log"]
+motive_types = ["ambition", "faith", "inheritance", "jealousy", "revenge"]
+
+[roles.groom]
+names = [
+  { text = "Wat", pronoun = "he", proper = true },
+  { text = "Alys", pronoun = "she", proper = true },
+]
+traits = ["sturdy and sunburnt", "smelling of hay and horses"]
+record_kinds = ["chapel_register", "gate_log"]
+motive_types = ["faith", "fear", "inheritance", "jealousy", "revenge"]
+
+[roles.maid]
+names = [
+  { text = "Joan", pronoun = "she", proper = true },
+  { text = "Isolde", pronoun = "she", proper = true },
+]
+traits = ["freckled and brisk", "with a kerchief over her hair"]
+record_kinds = ["chapel_register", "visitor_ledger"]
+motive_types = ["blackmail", "debt", "faith", "fear", "jealousy"]
+
+[roles.priest]
+names = [
+  { text = "Anselm", pronoun = "he", proper = true },
+  { text = "Roger", pronoun = "he", proper = true },
+]
+traits = ["grey-haired and soft-spoken", "with a slow, steady gait"]
+record_kinds = ["chapel_register"]
+motive_types = ["ambition", "blackmail", "debt", "fear", "revenge"]
+
+[roles.steward]
+names = [
+  { text = "Edmund", pronoun = "he", proper = true },
+  { text = "Hugh", pronoun = "he", proper = true },
+]
+traits = ["tall and upright", "with a heavy bunch of keys at his belt"]
+record_kinds = ["visitor_ledger", "gate_log"]
+motive_types = ["ambition", "blackmail", "debt", "inheritance", "revenge"]
+
+[motive_defs.ambition]
+label = "out of ambition"
+aliases = ["ambition", "hunger for power"]
+secrets = [
+  "{^who} had tried on the lord's chain of office when alone.",
+  "{^who} had quietly courted the favour of every guest of rank.",
+]
+
+[motive_defs.blackmail]
+label = "to escape blackmail"
+aliases = ["blackmail", "extortion"]
+secrets = [
+  "{^who} had been paying someone in secret to keep an old letter hidden.",
+  "{^who} had received a note demanding payment to keep an old shame from the lord.",
+]
+
+[motive_defs.debt]
+label = "to cover a gambling debt"
+aliases = ["debt", "money owed"]
+secrets = [
+  "{^who} had pawned a silver ring and could not buy it back.",
+  "{^who} had lost a whole season's wages at dice.",
+]
+
+[motive_defs.faith]
+label = "out of faith"
+aliases = ["faith", "devotion"]
+secrets = [
+  "{^who} wore a hair shirt in secret and fasted for days.",
+  "{^who} spoke of a holy duty that outweighed all earthly law.",
+]
+
+[motive_defs.fear]
+label = "out of fear"
+aliases = ["fear", "dread"]
+secrets = [
+  "{^who} flinched at every footstep in the corridor.",
+  "{^who} slept with a stool wedged against the door.",
+]
+
+[motive_defs.inheritance]
+label = "to claim an inheritance"
+aliases = ["inheritance", "legacy"]
+secrets = [
+  "{^who} was the last living kin of the old lord's brother.",
+  "{^who} had kept a copy of the lord's will with one line underlined.",
+]
+
+[motive_defs.jealousy]
+label = "out of jealousy"
+aliases = ["jealousy", "envy"]
+secrets = [
+  "{^who} stared at the lord's favourites with narrowed eyes.",
+  "{^who} was heard muttering that the lord's favourite had stolen a sweetheart.",
+]
+
+[motive_defs.revenge]
+label = "to take revenge"
+aliases = ["revenge", "vengeance"]
+secrets = [
+  "{^who} had never forgiven the lord for a sister sent away in disgrace.",
+  "{^who} was heard swearing that someone would answer for it one day.",
+]
+
+[method_defs.candlestick]
+label = "bludgeoned with a candlestick"
+aliases = ["candle stand", "brass holder"]
+
+[[method_defs.candlestick.traces]]
+kind = "bruise"
+location_kinds = ["great_hall", "chapel", "keep", "kitchen", "undercroft", "gatehouse"]
+templates = [
+  "A heavy stand lay overturned {place.in}, its drip pan bent and dented.",
+  "A tall stand lay toppled {place.in}, cold wax spattered round its dented foot.",
+]
+
+[method_defs.poison_wine]
+label = "poisoned in wine"
+aliases = ["poison", "draught", "tainted cup"]
+
+[[method_defs.poison_wine.traces]]
+kind = "residue"
+location_kinds = ["great_hall", "chapel", "keep", "kitchen", "undercroft", "herb_garden"]
+templates = [
+  "A cup lay tipped over {place.in}, with a bitter white crust inside.",
+  "A jug {place.in} held a purple film and gave off a sour smell.",
+]
+
+[method_defs.dagger]
+label = "stabbed with a dagger"
+aliases = ["knife", "blade"]
+
+[[method_defs.dagger.traces]]
+kind = "wound"
+location_kinds = ["great_hall", "chapel", "kitchen", "undercroft", "gatehouse", "herb_garden"]
+templates = [
+  "An empty leather sheath, slim and short, lay dropped {place.in}.",
+  "A slim steel point had snapped off and lay glinting {place.in}.",
+]
+
+[method_defs.rope]
+label = "strangled with a rope"
+aliases = ["cord", "noose"]
+
+[[method_defs.rope.traces]]
+kind = "fibre"
+location_kinds = ["great_hall", "keep", "kitchen", "undercroft", "gatehouse", "herb_garden"]
+templates = [
+  "Coarse hairy fibres clung to a rough post {place.in}, snagged and loose.",
+  "A shiny worn groove ran round a post {place.in}, and frayed strands lay beneath.",
+]
+
+[method_defs.crossbow]
+label = "shot with a crossbow"
+aliases = ["arbalest", "bolt"]
+
+[[method_defs.crossbow.traces]]
+kind = "bolt"
+location_kinds = ["great_hall", "chapel", "keep", "gatehouse", "herb_garden"]
+templates = [
+  "A short feathered shaft stood buried deep in a door {place.in}.",
+  "A neat splintered hole had been punched clean through a door {place.in}.",
+]
+
+[method_defs.fall_from_height]
+label = "pushed from a height"
+aliases = ["shove", "fall", "thrown down"]
+
+[[method_defs.fall_from_height.traces]]
+kind = "scuff"
+location_kinds = ["great_hall", "chapel", "keep", "gatehouse"]
+templates = [
+  "Pale scrapes marked a high ledge {place.in}, with loose grit on the floor below.",
+  "A rail hung broken over a drop {place.in}, its upright snapped clean off.",
+]
+
+[scene_types.murder_in_chapel]
+location_kinds = ["chapel"]
+allowed_methods = ["candlestick", "poison_wine", "dagger", "crossbow", "fall_from_height"]
+allowed_trace_kinds = ["bruise", "residue", "wound", "bolt", "scuff"]
+
+[scene_types.murder_in_keep]
+location_kinds = ["keep"]
+allowed_methods = ["candlestick", "poison_wine", "rope", "crossbow", "fall_from_height"]
+allowed_trace_kinds = ["bruise", "residue", "fibre", "bolt", "scuff"]
+
+[scene_types.murder_in_undercroft]
+location_kinds = ["undercroft"]
+allowed_methods = ["candlestick", "poison_wine", "dagger", "rope"]
+allowed_trace_kinds = ["bruise", "residue", "wound", "fibre"]
+
+[scene_types.murder_in_great_hall]
+location_kinds = ["great_hall"]
+allowed_methods = ["candlestick", "poison_wine", "dagger", "rope", "crossbow", "fall_from_height"]
+allowed_trace_kinds = ["bruise", "residue", "wound", "fibre", "bolt", "scuff"]
+
+[scene_types.murder_in_kitchen]
+location_kinds = ["kitchen"]
+allowed_methods = ["candlestick", "poison_wine", "dagger", "rope"]
+allowed_trace_kinds = ["bruise", "residue", "wound", "fibre"]
+
+[scene_types.murder_in_gatehouse]
+location_kinds = ["gatehouse"]
+allowed_methods = ["candlestick", "dagger", "rope", "crossbow", "fall_from_height"]
+allowed_trace_kinds = ["bruise", "wound", "fibre", "bolt", "scuff"]
+
+[scene_types.murder_in_herb_garden]
+location_kinds = ["herb_garden"]
+allowed_methods = ["poison_wine", "dagger", "rope", "crossbow"]
+allowed_trace_kinds = ["residue", "wound", "fibre", "bolt"]
+
+
+[[families]]
+id = "alibi"
+kind = "alibi"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "{^who} said that {who.subj} had been {place.in} {time.at}.",
+  "{^who} told the household that {who.subj} had spent the time {place.in} {time.at}.",
+  "{^who} remembered that {who.subj} had stayed {place.in} {time.at}.",
+  "{^who} mentioned to a visitor that {who.subj} had been {place.in} {time.at}.",
+  "A pilgrim with a staff said {who} was {place.in} {time.at}.",
+  "Word in the household was that {who} had been {place.in} {time.at}.",
+  "Talk among the servants had it that {who} remained {place.in} {time.at}.",
+]
+
+[[families]]
+id = "lie_alibi"
+kind = "lie"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "{^who} stated that {who.subj} was {place.in} {time.at}.",
+  "{^who} told the household that {who.subj} had stayed {place.in} {time.at}.",
+  "{^who} recalled being {place.in} {time.at}.",
+  "{^who} mentioned to a visitor that {who.subj} had remained {place.in} {time.at}.",
+  "A pilgrim carrying a satchel recalled that {who} had spent the time {place.in} {time.at}.",
+  "Gossip in the household had it that {who} was {place.in} {time.at}.",
+  "A story went round the servants that {who} had been {place.in} {time.at}.",
+]
+
+[[families]]
+id = "witness_sighting"
+kind = "witness"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "A pilgrim on an errand saw {who} {place.in} {time.at}.",
+  "{^who} was glimpsed {place.in} {time.at} by a watchman on his rounds.",
+  "A page carrying a tray noticed {who} {place.in} {time.at}.",
+  "A visiting merchant with a cart remembered seeing {who} {place.in} {time.at}.",
+  "A man-at-arms on patrol said {who} was {place.in} {time.at}.",
+  "A laundress with a full basket glimpsed {who} {place.in} {time.at}.",
+  "{^who} was seen {place.in} {time.at} by a pedlar with a pack.",
+]
+
+[[families]]
+id = "witness_hearing"
+kind = "witness"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "A guest carrying a lantern heard {who} talking {place.in} {time.at}.",
+  "{^who} was heard {place.in} {time.at} by a scullion fetching water.",
+  "A porter sweeping nearby heard {who} {place.in} {time.at}.",
+  "A mason on a ladder heard {who} laughing {place.in} {time.at}.",
+  "A messenger on an errand remembered hearing {who} {place.in} {time.at}.",
+  "A pilgrim resting nearby heard {who} muttering {place.in} {time.at}.",
+  "A watchman said {who} could be heard {place.in} {time.at}.",
+]
+
+[[families]]
+id = "presence_record"
+kind = "record"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "The household books listed {who} {place.in} {time.at}.",
+  "The day book showed {who} {place.in} {time.at}.",
+  "An entry in the day book put {who} {place.in} {time.at}.",
+  "A porter recalled that the watch book had {who} {place.in} {time.at}.",
+  "A page mentioned that the tally put {who} {place.in} {time.at}.",
+  "{^who} mentioned an entry that said {who.subj} was {place.in} {time.at}.",
+  "{^who} said the register would show that {who.subj} was {place.in} {time.at}.",
+]
+
+[[families]]
+id = "lie_record"
+kind = "lie"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "The watch book recorded {who} {place.in} {time.at}.",
+  "The register held an entry for {who} {place.in} {time.at}.",
+  "An entry in the household books named {who} {place.in} {time.at}.",
+  "A page recalled that the day book had {who} {place.in} {time.at}.",
+  "A porter mentioned that the tally listed {who} {place.in} {time.at}.",
+  "{^who} pointed out an entry which said {who.subj} was {place.in} {time.at}.",
+  "{^who} said the household books would show that {who.subj} was {place.in} {time.at}.",
+]
+
+[[families]]
+id = "lie_accusation"
+kind = "lie"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "A porter on his rounds said {who} had been {place.in} {time.at}.",
+  "A guest carrying a lantern recalled seeing {who} {place.in} {time.at}.",
+  "{^who} was glimpsed {place.in} {time.at} by a mason carrying stone.",
+  "A laundress with a basket mentioned that {who} was {place.in} {time.at}.",
+  "A watchman told the household that {who} had stayed {place.in} {time.at}.",
+  "Word went round the visitors that {who} had been {place.in} {time.at}.",
+  "A story went round that {who} had spent the time {place.in} {time.at}.",
+]
+
+[[families]]
+id = "secret_discovery"
+kind = "secret"
+claim_slots = ["who"]
+variants = [
+  "A folded paper belonging to {who} was found tucked inside a boot.",
+  "A small coffer that belonged to {who} was found behind a loose stone.",
+  "A hidden packet addressed to {who} was found under a pillow.",
+  "A worn pouch was found beneath a loose board, and everyone knew {who} owned it.",
+  "A private note written by {who} was found tucked behind a shelf.",
+  "{^who} had wrapped a bundle in sacking under the stairs, and it was found there.",
+  "{^who} had buried a little box in the woodpile, and someone found it.",
+]
+
+[[families]]
+id = "trace_inspection"
+kind = "trace"
+claim_slots = ["place.in"]
+variants = [
+  "Everything {place.in} looked muddy and scuffed.",
+  "Things {place.in} lay scattered and askew.",
+  "Most things {place.in} were smeared and streaked.",
+  "Things {place.in} had been moved from where they were left.",
+  "Anyone looking {place.in} would have found things shifted and crooked.",
+  "Marks of recent traffic were plain to see {place.in}.",
+  "There was a trampled, restless look about everything {place.in}.",
+]
+
+[[families]]
+id = "absent_trace"
+kind = "absent_trace"
+claim_slots = ["place.in"]
+variants = [
+  "Everything {place.in} looked swept and tidy.",
+  "Things {place.in} lay straight and in their places.",
+  "Most things {place.in} were smooth and clean.",
+  "Things {place.in} stood where they had been left.",
+  "Anyone looking {place.in} would have found things neat and orderly.",
+  "Signs of recent sweeping were plain to see {place.in}.",
+  "There was a calm, settled look about everything {place.in}.",
+]
+
+[[families]]
+id = "motive_clue"
+kind = "motive_clue"
+claim_slots = ["who"]
+variants = [
+  "{^who} was unusually cheerful and handed out gifts to the household.",
+  "{^who} grew secretive, and {who.poss} door stayed shut.",
+  "{^who} was busier than usual, and {who.poss} hands were never still.",
+  "{^who} was restless and paced the walls long after dark.",
+  "{^who} was quiet, and {who.poss} gaze drifted to the window.",
+  "{^who} was tense, and {who.poss} mood had darkened.",
+  "{^who} hummed a merry tune and hardly slept.",
+  "{^who} sat apart at meals and snapped at anyone who spoke.",
+]
+
+[[families]]
+id = "small_clue"
+kind = "small_clue"
+claim_slots = ["place.in"]
+variants = [
+  "A dropped glove lay {place.in}.",
+  "A tarnished button was found {place.in}.",
+  "A scrap of ribbon had been left lying {place.in}.",
+  "A bent pewter spoon lay forgotten {place.in}.",
+  "A wooden toy was discovered {place.in}.",
+  "A broken comb was picked up {place.in} by a page.",
+  "A snapped bootlace lay {place.in}.",
+]
