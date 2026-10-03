@@ -7,7 +7,7 @@ import pytest
 
 from gumshoe.cases.model.pack import FamilyDef, Pack
 from gumshoe.cases.model.spec import PRESETS, derive_spec
-from gumshoe.cases.packs import load_pack
+from gumshoe.cases.packs import LoadResult, load_pack
 from gumshoe.cases.packs.check.lint import SAMPLES, render
 from gumshoe.cases.tools.builtin import load_builtin_pack
 
@@ -109,7 +109,7 @@ def _castle_bytes() -> bytes:
     return files("gumshoe.cases.packs").joinpath("castle.toml").read_bytes()
 
 
-def _castle():
+def _castle() -> LoadResult:
     return load_pack(_castle_bytes())
 
 

@@ -23,7 +23,9 @@ def test_every_pack_code_has_a_mutation():
 
 
 def test_the_base_pack_is_clean_through_the_whole_pipeline():
-    assert check_pack(load_pack(BASE_TOML.encode(), TEST_PRESETS).pack, TEST_PRESETS) == ()
+    pack = load_pack(BASE_TOML.encode(), TEST_PRESETS).pack
+    assert pack is not None
+    assert check_pack(pack, TEST_PRESETS) == ()
 
 
 def test_an_empty_pack_never_crashes_any_stage():
