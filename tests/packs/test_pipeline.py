@@ -1,7 +1,10 @@
 import os
 import random
+import re
 import subprocess
 import sys
+import time
+from importlib.resources import files
 from pathlib import Path
 
 import pytest
@@ -77,27 +80,61 @@ def test_stage_3_and_4_issues_do_not_stop_stages_6_and_7(monkeypatch):
     assert _run_with_issues_at(monkeypatch, {3, 4}) == [2, 3, 4, 5, 6, 7]
 
 
-def test_loading_mutated_text_never_raises():
+def _castle_text() -> str:
+    return files("gumshoe.cases.packs").joinpath("castle.toml").read_text(encoding="utf-8")
+
+
+_WORD = re.compile(r"[a-z]+")
+_QUOTED = re.compile(r'"[^"\\]*"')
+
+
+def _mutate_line(
+    rng: random.Random, mutated: list[str], words: list[str], structural: bool
+) -> None:
+    """One seeded edit. A structural edit (drop, dup, garble, swap) mostly breaks the schema; a
+    content edit swaps a word inside a quoted string, so the pack usually still loads and the
+    later stages see odd values."""
+    i = rng.randrange(len(mutated))
+    op = rng.choice(("drop", "dup", "garble", "swap")) if structural else "word"
+    if op == "drop":
+        del mutated[i]
+    elif op == "dup":
+        mutated.insert(i, mutated[i])
+    elif op == "garble":
+        text = mutated[i]
+        cut = rng.randrange(len(text) + 1)
+        mutated[i] = text[:cut] + rng.choice('{}[]"=\\#.\n\t ') + text[cut:]
+    elif op == "swap":
+        j = rng.randrange(len(mutated))
+        mutated[i], mutated[j] = mutated[j], mutated[i]
+    else:
+        text = mutated[i]
+        spans = [
+            w for q in _QUOTED.finditer(text) for w in _WORD.finditer(text, q.start(), q.end())
+        ]
+        if spans:
+            w = rng.choice(spans)
+            mutated[i] = text[: w.start()] + rng.choice(words) + text[w.end() :]
+
+
+@pytest.mark.parametrize("source", ["base", "castle"])
+def test_loading_mutated_text_never_raises(source):
+    # the castle runs on the small test presets: stages 6 and 7 still run on every mutant that
+    # gets that far, but the real seven-suspect preset would make 300 loads too slow
+    text = BASE_TOML if source == "base" else _castle_text()
+    lines, words = text.splitlines(), sorted(set(_WORD.findall(text)))
     rng = random.Random(7)
-    lines = BASE_TOML.splitlines()
-    for _ in range(300):
+    loaded = 0
+    start = time.perf_counter()
+    for k in range(300):
         mutated = list(lines)
         for _ in range(rng.randint(1, 4)):
-            op = rng.choice(("drop", "dup", "garble", "swap"))
-            i = rng.randrange(len(mutated))
-            if op == "drop":
-                del mutated[i]
-            elif op == "dup":
-                mutated.insert(i, mutated[i])
-            elif op == "garble":
-                text = mutated[i]
-                cut = rng.randrange(len(text) + 1)
-                mutated[i] = text[:cut] + rng.choice('{}[]"=\\#.\n\t ') + text[cut:]
-            else:
-                j = rng.randrange(len(mutated))
-                mutated[i], mutated[j] = mutated[j], mutated[i]
+            _mutate_line(rng, mutated, words, structural=k % 2 == 1)
         result = load_pack("\n".join(mutated).encode(), TEST_PRESETS)
         assert isinstance(result.issues, tuple)
+        loaded += result.pack is not None
+    assert loaded >= 100, loaded  # enough mutants get past stage 1 to exercise stages 2 to 7
+    assert time.perf_counter() - start < 5
 
 
 def test_issue_order_is_identical_across_hash_seeds():
