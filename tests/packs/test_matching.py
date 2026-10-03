@@ -86,9 +86,9 @@ def test_a_pack_with_no_roles_has_nothing_to_match():
 
 def test_no_perfect_matching_is_reported_at_most_five_times_per_suspect_count():
     # 15 rosters of four drawn from a..f share three motive types and cannot be matched
-    shared = ("x", "y", "z")
+    shared: tuple[str, ...] = ("x", "y", "z")
     allowed = {k: shared for k in "abcdef"} | {"g": ("w", "x", "y")}
-    issues = [i for i in matching.check(_pack(allowed, "quad", 4), TEST_PRESETS)]
+    issues = matching.check(_pack(allowed, "quad", 4), TEST_PRESETS)
     failing = [i.message.rsplit(" ", 1)[1] for i in issues if i.code == "NO_PERFECT_MATCHING"]
     assert failing == ["a,b,c,d", "a,b,c,e", "a,b,c,f", "a,b,d,e", "a,b,d,f"]
 
