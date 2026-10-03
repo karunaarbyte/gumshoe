@@ -1,6 +1,7 @@
 """Stage 6: capacity vs demand at every claimed preset, and monotone effective sizes."""
 
 from collections.abc import Mapping
+from math import comb, perm
 
 from gumshoe.cases.model.entities import Spec
 from gumshoe.cases.model.pack import Pack
@@ -10,6 +11,17 @@ from gumshoe.cases.packs.issues import PackIssue
 
 MIN_HOSTING_SCENES = 3  # scene types able to carry a preset's method count, else it is one place
 SIZES = ("suspects", "methods", "locations", "record_kinds", "slots")
+# Stage 7 enumerates every matching of every roster; a preset whose upper bound on that work is
+# above this is unsupported here (and so never enumerated), which keeps the load bounded and
+# stage 7 exact for every preset it does check.
+MATCHING_BUDGET = 5_000_000
+
+
+def matching_bound(pack: Pack, suspects: int) -> int:
+    """An upper bound on stage 7's work for one suspect count: rosters x motive assignments."""
+    if suspects <= 0:
+        return 1  # one empty roster, one empty assignment
+    return comb(len(pack.roles), suspects) * perm(len(pack.motive_defs), suspects)
 
 
 def _order(name: str) -> int:
@@ -29,6 +41,13 @@ def _preset_problems(
         problems.append(f"roles={len(pack.roles)} (needs at least {spec.suspects})")
     if spec.suspects > len(pack.motive_defs):
         problems.append(f"motive types={len(pack.motive_defs)} (needs at least {spec.suspects})")
+    bound = matching_bound(pack, spec.suspects)
+    if bound > MATCHING_BUDGET:
+        problems.append(
+            f"matching check too large (roles={len(pack.roles)},"
+            f" motive types={len(pack.motive_defs)}, up to {bound} matchings;"
+            f" the limit is {MATCHING_BUDGET})"
+        )
     hosting = sum(1 for s in pack.scene_types if len(set(s.allowed_methods)) >= spec.methods)
     if hosting < MIN_HOSTING_SCENES:
         problems.append(

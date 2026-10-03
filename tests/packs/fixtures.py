@@ -113,7 +113,7 @@ def rich_pack(**changes: Any) -> Pack:
     return Pack(**fields)
 
 
-def _preset(name: str, suspects: int, locations: int) -> PresetDef:
+def preset(name: str, suspects: int, locations: int) -> PresetDef:
     return PresetDef(
         name=name,
         suspects=SizeRange(min=suspects, max=suspects),
@@ -127,10 +127,10 @@ def _preset(name: str, suspects: int, locations: int) -> PresetDef:
 
 # "short" then "standard" shrink the locations on purpose, for the monotonicity test
 TEST_PRESETS = {
-    "tiny": _preset("tiny", 3, 3),
-    "short": _preset("short", 3, 3),
-    "standard": _preset("standard", 3, 2),
-    "quad": _preset("quad", 4, 3),
+    "tiny": preset("tiny", 3, 3),
+    "short": preset("short", 3, 3),
+    "standard": preset("standard", 3, 2),
+    "quad": preset("quad", 4, 3),
 }
 
 BASE_TOML = """\

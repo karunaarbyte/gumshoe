@@ -12,6 +12,10 @@ from gumshoe.cases.packs.check.capacity import hosted_specs
 from gumshoe.cases.packs.issues import PackIssue
 
 MAX_SHARE_PERCENT = 50
+# A pack whose roles share too few motive types can fail thousands of rosters; the first few
+# (in sorted roster order) are enough to show the problem, so at most this many are reported
+# per suspect count.
+MAX_UNMATCHED_REPORTS = 5
 
 
 def matchings(
@@ -38,6 +42,7 @@ def check(pack: Pack, presets: Mapping[str, PresetDef]) -> list[PackIssue]:
     allowed = {r.key: tuple(sorted(set(r.motive_types))) for r in pack.roles}
     out: list[PackIssue] = []
     for size in sizes:
+        unmatched = 0
         for roster in combinations(sorted(allowed), size):
             counts: Counter[tuple[str, str]] = Counter()
             total = 0
@@ -46,7 +51,9 @@ def check(pack: Pack, presets: Mapping[str, PresetDef]) -> list[PackIssue]:
                 counts.update(zip(roster, assignment, strict=True))
             label = ",".join(roster)
             if total == 0:
-                out.append(make("NO_PERFECT_MATCHING", "roles", roster=label))
+                unmatched += 1
+                if unmatched <= MAX_UNMATCHED_REPORTS:
+                    out.append(make("NO_PERFECT_MATCHING", "roles", roster=label))
                 continue
             for (role, motive), count in sorted(counts.items()):
                 if count * 100 > MAX_SHARE_PERCENT * total:
