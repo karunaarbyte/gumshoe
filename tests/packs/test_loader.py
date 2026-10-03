@@ -1,3 +1,7 @@
+from importlib.resources import files
+
+import pytest
+
 from gumshoe.cases.packs.loader import load_pack, reshape
 from tests.packs.fixtures import BASE_TOML, TEST_PRESETS
 from tests.packs.mutations import replace
@@ -94,3 +98,56 @@ def test_a_key_field_inside_a_keyed_table_never_crashes_and_the_table_key_wins()
 def test_deeply_nested_input_is_a_toml_syntax_issue_not_a_recursion_error():
     result = load_pack(b"x = " + b"[" * 5000, TEST_PRESETS)
     assert result.pack is None and [i.code for i in result.issues] == ["TOML_SYNTAX"]
+
+
+def _castle_text() -> str:
+    return files("gumshoe.cases.packs").joinpath("castle.toml").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("source", ["base", "castle"])
+def test_a_misspelt_top_level_section_stops_the_pipeline_at_stage_1(source):
+    if source == "base":
+        result = load(BASE_TOML.replace("[roles.", "[rolse."))
+    else:
+        result = load_pack(_castle_text().replace("[roles.", "[rolse.").encode())
+    assert result.pack is None
+    assert [(i.code, i.path) for i in result.issues] == [("UNKNOWN_KEY", "rolse")]
+    assert {i.stage for i in result.issues} == {1}
+
+
+def test_an_unknown_meta_key_is_reported_under_meta_and_is_not_flattened():
+    for extra in ('record_kinds = ["ghost"]', "roles = 7", 'author = "x"'):
+        text = replace('id = "tiny"\n', f'id = "tiny"\n{extra}\n')(BASE_TOML)
+        key = extra.split(" ")[0]
+        result = load(text)
+        assert result.pack is None, extra
+        assert [(i.code, i.path) for i in result.issues] == [("UNKNOWN_KEY", f"meta.{key}")]
+        assert "known: id, presets, skeleton_rev, skin_rev, slots" in result.issues[0].suggestion
+
+
+def test_an_unknown_meta_key_gets_a_did_you_mean():
+    text = replace("slots = 4\n", "slots = 4\nskin_revv = 2\n")(BASE_TOML)
+    (issue,) = load(text).issues
+    assert issue.path == "meta.skin_revv"
+    assert issue.suggestion.startswith("did you mean 'skin_rev'?")
+
+
+def test_reshape_keeps_only_the_meta_fields():
+    out = reshape({"meta": {"id": "x", "roles": 7, "record_kinds": ["ghost"]}})
+    assert out == {"id": "x"}
+
+
+def test_a_meta_that_is_not_a_table_is_a_wrong_type_at_meta():
+    result = load("meta = 5\n[capacity]" + BASE_TOML.split("[capacity]", 1)[1])
+    assert result.pack is None
+    assert ("WRONG_TYPE", "meta") in [(i.code, i.path) for i in result.issues]
+
+
+@pytest.mark.parametrize("value", ["5", "[1, 2]"])
+def test_a_keyed_section_of_the_wrong_shape_is_a_wrong_type_not_a_crash(value):
+    roles = BASE_TOML.index("[roles.maid]")
+    scenes = BASE_TOML.index("[scene_types.study_murder]")
+    text = f"roles = {value}\n" + BASE_TOML[:roles] + BASE_TOML[scenes:]
+    result = load(text)
+    assert result.pack is None
+    assert [(i.code, i.path) for i in result.issues] == [("WRONG_TYPE", "roles")]
