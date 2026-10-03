@@ -20,7 +20,7 @@ def _duplicates(path: str, keys: Iterable[str]) -> list[PackIssue]:
 def check(pack: Pack) -> list[PackIssue]:
     known = {
         "UNKNOWN_LOCATION_KIND": {d.key for d in pack.location_defs},
-        "UNKNOWN_RECORD_KIND": {d.key for d in pack.record_defs},
+        "UNKNOWN_RECORD_KIND": set(pack.known_record_kinds),
         "UNKNOWN_METHOD": {d.key for d in pack.method_defs},
         "UNKNOWN_MOTIVE_TYPE": {d.key for d in pack.motive_defs},
         "UNKNOWN_TRACE_KIND": {t.kind for m in pack.method_defs for t in m.traces},
@@ -47,6 +47,7 @@ def check(pack: Pack) -> list[PackIssue]:
     for role in pack.roles:
         unknown("UNKNOWN_RECORD_KIND", f"roles.{role.key}.record_kinds", role.record_kinds)
         unknown("UNKNOWN_MOTIVE_TYPE", f"roles.{role.key}.motive_types", role.motive_types)
+    out += _duplicates("meta.presets", pack.presets)
     out += _duplicates("slot_defs", (s.key for s in pack.slot_defs))
     out += _duplicates("families", (f.id for f in pack.families))
     out += _duplicates("location_defs", (d.key for d in pack.location_defs))

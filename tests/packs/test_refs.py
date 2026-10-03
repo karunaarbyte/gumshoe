@@ -53,3 +53,17 @@ def test_a_valid_rich_pack_has_no_reference_issues():
 
 def test_a_pack_with_nothing_declared_has_no_reference_issues():
     assert refs.check(Pack(id="e", capacity=rich_pack().capacity)) == []
+
+
+def test_a_record_kind_declared_without_a_record_def_is_still_known():
+    pack = rich_pack(record_kinds=("ledger",), record_defs=())
+    assert pack.roles[0].record_kinds == ("ledger",)
+    assert refs.check(pack) == []
+
+
+def test_a_preset_claimed_twice_is_a_duplicate_key():
+    text = replace('presets = ["tiny"]', 'presets = ["short", "short"]')(BASE_TOML)
+    assert paths(text) == [("DUPLICATE_KEY", "meta.presets[short]")]
+    assert ("DUPLICATE_KEY", "meta.presets[tiny]") in {
+        (i.code, i.path) for i in refs.check(rich_pack(presets=("tiny", "tiny")))
+    }
