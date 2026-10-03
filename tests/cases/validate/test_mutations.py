@@ -4,7 +4,7 @@ from gumshoe.cases.validate import runner
 from gumshoe.cases.validate.catalogue import CATALOGUE
 from gumshoe.cases.validate.report import Profile
 from tests.cases.fixtures import build_case
-from tests.cases.mutations import MUTATIONS, implemented_codes, run_mutation
+from tests.cases.mutations import MUTATIONS, VARIANTS, implemented_codes, run_mutation
 
 
 def test_the_fixture_is_clean_under_the_implemented_groups():
@@ -26,3 +26,11 @@ def test_mutation_reports_exactly_its_declared_cascade(code):
 
 def test_every_mutation_targets_a_catalogue_code():
     assert set(MUTATIONS) <= set(CATALOGUE)
+
+
+@pytest.mark.parametrize("name", sorted(VARIANTS))
+def test_variant_mutation_reports_exactly_its_declared_cascade(name):
+    mutation = VARIANTS[name]
+    report = run_mutation(mutation)
+    assert mutation.code in report.codes(), f"{name}: got {sorted(report.codes())}"
+    assert report.codes() == mutation.expected, f"{name}: got {sorted(report.codes())}"

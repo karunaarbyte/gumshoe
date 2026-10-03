@@ -79,6 +79,24 @@ def pair_mutation(
     )
 
 
+# A second mutation for a code whose MUTATIONS entry covers another branch of the same rule. Kept
+# apart so MUTATIONS stays one entry per catalogue code (several tests rely on that).
+VARIANTS: dict[str, Mutation] = {}
+
+
+def pair_variant(
+    name: str,
+    code: str,
+    apply_pair: Callable[[Case, Pack], tuple[Case, Pack]],
+    expected: set[str] | None = None,
+) -> None:
+    assert code in CATALOGUE and name not in VARIANTS
+    wanted = frozenset(expected if expected is not None else {code})
+    VARIANTS[name] = Mutation(
+        code, lambda c: c, wanted, Profile.STRICT, True, None, True, apply_pair
+    )
+
+
 def _boom(ctx: object) -> list[Issue]:
     raise RuntimeError("deliberate crash")
 
@@ -542,6 +560,32 @@ mutation(
     strict=True,
     profile=Profile.STRICT,
 )
+
+
+def _no_residue_in_study(case: Case, pack: Pack) -> tuple[Case, Pack]:
+    """The poison trace f_trace_poison is found at l_study, where its kind cannot occur."""
+    methods = tuple(
+        m.model_copy(
+            update={
+                "traces": tuple(
+                    t.model_copy(
+                        update={
+                            "location_kinds": tuple(k for k in t.location_kinds if k != "study")
+                        }
+                    )
+                    for t in m.traces
+                )
+            }
+        )
+        if m.key == "poison"
+        else m
+        for m in pack.method_defs
+    )
+    pack = pack.model_copy(update={"method_defs": methods})
+    return _rehash(case, pack), pack
+
+
+pair_variant("TRACE_KIND_NOT_ALLOWED:location", "TRACE_KIND_NOT_ALLOWED", _no_residue_in_study)
 mutation(
     "TRACE_KIND_MISSING",
     lambda c: replace_fact(c, "f_trace_poison", trace_kind=None),
