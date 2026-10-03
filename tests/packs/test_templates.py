@@ -2,8 +2,10 @@ import pytest
 
 from gumshoe.cases.model.pack import FamilyDef
 from gumshoe.cases.packs.check import templates
-from gumshoe.cases.packs.check.lint import template_items
-from tests.packs.fixtures import rich_pack
+from gumshoe.cases.packs.check.lint import pack_sample, template_items
+from gumshoe.cases.packs.loader import load_pack
+from tests.packs.fixtures import BASE_TOML, TEST_PRESETS, rich_pack
+from tests.packs.mutations import replace
 
 
 def codes(pack):
@@ -51,3 +53,64 @@ def test_template_items_cover_every_templated_table():
     assert "method_defs.poison.traces[residue].templates[0]" in paths
     assert "motive_defs.debt.secrets[0]" in paths
     assert "families.alibi.variants[0]" in paths
+
+
+def loaded(old: str, new: str) -> set[tuple[str, str]]:
+    result = load_pack(replace(old, new)(BASE_TOML).encode(), TEST_PRESETS)
+    assert result.pack is not None
+    return {(i.code, i.path) for i in result.issues}
+
+
+def test_a_broken_slot_phrase_is_linted_at_its_own_path():
+    found = loaded('during = "during the midday meal"', 'during = "during the the {noon  meal"')
+    path = "slot_defs[noon].during"
+    assert found == {("UNRESOLVED_BRACE", path), ("DOUBLE_SPACE", path), ("DOUBLED_WORD", path)}
+    assert loaded('at = "at noon"', 'at = "at an noon"') == {
+        ("ARTICLE_MISMATCH", "slot_defs[noon].at")
+    }
+
+
+def test_a_pool_entry_is_linted_with_its_article():
+    found = loaded('{ text = "Study", article = "the" }', '{ text = "Study", article = "an" }')
+    assert found == {("ARTICLE_MISMATCH", "location_defs.study.names[0]")}
+    # the maid is not the first role, so the pack sample (and every template) is unaffected
+    found = loaded('{ text = "Maud", pronoun', '{ text = "Maud  Maud", pronoun')
+    assert found == {
+        ("DOUBLE_SPACE", "roles.maid.names[0]"),
+        ("DOUBLED_WORD", "roles.maid.names[0]"),
+    }
+
+
+def test_a_trait_with_braces_is_an_unresolved_brace_and_still_leaks_its_token():
+    found = loaded('"quiet and watchful"', '"{oops handy with a {dagger}"')
+    assert found == {
+        ("UNRESOLVED_BRACE", "roles.maid.traits[0]"),
+        ("LABEL_TOKEN_LEAK", "roles.maid.traits[0]"),
+    }
+
+
+def test_method_and_motive_labels_and_aliases_are_linted():
+    assert loaded('"poison", "laced wine"', '"poison", "laced  wine"') == {
+        ("DOUBLE_SPACE", "method_defs.poison.aliases[0]")  # aliases are sorted
+    }
+    assert loaded('"to claim an inheritance"', '"to claim a inheritance"') == {
+        ("ARTICLE_MISMATCH", "motive_defs.inheritance.label")
+    }
+
+
+def test_templates_are_also_rendered_with_the_packs_own_first_values():
+    # "The Cellar cellar" only with the pack's own first location; the fixed samples miss it
+    found = loaded("{^place} is damp, low", "{^place} cellar is damp, low")
+    assert found == {("DOUBLED_WORD", "location_defs.cellar.descriptions[0]")}
+
+
+def test_the_pack_sample_takes_the_first_pool_values_and_falls_back_to_the_fixed_one():
+    pack = load_pack(BASE_TOML.encode(), TEST_PRESETS).pack
+    assert pack is not None
+    sample = pack_sample(pack)
+    assert sample["place"] == "the Cellar" and sample["place.in"] == "in the Cellar"
+    assert sample["time.at"] == "at dawn" and sample["time.during"] == "during the dawn watch"
+    assert (sample["who"], sample["who.subj"], sample["who.poss"]) == ("Hob", "he", "his")
+    assert sample["item.a"] == "a lantern"
+    empty = pack_sample(rich_pack(roles=(), slot_defs=(), location_defs=()))
+    assert empty["who"] == "Edmund" and empty["place"] == "the Chapel"

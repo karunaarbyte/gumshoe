@@ -8,7 +8,7 @@ from gumshoe.cases.core.labels import distinctive, token_set
 from gumshoe.cases.core.text import tokens
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.packs.catalogue import make
-from gumshoe.cases.packs.check.lint import SAMPLES, render, template_items
+from gumshoe.cases.packs.check.lint import SAMPLES, blank_placeholders, render, template_items
 from gumshoe.cases.packs.issues import PackIssue
 
 LENGTH_TOLERANCE = Fraction(1, 5)  # 20%
@@ -28,7 +28,9 @@ def _candidates(pack: Pack) -> dict[str, frozenset[str]]:
 
 
 def _texts(pack: Pack) -> Iterator[tuple[str, str, str | None]]:
-    """(path, text, owner): owner is the candidate id a text belongs to, if any."""
+    """(path, prose, owner): owner is the candidate id a text belongs to, if any. A template's
+    placeholders are syntax, not prose, so each becomes a space; a plain pool text (names,
+    traits, slot phrases) has no placeholders and is scanned as written, braces and all."""
     owners = {}
     for method in pack.method_defs:
         for trace in method.traces:
@@ -39,7 +41,7 @@ def _texts(pack: Pack) -> Iterator[tuple[str, str, str | None]]:
         for i in range(len(motive.secrets)):
             owners[f"motive_defs.{motive.key}.secrets[{i}]"] = f"motive:{motive.key}"
     for path, text in template_items(pack):
-        yield path, text, owners.get(path)
+        yield path, blank_placeholders(text), owners.get(path)
     for location in pack.location_defs:
         for i, entry in enumerate(location.names):
             yield f"location_defs.{location.key}.names[{i}]", entry.text, None
@@ -56,8 +58,7 @@ def _leaks(pack: Pack) -> list[PackIssue]:
     candidates = _candidates(pack)
     out: list[PackIssue] = []
     for path, text, owner in _texts(pack):
-        # placeholder names ({place.in}) are syntax, not prose: render with no values
-        words = set(tokens(render(text, {})))
+        words = set(tokens(text))
         for cid, owned in sorted(candidates.items()):
             hit = words & owned
             if not hit:

@@ -1,4 +1,5 @@
-"""Stage 3: template placeholders, rendering lints, variant counts and claim slots."""
+"""Stage 3: template placeholders, rendering lints, pool text lints, variant counts and claim
+slots."""
 
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.packs.catalogue import make
@@ -9,7 +10,9 @@ from gumshoe.cases.packs.check.lint import (
     double_space,
     doubled_word,
     mid_sentence_capital,
+    pack_sample,
     placeholders,
+    pool_items,
     render,
     stray_brace,
     template_items,
@@ -21,7 +24,26 @@ VARIANTS_STANDARD = 5
 VARIANTS_LONG = 7  # the largest per-case count (spec 4.2)
 
 
-def lint_template(path: str, text: str) -> list[PackIssue]:
+def lint_pool_text(path: str, text: str) -> list[PackIssue]:
+    """A plain pool text has no placeholders, so any brace is stray; nothing is rendered, so
+    every lint is reported on its own."""
+    out: list[PackIssue] = []
+    if "{" in text or "}" in text:
+        out.append(make("UNRESOLVED_BRACE", path))
+    if double_space(text):
+        out.append(make("DOUBLE_SPACE", path))
+    doubled = doubled_word(text)
+    if doubled:
+        out.append(make("DOUBLED_WORD", path, word=doubled))
+    phrase = article_mismatch(text)
+    if phrase:
+        out.append(make("ARTICLE_MISMATCH", path, phrase=phrase))
+    return out
+
+
+def lint_template(
+    path: str, text: str, samples: tuple[dict[str, str], ...] = SAMPLES
+) -> list[PackIssue]:
     names = placeholders(text)
     out = [
         make("UNKNOWN_PLACEHOLDER", path, did_you_mean(n, KNOWN_PLACEHOLDERS), name=n)
@@ -35,7 +57,7 @@ def lint_template(path: str, text: str) -> list[PackIssue]:
     if word:
         out.append(make("MID_SENTENCE_CAPITAL", path, word=word))
     seen: set[str] = set()
-    for sample in SAMPLES:
+    for sample in samples:
         rendered = render(text, sample)
         doubled = doubled_word(rendered)
         if doubled and "DOUBLED_WORD" not in seen:
@@ -53,8 +75,11 @@ def lint_template(path: str, text: str) -> list[PackIssue]:
 
 def check(pack: Pack) -> list[PackIssue]:
     out: list[PackIssue] = []
+    samples = (*SAMPLES, pack_sample(pack))  # still bounded: three renders per template
     for path, text in template_items(pack):
-        out += lint_template(path, text)
+        out += lint_template(path, text, samples)
+    for path, text in pool_items(pack):
+        out += lint_pool_text(path, text)
     needed = VARIANTS_LONG if "long" in pack.presets else VARIANTS_STANDARD
     for family in pack.families:
         base = f"families.{family.id}"

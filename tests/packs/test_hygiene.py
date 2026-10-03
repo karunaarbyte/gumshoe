@@ -102,3 +102,21 @@ def test_placeholder_names_are_not_text_and_odd_input_is_total():
         MethodDef(key="b", label="", traces=(TraceDef(kind="k", templates=("{place}",)),)),
     )
     assert [c for c, _ in found(rich_pack(method_defs=methods))] == ["TRACE_LENGTH_SKEW"] * 2
+
+
+def test_a_trait_is_tokenised_raw_so_braces_do_not_hide_a_leak():
+    (issue,) = hygiene.check(_two_methods("handy with {dagger}"))
+    assert (issue.code, issue.path) == ("LABEL_TOKEN_LEAK", "roles.maid.traits[0]")
+
+
+def test_a_placeholder_in_a_template_splits_the_words_around_it():
+    methods = _two_methods("quiet").method_defs
+    poison = methods[1].model_copy(
+        update={
+            "traces": (
+                TraceDef(kind="residue", location_kinds=("study",), templates=("bla{place}de",)),
+            )
+        }
+    )
+    # "bla de", not the dagger's "blade"
+    assert found(rich_pack(method_defs=(methods[0], poison))) == []
