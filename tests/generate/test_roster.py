@@ -177,3 +177,13 @@ def test_a_role_with_no_unused_name_raises_a_generation_error():
     ctx = GenContext.of(shared_names(castle(), 1), 1, "short")
     with pytest.raises(GenerationError, match="no unused name"):
         roster_stage.run(ctx, ctx.stream("roster"))
+
+
+@pytest.mark.parametrize("preset", PRESET_NAMES)
+def test_a_record_kind_with_no_definition_imposes_no_location_constraint(preset):
+    pack = castle()
+    bare = pack.model_copy(update={"record_kinds": (*pack.record_kinds, "aaa_bare")})
+    defined = {d.key for d in pack.record_defs}
+    for seed in range(40):
+        _, r = draw(bare, seed, preset)
+        assert all(s.record_kind in defined for s in r.suspects)

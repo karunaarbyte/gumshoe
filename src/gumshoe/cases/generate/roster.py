@@ -77,7 +77,9 @@ def location_kinds(
             continue
         if not all(chosen & set(records[kind].location_kinds) for kind in secret_kinds):
             continue
-        place_subject = [records[k] for k in record_kinds if records[k].subject == "location"]
+        place_subject = [
+            records[k] for k in record_kinds if k in records and records[k].subject == "location"
+        ]
         if not all((chosen | {scene_kind}) & set(r.location_kinds) for r in place_subject):
             continue
         feasible.append(subset)
