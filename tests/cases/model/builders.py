@@ -39,6 +39,7 @@ def tiny_case() -> Case:
         locations=1,
         record_kinds=1,
         slots=4,
+        opportunity=1,
         limits=tiny_limits(),
     )
     return Case(

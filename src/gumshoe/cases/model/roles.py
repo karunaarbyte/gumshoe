@@ -119,6 +119,7 @@ FIELD_ROLES: dict[str, dict[str, FieldRole]] = {
         "locations": S,
         "record_kinds": S,
         "slots": S,
+        "opportunity": S,
         "source_cap": S,
         "fairness_tolerance": S,
         "limits": S,

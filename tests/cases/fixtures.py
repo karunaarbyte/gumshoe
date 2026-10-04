@@ -288,6 +288,7 @@ def custom_spec() -> Spec:
         locations=3,
         record_kinds=2,
         slots=4,
+        opportunity=1,
         limits=LIMITS,
     )
 
@@ -428,6 +429,7 @@ TINY_PRESETS = {
         locations=SizeRange(min=3, max=3),
         record_kinds=SizeRange(min=2, max=2),
         slots=4,
+        opportunity=1,
         limits=LIMITS,
     )
 }

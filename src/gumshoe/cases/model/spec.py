@@ -27,7 +27,14 @@ class PresetDef(Frozen):
     locations: SizeRange
     record_kinds: SizeRange
     slots: int
+    opportunity: int  # wrong suspects that can reach the scene in the crime slot
     limits: Limits
+
+    @model_validator(mode="after")
+    def _opportunity_leaves_a_culprit_and_a_wrong_suspect_count(self) -> Self:
+        if not 0 <= self.opportunity <= self.suspects.min - 1:
+            raise ValueError("opportunity must be between 0 and the smallest suspect count - 1")
+        return self
 
 
 class UnsupportedPreset(ValueError):
@@ -62,6 +69,7 @@ PRESETS: dict[str, PresetDef] = {
         locations=_r(3, 3),
         record_kinds=_r(2, 2),
         slots=4,
+        opportunity=1,
         limits=_limits((3, 14), (0, 2), (2, 8), 30),
     ),
     "standard": PresetDef(
@@ -71,6 +79,7 @@ PRESETS: dict[str, PresetDef] = {
         locations=_r(4, 5),
         record_kinds=_r(2, 2),
         slots=4,
+        opportunity=2,
         limits=_limits((4, 20), (1, 3), (3, 10), 25),
     ),
     "long": PresetDef(
@@ -80,6 +89,7 @@ PRESETS: dict[str, PresetDef] = {
         locations=_r(6, 6),
         record_kinds=_r(3, 3),
         slots=4,
+        opportunity=3,
         limits=_limits((5, 30), (2, 5), (4, 14), 20),
     ),
 }
@@ -144,6 +154,7 @@ def derive_spec(name: str, pack: Pack, presets: Mapping[str, PresetDef] = PRESET
         locations=sizes["locations"],
         record_kinds=sizes["record_kinds"],
         slots=pack.slots,
+        opportunity=preset.opportunity,
         limits=preset.limits,
     )
 

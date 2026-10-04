@@ -103,6 +103,7 @@ def test_spec_requires_all_sizes_and_limits():
         locations=3,
         record_kinds=2,
         slots=4,
+        opportunity=1,
         limits=tiny_limits(),
     )
     assert spec.source_cap == 4 and spec.fairness_tolerance == 1

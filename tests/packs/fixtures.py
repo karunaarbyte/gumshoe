@@ -129,6 +129,7 @@ def preset(name: str, suspects: int, locations: int) -> PresetDef:
         locations=SizeRange(min=locations, max=locations),
         record_kinds=SizeRange(min=2, max=2),
         slots=4,
+        opportunity=min(1, suspects - 1),
         limits=LIMITS,
     )
 

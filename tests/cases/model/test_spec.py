@@ -1,6 +1,7 @@
 import pytest
+from pydantic import ValidationError
 
-from gumshoe.cases.model.entities import Limits
+from gumshoe.cases.model.entities import Limits, Spec
 from gumshoe.cases.model.pack import Capacity, Pack
 from gumshoe.cases.model.spec import (
     PRESET_ORDER,
@@ -109,6 +110,7 @@ def test_custom_preset_tables_are_accepted():
         locations=SizeRange(min=3, max=3),
         record_kinds=SizeRange(min=2, max=2),
         slots=4,
+        opportunity=1,
         limits=Limits(
             solution_min=3,
             solution_max=12,
@@ -138,3 +140,27 @@ def test_slots_are_pack_declared():
         capacity=Capacity(max_suspects=8, max_locations=7, max_methods=6, max_record_kinds=3),
     )
     assert derive_spec("short", six).slots == 6
+
+
+def test_the_presets_set_the_opportunity_count_one_two_three():
+    assert [PRESETS[n].opportunity for n in ("short", "standard", "long")] == [1, 2, 3]
+
+
+def test_derive_spec_copies_the_presets_opportunity():
+    assert [derive_spec(n, pack()).opportunity for n in ("short", "standard", "long")] == [1, 2, 3]
+
+
+def test_opportunity_must_leave_a_culprit_and_cannot_be_negative():
+    fields = PRESETS["short"].model_dump()
+    with pytest.raises(ValidationError, match="smallest suspect count"):
+        PresetDef(**{**fields, "opportunity": 4})  # suspects.min is 4: at most 3 wrong suspects
+    with pytest.raises(ValidationError, match="smallest suspect count"):
+        PresetDef(**{**fields, "opportunity": -1})
+    assert PresetDef(**{**fields, "opportunity": 0}).opportunity == 0
+    assert PresetDef(**{**fields, "opportunity": 3}).opportunity == 3
+
+
+def test_a_spec_cannot_carry_a_negative_opportunity():
+    spec = derive_spec("short", pack())
+    with pytest.raises(ValidationError):
+        Spec(**{**spec.model_dump(), "opportunity": -1})

@@ -211,6 +211,7 @@ class Spec(Frozen):
     locations: int = Field(ge=0)
     record_kinds: int = Field(ge=0)
     slots: int = Field(ge=0)
+    opportunity: int = Field(ge=0)
     source_cap: int = 4
     fairness_tolerance: int = 1
     limits: Limits
