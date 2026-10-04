@@ -42,3 +42,17 @@ def test_streams_are_keyed_by_stage_counter_and_seed():
 
 def test_every_stage_has_a_version():
     assert set(STAGE_VERSIONS) == set(STAGES) == {"roster", "truth", "timeline"}
+
+
+@pytest.mark.parametrize("seed", [True, "1", None, 1.5])
+def test_a_seed_that_is_not_an_int_is_refused(seed):
+    with pytest.raises(TypeError, match="seed must be an int"):
+        GenContext.of(castle(), seed, "short")
+
+
+def test_a_bad_counter_is_refused():
+    ctx = GenContext.of(castle(), 1, "short")
+    with pytest.raises(ValueError, match="counter"):
+        ctx.stream("roster", -1)
+    with pytest.raises(TypeError, match="counter must be an int"):
+        ctx.stream("roster", True)

@@ -59,7 +59,7 @@ def _trace_ok(method: MethodDef, scene: SceneType, places: set[str]) -> bool:
 def location_kinds(
     pack: Pack,
     scene: SceneType,
-    secret_kindss: list[str],
+    secret_kinds: list[str],
     methods: list[MethodDef],
     record_kinds: tuple[str, ...],
     size: int,
@@ -76,7 +76,7 @@ def location_kinds(
         chosen = set(subset)
         if not all(_trace_ok(m, scene, chosen) for m in methods):
             continue
-        if not all(chosen & set(records[kind].location_kinds) for kind in secret_kindss):
+        if not all(chosen & set(records[kind].location_kinds) for kind in secret_kinds):
             continue
         place_subject = [
             records[k] for k in record_kinds if k in records and records[k].subject == "location"
@@ -116,7 +116,7 @@ def run(ctx: GenContext, stream: Stream) -> RosterOut:
         options = sorted(set(_usable_kinds(role, scene, records)) & set(kinds))
         secret_kinds.append(stream.child(f"record_kind/{role.key}").choice(options))
 
-    method_keys = stream.rank(list(scene.allowed_methods), "methods")[: spec.methods]
+    method_keys = stream.rank(sorted(set(scene.allowed_methods)), "methods")[: spec.methods]
     methods_by_key = {m.key: m for m in pack.method_defs}
     methods = [methods_by_key[k] for k in method_keys]
 

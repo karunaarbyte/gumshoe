@@ -16,6 +16,12 @@ STAGE_VERSIONS: dict[str, int] = {"roster": 1, "truth": 1, "timeline": 1}
 SKELETON_ALGO_VERSION = 1
 
 
+def _require_int(name: str, value: object) -> None:
+    """A bool is an int in Python but never a seed or counter anyone meant."""
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{name} must be an int, not {type(value).__name__}")
+
+
 @dataclass(frozen=True, eq=False)
 class GenContext:
     pack: Pack
@@ -35,6 +41,7 @@ class GenContext:
     ) -> "GenContext":
         """Refuses a preset the pack cannot host: the pack checks exclude presets that
         `derive_spec` alone would accept (too few hosting scenes, a matching that is too large)."""
+        _require_int("seed", seed)
         hosted = dict(hosted_specs(pack, presets))
         spec = hosted.get(preset)
         if spec is None:
@@ -50,4 +57,7 @@ class GenContext:
 
     def stream(self, stage: str, counter: int = 0) -> Stream:
         """The stage's stream: keyed by seed, spec, stage version, counter and stage name."""
+        _require_int("counter", counter)
+        if counter < 0:
+            raise ValueError(f"counter must not be negative, not {counter}")
         return Stream.root(self.seed, self.spec_hash, STAGE_VERSIONS[stage], counter, stage)

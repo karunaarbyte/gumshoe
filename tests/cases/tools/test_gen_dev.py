@@ -51,9 +51,9 @@ def test_a_truth_override_replaces_the_roster_entry_by_its_roster():
         3,
         "short",
         pack,
-        override={"truth": other, "roster": replay(5, "short", pack, "roster")["roster"]},
+        override={"truth": other, "roster": replay(4, "short", pack, "roster")["roster"]},
     )
-    assert both["roster"] == replay(5, "short", pack, "roster")["roster"]
+    assert both["roster"] == replay(4, "short", pack, "roster")["roster"]
 
 
 def test_replay_rejects_unknown_stages_and_wrongly_typed_overrides():
@@ -79,3 +79,24 @@ def test_the_fold_gives_what_calling_the_stages_one_by_one_gives():
         roster, truth, timeline = stages(ctx)
         full = replay(8, preset, pack)
         assert (full["roster"], full["truth"], full["timeline"]) == (roster, truth, timeline)
+
+
+def test_overrides_that_do_not_fit_the_spec_or_each_other_are_refused():
+    pack = castle()
+    long_roster = replay(3, "long", pack, "roster")["roster"]
+    with pytest.raises(ValueError, match="roster override"):
+        replay(3, "short", pack, override={"roster": long_roster})
+    short_truth = replay(3, "short", pack, "truth")["truth"]
+    with pytest.raises(ValueError, match="truth override"):
+        replay(3, "long", pack, override={"truth": short_truth})
+    other_roster = replay(4, "short", pack, "roster")["roster"]
+    with pytest.raises(ValueError, match="same people"):
+        replay(3, "short", pack, override={"truth": short_truth, "roster": other_roster})
+    timeline = replay(3, "short", pack)["timeline"]
+    rows = timeline.rows  # type: ignore[attr-defined]
+    fewer = timeline.model_copy(update={"rows": rows[:-1]})
+    with pytest.raises(ValueError, match="timeline override"):
+        replay(3, "short", pack, override={"timeline": fewer})
+    thin = timeline.model_copy(update={"opportunity": ()})
+    with pytest.raises(ValueError, match="timeline override"):
+        replay(3, "short", pack, override={"timeline": thin})

@@ -206,3 +206,16 @@ def test_no_record_kind_set_that_serves_every_role_raises_a_generation_error():
     ctx = GenContext.of(broken, 1, "short")
     with pytest.raises(GenerationError, match="record-kind set"):
         roster_stage.run(ctx, ctx.stream("roster"))
+
+
+@pytest.mark.parametrize("preset", PRESET_NAMES)
+def test_a_duplicate_in_allowed_methods_never_gives_a_duplicate_method(preset):
+    pack = castle()
+    doubled = tuple(
+        s.model_copy(update={"allowed_methods": (*s.allowed_methods, s.allowed_methods[0])})
+        for s in pack.scene_types
+    )
+    dup = pack.model_copy(update={"scene_types": doubled})
+    for seed in range(60):
+        _, r = draw(dup, seed, preset)
+        assert len({m.key for m in r.methods}) == len(r.methods)
