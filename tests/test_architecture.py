@@ -225,12 +225,12 @@ def cases_decider_problems(root: Path) -> list[str]:
 
 
 def cases_determinism_problems(root: Path) -> list[str]:
-    """Randomness, clocks, environment and file access are banned outside streams.py and tools/."""
+    """Randomness, clocks, environment and file access are banned outside tools/."""
     cases_root = root / "gumshoe" / "cases"
     problems: list[str] = []
     for path in sources(cases_root):
         parts = path.relative_to(cases_root).parts
-        if parts[0] == "tools" or parts == ("generate", "streams.py"):
+        if parts[0] == "tools":
             continue
         rel = path.relative_to(root)
         for module in sorted(imported_modules(path, root)):
@@ -300,7 +300,7 @@ def test_determinism_checker_bans_clocks_randomness_and_files(tmp_path):
         {
             "core/a.py": "import random\nimport time\nfrom datetime import UTC\n",
             "model/b.py": "x = hash('a')\nwith open('f') as fh:\n    pass\n",
-            "generate/streams.py": "import random\n",
+            "generate/streams.py": "import random\nimport hashlib\n",
             "tools/cli.py": "import os\n",
             "core/clean.py": "import hashlib\nimport json\n",
         },
@@ -309,9 +309,16 @@ def test_determinism_checker_bans_clocks_randomness_and_files(tmp_path):
         "gumshoe/cases/core/a.py imports datetime",
         "gumshoe/cases/core/a.py imports random",
         "gumshoe/cases/core/a.py imports time",
+        "gumshoe/cases/generate/streams.py imports random",
         "gumshoe/cases/model/b.py calls hash()",
         "gumshoe/cases/model/b.py calls open()",
     ]
+
+
+def test_the_streams_module_has_no_exemption_from_the_determinism_rule():
+    streams = CASES / "generate" / "streams.py"
+    assert streams.exists()
+    assert {m.split(".")[0] for m in imported_modules(streams, SRC)}.isdisjoint(BANNED_MODULES)
 
 
 def test_decider_checker_exempts_only_the_top_level_play_layer(tmp_path):
