@@ -434,3 +434,16 @@ def test_simulate_does_not_import_validate():
     simulate = sources(CASES / "simulate")
     assert simulate
     assert violations(simulate, ("gumshoe.cases.validate",)) == []
+
+
+def test_the_generator_replay_is_reachable_from_tools_only():
+    """gen_dev may be imported by developer tooling, never by a player surface or the play layer."""
+    importers = [
+        p.relative_to(CASES)
+        for p in sources(CASES)
+        if "gumshoe.cases.tools.gen_dev" in imported_modules(p, SRC)
+    ]
+    assert all(path.parts[0] == "tools" and path.name != "play_cli.py" for path in importers)
+    play = sources(CASES / "play")
+    assert violations(play, ("gumshoe.cases.generate", "gumshoe.cases.tools"), SRC) == []
+    assert "gumshoe.cases.tools.gen_dev" not in PLAYER_ALLOWED
