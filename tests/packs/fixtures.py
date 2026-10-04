@@ -59,6 +59,7 @@ def rich_pack(**changes: Any) -> Pack:
                 motive_types=("debt",),
                 names=(Entry(text="Maud", pronoun="she", proper=True),),
                 traits=("quiet",),
+                noun="maid",
             ),
         ),
         "record_kinds": ("ledger",),
@@ -69,6 +70,11 @@ def rich_pack(**changes: Any) -> Pack:
                 names=(Entry(text="Study", article="the"),),
                 descriptions=("{^place} smells of ink.",),
             ),
+            LocationDef(
+                key="garden",
+                names=(Entry(text="Garden", article="the"),),
+                descriptions=("{^place} is wet.",),
+            ),
         ),
         "record_defs": (
             RecordDef(
@@ -76,6 +82,8 @@ def rich_pack(**changes: Any) -> Pack:
                 subject="suspect",
                 medium="written",
                 presence=("The ledger lists {who} {time.at}.",),
+                names=(Entry(text="ledger", article="the"),),
+                location_kinds=("garden", "study"),
             ),
         ),
         "method_defs": (

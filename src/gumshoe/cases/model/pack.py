@@ -63,6 +63,8 @@ class RecordDef(Frozen):
     subject: Literal["suspect", "location", "event"]
     medium: Literal["written", "token", "oral"]
     presence: tuple[str, ...] = ()
+    names: tuple[Entry, ...] = ()  # display names; the first one is what `{record}` renders
+    location_kinds: SetTexts = ()  # the kinds of place this record kind can attest
 
 
 class TraceDef(Frozen):
@@ -103,6 +105,7 @@ class RoleDef(Frozen):
     motive_types: tuple[str, ...] = ()  # allow-list of pack motive keys
     names: tuple[Entry, ...] = ()
     traits: tuple[str, ...] = ()
+    noun: str = ""  # display noun: a suspect's label is "<name> the <noun>"
 
     @field_validator("record_kinds", "motive_types", mode="after")
     @classmethod
@@ -181,6 +184,7 @@ class Pack(Frozen):
             "roles": [
                 {
                     "key": r.key,
+                    "noun": r.noun,
                     "record_kinds": list(r.record_kinds),
                     "motive_types": list(r.motive_types),
                     "names": entries(r.names),
@@ -189,7 +193,13 @@ class Pack(Frozen):
             ],
             "locations": [{"key": d.key, "names": entries(d.names)} for d in self.location_defs],
             "records": [
-                {"key": d.key, "subject": d.subject, "medium": d.medium} for d in self.record_defs
+                {
+                    "key": d.key,
+                    "subject": d.subject,
+                    "medium": d.medium,
+                    "location_kinds": list(d.location_kinds),
+                }
+                for d in self.record_defs
             ],
             "methods": [
                 {
@@ -214,4 +224,4 @@ class Pack(Frozen):
 
     def skeleton_hash(self) -> str:
         """Digest of everything that can change a generated skeleton (not the wording)."""
-        return domain_digest("gumshoe.pack.skeleton.v2", canonical_json(self.skeleton_view()))
+        return domain_digest("gumshoe.pack.skeleton.v3", canonical_json(self.skeleton_view()))

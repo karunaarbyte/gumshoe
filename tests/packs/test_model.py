@@ -10,6 +10,8 @@ from gumshoe.cases.model.pack import (
     LocationDef,
     MethodDef,
     Pack,
+    RecordDef,
+    RoleDef,
     TraceDef,
 )
 from tests.packs.fixtures import CAPACITY, rich_pack
@@ -96,3 +98,30 @@ def test_the_hash_is_identical_across_hash_seeds():
         )
         digests.add(result.stdout.strip())
     assert len(digests) == 1
+
+
+def test_a_role_noun_and_record_location_kinds_change_the_hash_but_record_names_do_not():
+    base = rich_pack()
+    role = base.roles[0].model_copy(update={"noun": "housekeeper"})
+    assert rich_pack(roles=(role,)).skeleton_hash() != base.skeleton_hash()
+    record = base.record_defs[0]
+    wider = record.model_copy(update={"location_kinds": (*record.location_kinds, "cellar")})
+    assert rich_pack(record_defs=(wider,)).skeleton_hash() != base.skeleton_hash()
+    renamed = record.model_copy(update={"names": (Entry(text="big book", article="the"),)})
+    assert rich_pack(record_defs=(renamed,)).skeleton_hash() == base.skeleton_hash()
+
+
+def test_the_new_pack_fields_default_to_empty_so_old_packs_still_build():
+    pack = Pack(
+        id="x",
+        capacity=Capacity(max_suspects=1, max_locations=1, max_methods=1, max_record_kinds=1),
+        roles=(RoleDef(key="r"),),
+        record_defs=(RecordDef(key="k", subject="suspect", medium="written"),),
+    )
+    assert pack.roles[0].noun == ""
+    assert pack.record_defs[0].names == () and pack.record_defs[0].location_kinds == ()
+
+
+def test_record_location_kinds_are_a_sorted_set():
+    record = RecordDef(key="k", subject="suspect", medium="written", location_kinds=("b", "a"))
+    assert record.location_kinds == ("a", "b")
