@@ -3,6 +3,9 @@
 from collections.abc import Mapping
 from math import sqrt
 
+from gumshoe.cases.generate import roster
+from gumshoe.cases.generate.gen_context import GenContext
+from gumshoe.cases.generate.outputs import RosterOut
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.tools.builtin import load_builtin_pack
 
@@ -14,6 +17,10 @@ Z_BONFERRONI = 3.29  # one-sided p = 0.0005 per test, about 0.005 over the ten s
 
 def castle() -> Pack:
     return load_builtin_pack("castle")
+
+
+def roster_of(ctx: GenContext) -> RosterOut:
+    return roster.run(ctx, ctx.stream("roster"))
 
 
 def chi2_critical(df: int, z: float = Z_BONFERRONI) -> float:
