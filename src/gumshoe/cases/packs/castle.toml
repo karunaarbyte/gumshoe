@@ -86,8 +86,8 @@ medium = "written"
 names = [{ text = "visitor ledger", article = "the" }]
 location_kinds = ["chapel", "gatehouse", "great_hall", "keep", "kitchen"]
 presence = [
-  "The visitor ledger listed {who} {place.in} {time.at}.",
-  "According to the visitor ledger, {who} was {place.in} {time.at}.",
+  "{^record} listed {who} {place.in} {time.at}.",
+  "According to {record}, {who} was {place.in} {time.at}.",
 ]
 
 [record_defs.gate_log]
@@ -96,8 +96,8 @@ medium = "written"
 names = [{ text = "gate log", article = "the" }]
 location_kinds = ["gatehouse"]
 presence = [
-  "The gate log showed {who} {place.in} {time.at}.",
-  "By the gate log, {who} was {place.in} {time.at}.",
+  "{^record} showed {who} {place.in} {time.at}.",
+  "By {record}, {who} was {place.in} {time.at}.",
 ]
 
 [record_defs.chapel_register]
@@ -108,8 +108,8 @@ location_kinds = [
   "chapel", "gatehouse", "great_hall", "herb_garden", "keep", "kitchen", "undercroft",
 ]
 presence = [
-  "The chapel register named {who} {place.in} {time.at}.",
-  "An entry in the chapel register placed {who} {place.in} {time.at}.",
+  "{^record} named {who} {place.in} {time.at}.",
+  "An entry in {record} placed {who} {place.in} {time.at}.",
 ]
 
 [roles.bard]
@@ -425,13 +425,13 @@ id = "presence_record"
 kind = "record"
 claim_slots = ["who", "place.in", "time.at"]
 variants = [
-  "The household books listed {who} {place.in} {time.at}.",
-  "The day book showed {who} {place.in} {time.at}.",
-  "An entry in the day book put {who} {place.in} {time.at}.",
-  "A porter recalled that the watch book had {who} {place.in} {time.at}.",
-  "A page mentioned that the tally put {who} {place.in} {time.at}.",
+  "{^record} listed {who} {place.in} {time.at}.",
+  "{^record} showed {who} {place.in} {time.at}.",
+  "An entry in {record} put {who} {place.in} {time.at}.",
+  "A porter recalled that {record} had {who} {place.in} {time.at}.",
+  "A page mentioned that {record} put {who} {place.in} {time.at}.",
   "{^who} mentioned an entry that said {who.subj} was {place.in} {time.at}.",
-  "{^who} said the register would show that {who.subj} was {place.in} {time.at}.",
+  "{^who} said {record} would show that {who.subj} was {place.in} {time.at}.",
 ]
 
 [[families]]
@@ -439,13 +439,13 @@ id = "lie_record"
 kind = "lie"
 claim_slots = ["who", "place.in", "time.at"]
 variants = [
-  "The watch book recorded {who} {place.in} {time.at}.",
-  "The register held an entry for {who} {place.in} {time.at}.",
-  "An entry in the household books named {who} {place.in} {time.at}.",
-  "A page recalled that the day book had {who} {place.in} {time.at}.",
-  "A porter mentioned that the tally listed {who} {place.in} {time.at}.",
+  "{^record} recorded {who} {place.in} {time.at}.",
+  "{^record} held an entry for {who} {place.in} {time.at}.",
+  "An entry in {record} named {who} {place.in} {time.at}.",
+  "A page recalled that {record} had {who} {place.in} {time.at}.",
+  "A porter mentioned that {record} listed {who} {place.in} {time.at}.",
   "{^who} pointed out an entry which said {who.subj} was {place.in} {time.at}.",
-  "{^who} said the household books would show that {who.subj} was {place.in} {time.at}.",
+  "{^who} said that {record} would show {who.subj} was {place.in} {time.at}.",
 ]
 
 [[families]]

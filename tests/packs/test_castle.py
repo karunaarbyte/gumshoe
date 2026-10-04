@@ -66,7 +66,15 @@ WITNESS_NOUNS = (
     "merchant",
     "man-at-arms",
 )
-RECORD_NAMES = ("household books", "day book", "watch book", "register", "tally", "ledger")
+HARD_CODED_RECORD_NAMES = (
+    "household books",
+    "day book",
+    "watch book",
+    "register",
+    "tally",
+    "ledger",
+    "gate log",
+)
 AUDIENCES = (
     "the household",
     "a visitor",
@@ -278,7 +286,6 @@ def test_the_whole_word_match_does_not_flag_a_longer_word():
 def test_truth_and_lie_families_use_the_same_nouns_records_audiences_and_shape(pack, truth, lie):
     a, b = _family(pack, truth).variants, _family(pack, lie).variants
     assert _union(a, WITNESS_NOUNS) == _union(b, WITNESS_NOUNS)
-    assert _union(a, RECORD_NAMES) == _union(b, RECORD_NAMES)
     assert _union(a, AUDIENCES) == _union(b, AUDIENCES)
     assert _self_reports(a) == _self_reports(b)
     assert abs(_mean_length(a) - _mean_length(b)) <= 0.15 * max(_mean_length(a), _mean_length(b))
@@ -390,3 +397,21 @@ def test_the_household_register_attests_every_room_and_the_gate_log_only_the_gat
 def test_every_scene_leaves_at_least_seven_eligible_roles(pack):
     for scene in pack.scene_types:
         assert len(_eligible_roles(pack, scene)) >= 7, scene.key
+
+
+def test_no_hard_coded_record_name_is_left_in_the_families_or_the_presence_lines(pack):
+    assert _found(_all_texts(pack), HARD_CODED_RECORD_NAMES) == []
+
+
+def test_the_two_record_families_use_the_record_placeholder_in_the_same_variants(pack):
+    truth = _family(pack, "presence_record").variants
+    lie = _family(pack, "lie_record").variants
+    shapes = lambda vs: [("record" in _slots(v)) for v in vs]  # noqa: E731
+    assert shapes(truth) == shapes(lie)
+    assert sum(shapes(truth)) >= 5
+
+
+def test_every_presence_line_uses_the_record_placeholder(pack):
+    for record in pack.record_defs:
+        for line in record.presence:
+            assert "record" in _slots(line), line
