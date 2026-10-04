@@ -1,4 +1,4 @@
-from gumshoe.cases.model.pack import MethodDef, MotiveDef, Pack, TraceDef
+from gumshoe.cases.model.pack import Entry, MethodDef, MotiveDef, Pack, TraceDef
 from gumshoe.cases.packs.check import hygiene
 from tests.packs.fixtures import rich_pack
 
@@ -120,3 +120,15 @@ def test_a_placeholder_in_a_template_splits_the_words_around_it():
     )
     # "bla de", not the dagger's "blade"
     assert found(rich_pack(method_defs=(methods[0], poison))) == []
+
+
+def test_a_record_name_that_uses_a_candidate_token_is_a_leak():
+    record = (
+        rich_pack()
+        .record_defs[0]
+        .model_copy(update={"names": (Entry(text="poison book", article="the"),)})
+    )
+    issues = hygiene.check(rich_pack(record_defs=(record,)))
+    assert [(i.code, i.path) for i in issues] == [
+        ("LABEL_TOKEN_LEAK", "record_defs.ledger.names[0]")
+    ]

@@ -103,6 +103,7 @@ SAMPLE = {
     "time.phrase": "at vespers",
     "time.at": "at vespers",
     "time.during": "during vespers",
+    "record": "the household register",
 }
 
 

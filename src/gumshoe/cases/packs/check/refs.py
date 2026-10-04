@@ -47,6 +47,12 @@ def check(pack: Pack) -> list[PackIssue]:
     for role in pack.roles:
         unknown("UNKNOWN_RECORD_KIND", f"roles.{role.key}.record_kinds", role.record_kinds)
         unknown("UNKNOWN_MOTIVE_TYPE", f"roles.{role.key}.motive_types", role.motive_types)
+    for record_def in pack.record_defs:
+        unknown(
+            "UNKNOWN_LOCATION_KIND",
+            f"record_defs.{record_def.key}.location_kinds",
+            record_def.location_kinds,
+        )
     out += _duplicates("meta.presets", pack.presets)
     out += _duplicates("slot_defs", (s.key for s in pack.slot_defs))
     out += _duplicates("families", (f.id for f in pack.families))

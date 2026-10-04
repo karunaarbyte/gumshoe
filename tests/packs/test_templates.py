@@ -1,6 +1,6 @@
 import pytest
 
-from gumshoe.cases.model.pack import FamilyDef
+from gumshoe.cases.model.pack import Entry, FamilyDef
 from gumshoe.cases.packs.check import templates
 from gumshoe.cases.packs.check.lint import pack_sample, template_items
 from gumshoe.cases.packs.loader import load_pack
@@ -114,3 +114,17 @@ def test_the_pack_sample_takes_the_first_pool_values_and_falls_back_to_the_fixed
     assert sample["item.a"] == "a lantern"
     empty = pack_sample(rich_pack(roles=(), slot_defs=(), location_defs=()))
     assert empty["who"] == "Edmund" and empty["place"] == "the Chapel"
+
+
+def test_a_template_using_the_record_placeholder_is_clean():
+    assert templates.lint_template("p", "{^record} named {who} {place.in} {time.at}.") == []
+
+
+def test_a_record_name_with_a_double_space_is_a_pool_text_issue():
+    record = (
+        rich_pack()
+        .record_defs[0]
+        .model_copy(update={"names": (Entry(text="big  book", article="the"),)})
+    )
+    got = [(i.code, i.path) for i in templates.check(rich_pack(record_defs=(record,)))]
+    assert ("DOUBLE_SPACE", "record_defs.ledger.names[0]") in got

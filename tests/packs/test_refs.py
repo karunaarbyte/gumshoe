@@ -67,3 +67,13 @@ def test_a_preset_claimed_twice_is_a_duplicate_key():
     assert ("DUPLICATE_KEY", "meta.presets[tiny]") in {
         (i.code, i.path) for i in refs.check(rich_pack(presets=("tiny", "tiny")))
     }
+
+
+def test_a_record_location_kind_that_is_not_defined_is_reported_with_its_path():
+    record = rich_pack().record_defs[0].model_copy(update={"location_kinds": ("crypt", "study")})
+    (issue,) = refs.check(rich_pack(record_defs=(record,)))
+    assert (issue.code, issue.path) == (
+        "UNKNOWN_LOCATION_KIND",
+        "record_defs.ledger.location_kinds[crypt]",
+    )
+    assert issue.suggestion.startswith("known:") or "did you mean" in issue.suggestion

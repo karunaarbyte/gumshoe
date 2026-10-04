@@ -56,3 +56,24 @@ def test_lints_are_total_on_odd_input():
         double_space(odd)
         article_mismatch(odd)
         mid_sentence_capital(odd)
+
+
+def test_record_is_a_known_placeholder_and_the_caret_capitalises_the_article():
+    from gumshoe.cases.packs.check.lint import KNOWN_PLACEHOLDERS
+
+    assert "record" in KNOWN_PLACEHOLDERS
+    assert render("{^record} listed {who}.", SAMPLES[0]) == "The register listed Edmund."
+    assert render("{record} listed {who}.", SAMPLES[1]).startswith("the ")
+
+
+def test_pack_sample_uses_the_first_record_name_and_survives_a_pack_without_records():
+    from gumshoe.cases.model.pack import Capacity, Pack
+    from gumshoe.cases.packs.check.lint import pack_sample
+    from tests.packs.fixtures import rich_pack
+
+    assert pack_sample(rich_pack())["record"] == "the ledger"
+    empty = Pack(
+        id="e",
+        capacity=Capacity(max_suspects=1, max_locations=1, max_methods=1, max_record_kinds=1),
+    )
+    assert pack_sample(empty)["record"] == ""  # renders to nothing: never raises

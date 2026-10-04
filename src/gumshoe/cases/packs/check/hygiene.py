@@ -50,6 +50,9 @@ def _texts(pack: Pack) -> Iterator[tuple[str, str, str | None]]:
             yield f"roles.{role.key}.names[{i}]", entry.text, None
         for i, trait in enumerate(role.traits):
             yield f"roles.{role.key}.traits[{i}]", trait, None
+    for record_def in pack.record_defs:
+        for i, entry in enumerate(record_def.names):
+            yield f"record_defs.{record_def.key}.names[{i}]", entry.text, None
     for slot in pack.slot_defs:
         yield f"slot_defs[{slot.key}]", f"{slot.at} {slot.during}", None
 

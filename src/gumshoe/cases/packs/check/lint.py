@@ -19,6 +19,7 @@ KNOWN_PLACEHOLDERS = frozenset(
         "time.phrase",
         "time.at",
         "time.during",
+        "record",
     }
 )
 _PLACEHOLDER = re.compile(r"\{(\^?)([^{}]*)\}")
@@ -36,6 +37,7 @@ SAMPLES: tuple[dict[str, str], ...] = (
         "time.phrase": "at vespers",
         "time.at": "at vespers",
         "time.during": "during vespers",
+        "record": "the register",
     },
     {
         "who": "Maud",
@@ -48,6 +50,7 @@ SAMPLES: tuple[dict[str, str], ...] = (
         "time.phrase": "during the feast",
         "time.at": "at the feast",
         "time.during": "during the feast",
+        "record": "the old gate log",
     },
 )
 
@@ -64,6 +67,8 @@ def pack_sample(pack: Pack) -> dict[str, str]:
     """One more sample from the pack's own pools: the first location name, the first slot's
     phrases and the first role's first name and pronoun; anything missing keeps SAMPLES[0]."""
     sample = dict(SAMPLES[0])
+    record = next((e for d in pack.record_defs for e in d.names[:1]), None)
+    sample["record"] = phrase(record) if record is not None else ""
     place = next((e for d in pack.location_defs for e in d.names), None)
     if place is not None:
         sample["place"] = phrase(place)
@@ -143,6 +148,9 @@ def pool_items(pack: Pack) -> Iterator[tuple[str, str]]:
             yield f"roles.{role.key}.names[{i}]", phrase(entry)
         for i, trait in enumerate(role.traits):
             yield f"roles.{role.key}.traits[{i}]", trait
+    for record_def in pack.record_defs:
+        for i, entry in enumerate(record_def.names):
+            yield f"record_defs.{record_def.key}.names[{i}]", phrase(entry)
     for table, defs in (("method_defs", pack.method_defs), ("motive_defs", pack.motive_defs)):
         for d in defs:
             yield f"{table}.{d.key}.label", d.label
