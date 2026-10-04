@@ -18,9 +18,10 @@ def test_an_unknown_scene_location_kind_names_the_value_and_suggests_known_ones(
 
 
 def test_a_trace_naming_an_unknown_location_kind_gets_a_did_you_mean():
-    text = replace('location_kinds = ["cellar", "garden", "study"]', 'location_kinds = ["celar"]')(
-        BASE_TOML
-    )
+    text = replace(
+        'kind = "wound"\nlocation_kinds = ["cellar", "garden", "study"]',
+        'kind = "wound"\nlocation_kinds = ["celar"]',
+    )(BASE_TOML)
     (issue,) = load_pack(text.encode(), TEST_PRESETS).issues
     assert issue.code == "UNKNOWN_LOCATION_KIND"
     assert issue.path == "method_defs.dagger.traces[wound].location_kinds[celar]"

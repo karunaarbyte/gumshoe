@@ -97,3 +97,18 @@ def test_slot_definitions_must_cover_the_slot_count():
 def test_an_empty_pack_reports_only_its_missing_slot_definitions():
     got = [c for c, _ in found(Pack(id="e", capacity=CAPACITY))]
     assert got == ["SLOT_DEFS_TOO_FEW"]
+
+
+def test_a_role_without_a_noun_a_record_without_a_name_or_location_kinds_are_reported():
+    role = rich_pack().roles[0].model_copy(update={"noun": "  "})
+    record = rich_pack().record_defs[0].model_copy(update={"names": (), "location_kinds": ()})
+    got = found(rich_pack(roles=(role,), record_defs=(record,)))
+    assert ("ROLE_NO_NOUN", "roles.maid.noun") in got
+    assert ("RECORD_NO_NAME", "record_defs.ledger.names") in got
+    assert ("RECORD_NO_LOCATION_KIND", "record_defs.ledger.location_kinds") in got
+
+
+def test_the_new_stage_5_rules_are_unconditional_and_total_on_an_empty_pack():
+    assert [c for c, _ in found(Pack(id="e", capacity=rich_pack().capacity))] == [
+        "SLOT_DEFS_TOO_FEW"
+    ]  # the only issue an empty pack has: no roles or records, so nothing else to flag

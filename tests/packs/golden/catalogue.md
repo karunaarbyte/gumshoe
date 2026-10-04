@@ -21,11 +21,15 @@
 | UNKNOWN_PLACEHOLDER | 3 | error | unknown placeholder {name!r} |
 | UNRESOLVED_BRACE | 3 | error | unbalanced or unresolved brace in the text |
 | LABEL_TOKEN_LEAK | 4 | error | this text uses the token {token!r}, distinctive to candidate {candidate!r} |
+| ROLE_TOKEN_COLLISION | 4 | error | a token ({token!r}) of this role's {what} is also used by {other!r} |
 | SECRET_REUSES_LABEL | 4 | error | the secret of {candidate!r} reuses its own label token {token!r} |
 | TRACE_COUNT_SKEW | 4 | error | this method has {count} trace templates; the largest count is {target} |
 | TRACE_LENGTH_SKEW | 4 | error | mean trace length {mean} is more than 20% from the overall mean {overall} |
 | METHOD_TOO_RARE | 5 | error | the method is allowed in {count} scene types; needs at least {needed} |
 | MOTIVE_UNREACHABLE | 5 | error | no role allows this motive type |
+| RECORD_NO_LOCATION_KIND | 5 | error | the record kind lists no location kind |
+| RECORD_NO_NAME | 5 | error | the record kind has no display name |
+| ROLE_NO_NOUN | 5 | error | the role has no display noun |
 | ROLE_NO_RECORD_KIND | 5 | error | the role has no record kind |
 | ROLE_NO_SUSPECT_RECORD | 5 | error | the role has no record kind about a suspect |
 | ROLE_TOO_FEW_MOTIVES | 5 | error | the role allows {count} motive types; needs at least {needed} |

@@ -24,6 +24,8 @@ def check(pack: Pack) -> list[PackIssue]:
     allowed = {m for role in pack.roles for m in role.motive_types}
     for role in pack.roles:
         base = f"roles.{role.key}"
+        if not role.noun.strip():
+            out.append(make("ROLE_NO_NOUN", f"{base}.noun"))
         if not role.record_kinds:
             out.append(make("ROLE_NO_RECORD_KIND", f"{base}.record_kinds"))
         elif not about_suspect.intersection(role.record_kinds):
@@ -38,6 +40,12 @@ def check(pack: Pack) -> list[PackIssue]:
                     needed=MIN_ROLE_MOTIVES,
                 )
             )
+    for record_def in pack.record_defs:
+        base = f"record_defs.{record_def.key}"
+        if not record_def.names:
+            out.append(make("RECORD_NO_NAME", f"{base}.names"))
+        if not record_def.location_kinds:
+            out.append(make("RECORD_NO_LOCATION_KIND", f"{base}.location_kinds"))
     for motive in pack.motive_defs:
         if motive.key not in allowed:
             out.append(make("MOTIVE_UNREACHABLE", f"motive_defs.{motive.key}"))

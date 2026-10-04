@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from math import comb, perm
 
 from gumshoe.cases.model.entities import Spec
-from gumshoe.cases.model.pack import Pack
+from gumshoe.cases.model.pack import Pack, RecordDef, SceneType
 from gumshoe.cases.model.spec import PRESET_ORDER, PresetDef, UnsupportedPreset, derive_spec
 from gumshoe.cases.packs.catalogue import make
 from gumshoe.cases.packs.issues import PackIssue
@@ -28,6 +28,34 @@ def _order(name: str) -> int:
     return PRESET_ORDER.index(name) if name in PRESET_ORDER else len(PRESET_ORDER)
 
 
+def usable_kind(record: RecordDef, scene: SceneType) -> bool:
+    """Subject suspect, lists one of the scene's location kinds and at least one other kind."""
+    if record.subject != "suspect":
+        return False
+    listed = set(record.location_kinds)
+    return any(kind in listed and listed - {kind} for kind in scene.location_kinds)
+
+
+def eligible_roles(pack: Pack, scene: SceneType) -> list[str]:
+    """The role keys that have a usable record kind for the scene, in sorted order."""
+    records = {d.key: d for d in pack.record_defs}
+    return sorted(
+        role.key
+        for role in pack.roles
+        if any(k in records and usable_kind(records[k], scene) for k in role.record_kinds)
+    )
+
+
+def hosting_scenes(pack: Pack, spec: Spec) -> list[SceneType]:
+    """The scene types that can carry the preset: enough methods and enough eligible roles."""
+    return [
+        s
+        for s in pack.scene_types
+        if len(set(s.allowed_methods)) >= spec.methods
+        and len(eligible_roles(pack, s)) >= spec.suspects
+    ]
+
+
 def _preset_problems(
     pack: Pack, name: str, presets: Mapping[str, PresetDef]
 ) -> tuple[Spec | None, str]:
@@ -48,12 +76,9 @@ def _preset_problems(
             f" motive types={len(pack.motive_defs)}, up to {bound} matchings;"
             f" the limit is {MATCHING_BUDGET})"
         )
-    hosting = sum(1 for s in pack.scene_types if len(set(s.allowed_methods)) >= spec.methods)
+    hosting = len(hosting_scenes(pack, spec))
     if hosting < MIN_HOSTING_SCENES:
-        problems.append(
-            f"scene types allowing {spec.methods} methods={hosting}"
-            f" (needs at least {MIN_HOSTING_SCENES})"
-        )
+        problems.append(f"hosting scenes={hosting} (needs at least {MIN_HOSTING_SCENES})")
     return (None, "; ".join(problems)) if problems else (spec, "")
 
 

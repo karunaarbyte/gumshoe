@@ -132,3 +132,41 @@ def test_a_record_name_that_uses_a_candidate_token_is_a_leak():
     assert [(i.code, i.path) for i in issues] == [
         ("LABEL_TOKEN_LEAK", "record_defs.ledger.names[0]")
     ]
+
+
+def test_a_role_noun_sharing_a_non_distinctive_candidate_token_collides():
+    # "out" is in every "out of ..." motive label, so it is not distinctive, but the case
+    # validator's LABEL_NAME_COLLISION uses all tokens
+    motives = (
+        MotiveDef(key="a", label="out of fear"),
+        MotiveDef(key="b", label="out of envy"),
+    )
+    role = rich_pack().roles[0].model_copy(update={"noun": "look-out"})
+    issues = hygiene.check(rich_pack(motive_defs=motives, roles=(role,)))
+    assert [(i.code, i.path) for i in issues if i.code == "ROLE_TOKEN_COLLISION"] == [
+        ("ROLE_TOKEN_COLLISION", "roles.maid.noun")
+    ]
+
+
+def test_two_roles_may_not_share_a_noun_token():
+    first = rich_pack().roles[0]
+    second = first.model_copy(update={"key": "steward", "noun": "Maid"})  # case differs
+    issues = hygiene.check(rich_pack(roles=(first, second)))
+    assert ("ROLE_TOKEN_COLLISION", "roles.steward.noun") in [(i.code, i.path) for i in issues]
+
+
+def test_role_name_tokens_collide_with_candidate_tokens_in_any_case_or_unicode_form():
+    method = MethodDef(key="m", label="poisoned in the wine", aliases=("poison",))
+    name = Entry(text="POISON", proper=True)  # upper case
+    role = rich_pack().roles[0].model_copy(update={"names": (name,)})
+    issues = hygiene.check(rich_pack(method_defs=(method,), roles=(role,)))
+    assert ("ROLE_TOKEN_COLLISION", "roles.maid.names[0]") in [(i.code, i.path) for i in issues]
+    decomposed = Entry(text="e\u0301pe\u0301e")  # decomposed Unicode: e + combining accent
+    epee = MethodDef(key="e", label="stabbed with an épée")
+    role2 = rich_pack().roles[0].model_copy(update={"names": (decomposed,)})
+    got = hygiene.check(rich_pack(method_defs=(epee,), roles=(role2,)))
+    assert ("ROLE_TOKEN_COLLISION", "roles.maid.names[0]") in [(i.code, i.path) for i in got]
+
+
+def test_a_pack_with_no_roles_has_no_role_collisions():
+    assert hygiene.check(Pack(id="e", capacity=rich_pack().capacity)) == []

@@ -1,4 +1,5 @@
 from gumshoe.cases.model.pack import Capacity, MotiveDef, Pack, RoleDef, SceneType
+from gumshoe.cases.model.spec import derive_spec
 from gumshoe.cases.packs.check import capacity
 from tests.packs.fixtures import CAPACITY, TEST_PRESETS, rich_pack, scenes
 
@@ -8,7 +9,10 @@ def found(pack, presets=TEST_PRESETS):
 
 
 def _roles(n):
-    return tuple(RoleDef(key=f"r{i}", motive_types=("a", "b", "c")) for i in range(n))
+    return tuple(
+        RoleDef(key=f"r{i}", record_kinds=("ledger",), motive_types=("a", "b", "c"))
+        for i in range(n)
+    )
 
 
 def _hostable(**changes):
@@ -76,7 +80,7 @@ def _messages(pack):
 def test_two_scenes_that_can_host_the_methods_are_not_enough():
     (issue,) = capacity.check(_hostable(scene_types=scenes(2)), TEST_PRESETS)
     assert (issue.code, issue.path) == ("PRESET_UNSUPPORTED", "meta.presets[tiny]")
-    assert "scene types allowing 3 methods=2 (needs at least 3)" in issue.message
+    assert "hosting scenes=2 (needs at least 3)" in issue.message
 
 
 def test_three_scenes_that_can_host_the_methods_are_enough():
@@ -86,7 +90,7 @@ def test_three_scenes_that_can_host_the_methods_are_enough():
 def test_scenes_too_small_for_the_methods_do_not_count():
     two_big_one_small = scenes(2) + (SceneType(key="small", allowed_methods=("dagger", "poison")),)
     (message,) = _messages(_hostable(scene_types=two_big_one_small))
-    assert "scene types allowing 3 methods=2" in message
+    assert "hosting scenes=2" in message
 
 
 def test_a_method_listed_twice_in_a_scene_counts_once():
@@ -94,22 +98,52 @@ def test_a_method_listed_twice_in_a_scene_counts_once():
         SceneType(key=f"s{i}", allowed_methods=("dagger", "dagger", "poison")) for i in range(3)
     )
     (message,) = _messages(_hostable(scene_types=doubled))
-    assert "scene types allowing 3 methods=0 (needs at least 3)" in message
+    assert "hosting scenes=0 (needs at least 3)" in message
 
 
 def test_methods_larger_than_every_scene_leave_a_count_of_zero():
     (message,) = _messages(_hostable(scene_types=scenes(4, ("dagger", "poison"))))
-    assert "scene types allowing 3 methods=0 (needs at least 3)" in message
+    assert "hosting scenes=0 (needs at least 3)" in message
 
 
 def test_a_pack_with_no_scenes_is_unsupported_without_raising():
     (message,) = _messages(_hostable(scene_types=()))
-    assert "scene types allowing 3 methods=0" in message
+    assert "hosting scenes=0" in message
 
 
 def test_the_scene_reason_is_appended_to_the_other_reasons():
     pack = _hostable(roles=_roles(2), scene_types=scenes(2))
     (message,) = _messages(pack)
-    assert (
-        "roles=2 (needs at least 3); scene types allowing 3 methods=2 (needs at least 3)" in message
-    )
+    assert "roles=2 (needs at least 3); hosting scenes=0 (needs at least 3)" in message
+
+
+def test_a_record_kind_that_lists_only_the_scene_is_not_usable():
+    ledger = rich_pack().record_defs[0].model_copy(update={"location_kinds": ("study",)})
+    (message,) = _messages(_hostable(record_defs=(ledger,)))
+    assert "hosting scenes=0 (needs at least 3)" in message
+
+
+def test_a_location_subject_record_kind_never_makes_a_role_eligible():
+    ledger = rich_pack().record_defs[0].model_copy(update={"subject": "location"})
+    (message,) = _messages(_hostable(record_defs=(ledger,)))
+    assert "hosting scenes=0 (needs at least 3)" in message
+
+
+def test_scenes_with_enough_methods_but_too_few_eligible_roles_do_not_host():
+    roles = (*_roles(2), RoleDef(key="r2", motive_types=("a", "b", "c")))  # r2: no record kind
+    (message,) = _messages(_hostable(roles=roles))
+    assert "hosting scenes=0 (needs at least 3)" in message
+
+
+def test_the_shared_helpers_agree_with_the_rule():
+    pack = _hostable()
+    scene = pack.scene_types[0]
+    assert capacity.eligible_roles(pack, scene) == ["r0", "r1", "r2"]
+    assert capacity.usable_kind(pack.record_defs[0], scene) is True
+    spec = derive_spec("tiny", pack, TEST_PRESETS)
+    assert len(capacity.hosting_scenes(pack, spec)) == 3
+
+
+def test_a_scene_without_location_kinds_hosts_nothing_and_never_raises():
+    bare = SceneType(key="b", allowed_methods=("dagger", "poison", "rope"))
+    assert capacity.eligible_roles(_hostable(scene_types=(bare,)), bare) == []

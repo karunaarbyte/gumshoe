@@ -103,7 +103,12 @@ def _wide_pack(roles: int, motives: int, suspects: int) -> Pack:
             "presets": ("big",),
             "capacity": base.capacity.model_copy(update={"max_suspects": suspects}),
             "roles": tuple(
-                RoleDef(key=f"r{i:02}", record_kinds=("ledger",), motive_types=keys)
+                RoleDef(
+                    key=f"r{i:02}",
+                    noun=f"n{i:02}",
+                    record_kinds=("ledger",),
+                    motive_types=keys,
+                )
                 for i in range(roles)
             ),
             "motive_defs": tuple(MotiveDef(key=k, label=f"motive {k}") for k in keys),

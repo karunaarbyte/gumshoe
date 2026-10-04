@@ -81,7 +81,16 @@ _ROWS = (
         "mean",
         "overall",
     ),
+    _row(
+        "ROLE_TOKEN_COLLISION",
+        4,
+        "a token ({token!r}) of this role's {what} is also used by {other!r}",
+        "what",
+        "token",
+        "other",
+    ),
     # stage 5: plausibility
+    _row("ROLE_NO_NOUN", 5, "the role has no display noun"),
     _row("ROLE_NO_RECORD_KIND", 5, "the role has no record kind"),
     _row("ROLE_NO_SUSPECT_RECORD", 5, "the role has no record kind about a suspect"),
     _row(
@@ -107,6 +116,8 @@ _ROWS = (
         "method",
         "scene",
     ),
+    _row("RECORD_NO_NAME", 5, "the record kind has no display name"),
+    _row("RECORD_NO_LOCATION_KIND", 5, "the record kind lists no location kind"),
     _row("SLOT_DEFS_TOO_FEW", 5, "{defs} slot definitions for {slots} slots", "defs", "slots"),
     # stage 6: capacity and presets
     _row("PRESET_UNSUPPORTED", 6, "the pack cannot host this preset: {reason}", "reason"),

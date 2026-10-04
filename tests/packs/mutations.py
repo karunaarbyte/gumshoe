@@ -131,8 +131,17 @@ mutation(
     ),
 )
 
+# "stabbing" stems to the dagger's distinctive token "stab"
+mutation("ROLE_TOKEN_COLLISION", replace('noun = "maid"', 'noun = "stabbing"'))
+
 # ---- stage 5: plausibility (a failure here also skips stages 6 and 7) ------------------------
 
+mutation("ROLE_NO_NOUN", replace('noun = "maid"\n', ""))
+mutation("RECORD_NO_NAME", replace('names = [{ text = "ledger", article = "the" }]\n', ""))
+mutation(
+    "RECORD_NO_LOCATION_KIND",
+    replace('location_kinds = ["cellar", "garden", "study"]', "location_kinds = []"),
+)
 mutation("ROLE_NO_RECORD_KIND", replace('record_kinds = ["ledger"]', "record_kinds = []"))
 mutation(
     "ROLE_NO_SUSPECT_RECORD",
@@ -201,13 +210,13 @@ _QUAD = chain(
         'secrets = ["{^who} counts every coin twice."]\n'
     ),
     append(
-        '[roles.groom]\nnames = [{ text = "Wat", pronoun = "he", proper = true }]\n'
+        '[roles.groom]\nnames = [{ text = "Wat", pronoun = "he", proper = true }]\nnoun = "groom"\n'
         'traits = ["gentle with horses"]\nrecord_kinds = ["ledger"]\n'
         'motive_types = ["debt", "greed", "inheritance"]\n'
     ),
 )
 _PAGE = append(
-    '[roles.page]\nnames = [{ text = "Piers", pronoun = "he", proper = true }]\n'
+    '[roles.page]\nnames = [{ text = "Piers", pronoun = "he", proper = true }]\nnoun = "page"\n'
     'traits = ["fast on his feet"]\nrecord_kinds = ["ledger"]\n'
     'motive_types = ["debt", "inheritance", "jealousy"]\n'
 )

@@ -190,11 +190,15 @@ descriptions = ["{^place} is damp, low and lined with dusty racks."]
 [record_defs.gate_log]
 subject = "location"
 medium = "written"
+names = [{ text = "gate log", article = "the" }]
+location_kinds = ["cellar"]
 presence = ["The gate log shows {who} {time.at}."]
 
 [record_defs.ledger]
 subject = "suspect"
 medium = "written"
+names = [{ text = "ledger", article = "the" }]
+location_kinds = ["cellar", "garden", "study"]
 presence = ["The ledger lists {who} {time.at}."]
 
 [method_defs.dagger]
@@ -247,18 +251,21 @@ secrets = ["{^who} cannot bear to watch the master's favourites."]
 
 [roles.maid]
 names = [{ text = "Maud", pronoun = "she", proper = true }]
+noun = "maid"
 traits = ["quiet and watchful"]
 record_kinds = ["ledger"]
 motive_types = ["debt", "inheritance", "jealousy"]
 
 [roles.steward]
 names = [{ text = "Edmund", pronoun = "he", proper = true }]
+noun = "steward"
 traits = ["stern and exact"]
 record_kinds = ["ledger"]
 motive_types = ["debt", "inheritance", "jealousy"]
 
 [roles.cook]
 names = [{ text = "Hob", pronoun = "he", proper = true }]
+noun = "cook"
 traits = ["ruddy and quick to laugh"]
 record_kinds = ["ledger"]
 motive_types = ["debt", "inheritance", "jealousy"]

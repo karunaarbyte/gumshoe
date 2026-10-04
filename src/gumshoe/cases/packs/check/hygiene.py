@@ -105,5 +105,54 @@ def _trace_skew(pack: Pack) -> list[PackIssue]:
     return out
 
 
+def _role_collisions(pack: Pack) -> list[PackIssue]:
+    """Role nouns and names may not share a token with each other (nouns) or with ANY method or
+    motive label or alias token: the case validator's LABEL_NAME_COLLISION uses all tokens."""
+    candidate_tokens: dict[str, str] = {}
+    for kind, defs in (("method", pack.method_defs), ("motive", pack.motive_defs)):
+        for d in defs:
+            for token in sorted(token_set(d.label, *d.aliases)):
+                candidate_tokens.setdefault(token, f"{kind}:{d.key}")
+    out: list[PackIssue] = []
+    noun_owner: dict[str, str] = {}
+    for role in sorted(pack.roles, key=lambda r: r.key):
+        base = f"roles.{role.key}"
+        for token in sorted(token_set(role.noun)):
+            owner = noun_owner.setdefault(token, role.key)
+            if owner != role.key:
+                out.append(
+                    make(
+                        "ROLE_TOKEN_COLLISION",
+                        f"{base}.noun",
+                        what="noun",
+                        token=token,
+                        other=f"role:{owner}",
+                    )
+                )
+            if token in candidate_tokens:
+                out.append(
+                    make(
+                        "ROLE_TOKEN_COLLISION",
+                        f"{base}.noun",
+                        what="noun",
+                        token=token,
+                        other=candidate_tokens[token],
+                    )
+                )
+        for i, entry in enumerate(role.names):
+            for token in sorted(token_set(entry.text)):
+                if token in candidate_tokens:
+                    out.append(
+                        make(
+                            "ROLE_TOKEN_COLLISION",
+                            f"{base}.names[{i}]",
+                            what="name",
+                            token=token,
+                            other=candidate_tokens[token],
+                        )
+                    )
+    return out
+
+
 def check(pack: Pack) -> list[PackIssue]:
-    return [*_leaks(pack), *_trace_skew(pack)]
+    return [*_leaks(pack), *_trace_skew(pack), *_role_collisions(pack)]

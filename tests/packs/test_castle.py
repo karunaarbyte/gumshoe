@@ -364,6 +364,11 @@ def test_no_role_name_collides_with_a_candidate_token(pack):
     assert not token_set(*names) & _candidate_tokens(pack)
 
 
+def test_no_record_display_name_collides_with_a_candidate_token(pack):
+    names = {e.text for d in pack.record_defs for e in d.names}
+    assert not token_set(*names) & _candidate_tokens(pack)
+
+
 def _usable(record, scene_kinds):
     """Subject suspect, lists the scene's kind and at least one other kind."""
     return record.subject == "suspect" and any(
