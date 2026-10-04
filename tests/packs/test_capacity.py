@@ -147,3 +147,10 @@ def test_the_shared_helpers_agree_with_the_rule():
 def test_a_scene_without_location_kinds_hosts_nothing_and_never_raises():
     bare = SceneType(key="b", allowed_methods=("dagger", "poison", "rope"))
     assert capacity.eligible_roles(_hostable(scene_types=(bare,)), bare) == []
+
+
+def test_a_role_naming_an_unknown_record_kind_is_not_eligible_and_never_raises():
+    pack = _hostable()
+    roles = tuple(r.model_copy(update={"record_kinds": ("nope",)}) for r in pack.roles)
+    pack = pack.model_copy(update={"roles": roles})
+    assert capacity.eligible_roles(pack, pack.scene_types[0]) == []

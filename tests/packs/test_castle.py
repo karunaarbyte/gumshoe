@@ -9,6 +9,7 @@ from gumshoe.cases.core.labels import token_set
 from gumshoe.cases.model.pack import FamilyDef, MethodDef, MotiveDef, Pack
 from gumshoe.cases.model.spec import PRESETS, derive_spec
 from gumshoe.cases.packs import LoadResult, load_pack
+from gumshoe.cases.packs.check.capacity import eligible_roles, hosting_scenes
 from gumshoe.cases.packs.check.lint import SAMPLES, render
 from gumshoe.cases.tools.builtin import load_builtin_pack
 
@@ -225,15 +226,18 @@ def test_the_castle_claims_exactly_three_presets_and_fits_its_capacity_in_its_po
     assert cap.max_suspects <= len(pack.roles) and cap.max_suspects <= len(pack.motive_defs)
 
 
-def test_every_claimed_preset_is_hosted_by_enough_scene_types(pack):
-    scenes_by_methods = len({s.allowed_methods for s in pack.scene_types})
+def test_every_claimed_preset_has_at_least_three_hosting_scenes(pack):
+    expected_minimum = {"short": 7, "standard": 7, "long": 4}  # measured: 7, 7, 4
     for name in pack.presets:
-        methods = derive_spec(name, pack, PRESETS).methods
-        assert scenes_by_methods >= methods, name
-        hosts = [s for s in pack.scene_types if len(s.allowed_methods) >= methods]
+        spec = derive_spec(name, pack, PRESETS)
+        hosts = hosting_scenes(pack, spec)
         assert len(hosts) >= 3, name
-        if name == "long":
-            assert len(hosts) >= 4
+        assert len(hosts) >= expected_minimum[name], name  # long was once one scene
+
+
+def test_each_scene_has_exactly_one_location_kind(pack):
+    for scene in pack.scene_types:
+        assert len(scene.location_kinds) == 1, scene.key
 
 
 def test_every_method_is_placeable_in_every_scene_it_is_allowed_in(pack):
@@ -369,22 +373,6 @@ def test_no_record_display_name_collides_with_a_candidate_token(pack):
     assert not token_set(*names) & _candidate_tokens(pack)
 
 
-def _usable(record, scene_kinds):
-    """Subject suspect, lists the scene's kind and at least one other kind."""
-    return record.subject == "suspect" and any(
-        k in record.location_kinds and set(record.location_kinds) - {k} for k in scene_kinds
-    )
-
-
-def _eligible_roles(pack: Pack, scene) -> list[str]:
-    records = {d.key: d for d in pack.record_defs}
-    return [
-        r.key
-        for r in pack.roles
-        if any(_usable(records[k], scene.location_kinds) for k in r.record_kinds)
-    ]
-
-
 def test_every_record_kind_has_a_display_name_and_existing_location_kinds(pack):
     kinds = {d.key for d in pack.location_defs}
     for record in pack.record_defs:
@@ -401,7 +389,7 @@ def test_the_household_register_attests_every_room_and_the_gate_log_only_the_gat
 
 def test_every_scene_leaves_at_least_seven_eligible_roles(pack):
     for scene in pack.scene_types:
-        assert len(_eligible_roles(pack, scene)) >= 7, scene.key
+        assert len(eligible_roles(pack, scene)) >= 7, scene.key
 
 
 def test_no_hard_coded_record_name_is_left_in_the_families_or_the_presence_lines(pack):
