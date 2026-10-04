@@ -3,9 +3,9 @@
 from collections.abc import Mapping
 from math import sqrt
 
-from gumshoe.cases.generate import roster, truth
+from gumshoe.cases.generate import roster, timeline, truth
 from gumshoe.cases.generate.gen_context import GenContext
-from gumshoe.cases.generate.outputs import RosterOut, TruthOut
+from gumshoe.cases.generate.outputs import RosterOut, TimelineOut, TruthOut
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.tools.builtin import load_builtin_pack
 
@@ -26,6 +26,12 @@ def roster_of(ctx: GenContext) -> RosterOut:
 def truth_of(ctx: GenContext) -> tuple[RosterOut, TruthOut]:
     before = roster_of(ctx)
     return before, truth.run(ctx, ctx.stream("truth"), before)
+
+
+def stages(ctx: GenContext) -> tuple[RosterOut, TruthOut, TimelineOut]:
+    """The three structural stages, called directly (the fold in `structure.py` is tested apart)."""
+    before, after = truth_of(ctx)
+    return before, after, timeline.run(ctx, ctx.stream("timeline"), after)
 
 
 def chi2_critical(df: int, z: float = Z_BONFERRONI) -> float:
