@@ -109,6 +109,7 @@ names = [
   { text = "Thomas", pronoun = "he", proper = true },
   { text = "Wynne", pronoun = "she", proper = true },
 ]
+noun = "bard"
 traits = ["lean and bright-eyed", "carrying a worn lute"]
 record_kinds = ["visitor_ledger", "chapel_register"]
 motive_types = ["ambition", "blackmail", "faith", "inheritance", "jealousy"]
@@ -118,6 +119,7 @@ names = [
   { text = "Osric", pronoun = "he", proper = true },
   { text = "Maud", pronoun = "she", proper = true },
 ]
+noun = "clerk"
 traits = ["ink-stained and neat", "thin and stooped"]
 record_kinds = ["visitor_ledger", "gate_log", "chapel_register"]
 motive_types = ["ambition", "blackmail", "debt", "fear", "inheritance"]
@@ -127,6 +129,7 @@ names = [
   { text = "Berta", pronoun = "she", proper = true },
   { text = "Gilbert", pronoun = "he", proper = true },
 ]
+noun = "cook"
 traits = ["broad and ruddy", "forever smelling of onions"]
 record_kinds = ["chapel_register", "gate_log"]
 motive_types = ["debt", "faith", "fear", "jealousy", "revenge"]
@@ -136,6 +139,7 @@ names = [
   { text = "Hawise", pronoun = "she", proper = true },
   { text = "Piers", pronoun = "he", proper = true },
 ]
+noun = "falconer"
 traits = ["weathered and wiry", "always with a glove on one hand"]
 record_kinds = ["chapel_register", "gate_log"]
 motive_types = ["ambition", "faith", "inheritance", "jealousy", "revenge"]
@@ -145,6 +149,7 @@ names = [
   { text = "Wat", pronoun = "he", proper = true },
   { text = "Alys", pronoun = "she", proper = true },
 ]
+noun = "groom"
 traits = ["sturdy and sunburnt", "smelling of hay and horses"]
 record_kinds = ["chapel_register", "gate_log"]
 motive_types = ["faith", "fear", "inheritance", "jealousy", "revenge"]
@@ -154,6 +159,7 @@ names = [
   { text = "Joan", pronoun = "she", proper = true },
   { text = "Isolde", pronoun = "she", proper = true },
 ]
+noun = "maid"
 traits = ["freckled and brisk", "with a kerchief over her hair"]
 record_kinds = ["chapel_register", "visitor_ledger"]
 motive_types = ["blackmail", "debt", "faith", "fear", "jealousy"]
@@ -163,6 +169,7 @@ names = [
   { text = "Anselm", pronoun = "he", proper = true },
   { text = "Roger", pronoun = "he", proper = true },
 ]
+noun = "priest"
 traits = ["grey-haired and soft-spoken", "with a slow, steady gait"]
 record_kinds = ["chapel_register"]
 motive_types = ["ambition", "blackmail", "debt", "fear", "revenge"]
@@ -172,6 +179,7 @@ names = [
   { text = "Edmund", pronoun = "he", proper = true },
   { text = "Hugh", pronoun = "he", proper = true },
 ]
+noun = "steward"
 traits = ["tall and upright", "with a heavy bunch of keys at his belt"]
 record_kinds = ["visitor_ledger", "gate_log"]
 motive_types = ["ambition", "blackmail", "debt", "inheritance", "revenge"]

@@ -5,7 +5,8 @@ from importlib.resources import files
 
 import pytest
 
-from gumshoe.cases.model.pack import FamilyDef, Pack
+from gumshoe.cases.core.labels import token_set
+from gumshoe.cases.model.pack import FamilyDef, MethodDef, MotiveDef, Pack
 from gumshoe.cases.model.spec import PRESETS, derive_spec
 from gumshoe.cases.packs import LoadResult, load_pack
 from gumshoe.cases.packs.check.lint import SAMPLES, render
@@ -327,3 +328,29 @@ def test_no_two_family_variants_render_to_the_same_sentence(pack):
     rendered = [render(v, SAMPLE) for f in pack.families for v in f.variants]
     duplicates = sorted({s for s in rendered if rendered.count(s) > 1})
     assert duplicates == []
+
+
+def _candidate_tokens(pack: Pack) -> frozenset[str]:
+    """Every token of every method and motive label and alias
+    (the validator's collision set)."""
+    found: set[str] = set()
+    defs: tuple[MethodDef | MotiveDef, ...] = (*pack.method_defs, *pack.motive_defs)
+    for d in defs:
+        found |= token_set(d.label, *d.aliases)
+    return frozenset(found)
+
+
+def test_every_role_has_a_distinct_noun_that_collides_with_no_candidate_token(
+    pack,
+):
+    nouns = [r.noun for r in pack.roles]
+    assert all(n.strip() for n in nouns)
+    assert len(set(nouns)) == len(nouns)
+    per_role = [token_set(n) for n in nouns]
+    assert sum(len(t) for t in per_role) == len(frozenset().union(*per_role))  # no shared token
+    assert not frozenset().union(*per_role) & _candidate_tokens(pack)
+
+
+def test_no_role_name_collides_with_a_candidate_token(pack):
+    names = {e.text for r in pack.roles for e in r.names}
+    assert not token_set(*names) & _candidate_tokens(pack)
