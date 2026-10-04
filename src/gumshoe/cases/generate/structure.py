@@ -20,7 +20,9 @@ def run_structure(
     override: Mapping[str, Output] | None = None,
 ) -> dict[str, Output]:
     """Run the stages in order up to and including `upto`. An override replaces that stage's
-    output instead of running it, and the later stages run on top of it."""
+    output instead of running it, and the later stages run on top of it. An override for a stage
+    after `upto` is validated but ignored. A truth override replaces the roster entry by its own
+    roster (unless the roster is itself overridden), so the returned dict stays consistent."""
     override = override or {}
     if upto not in STAGES:
         raise ValueError(f"unknown stage {upto!r} (stages: {', '.join(STAGES)})")
@@ -43,11 +45,14 @@ def run_structure(
             out[stage] = truth.run(ctx, ctx.stream(stage), _need(out, "roster", RosterOut))
         else:
             out[stage] = timeline.run(ctx, ctx.stream(stage), _need(out, "truth", TruthOut))
+        if stage == "truth" and stage in override and "roster" not in override:
+            out["roster"] = _need(out, "truth", TruthOut).roster
         if stage == upto:
             break
     return out
 
 
+# `_need` exists only to narrow the type of a stage output for mypy.
 def _need[T: Output](outputs: dict[str, Output], stage: str, kind: type[T]) -> T:
     found = outputs[stage]
     if not isinstance(found, kind):

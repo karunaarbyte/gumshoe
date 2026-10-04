@@ -22,9 +22,10 @@ def run_with_hash_seed(hash_seed: str) -> str:
         env=env,
         capture_output=True,
         text=True,
-        check=True,
+        check=False,
         timeout=120,
     )
+    assert result.returncode == 0, result.stderr
     return result.stdout.strip()
 
 

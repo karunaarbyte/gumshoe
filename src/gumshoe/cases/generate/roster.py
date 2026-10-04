@@ -21,7 +21,7 @@ from gumshoe.cases.packs.check.capacity import eligible_roles, hosting_scenes, u
 from gumshoe.cases.packs.check.matching import matchings
 
 
-def _names(role: RoleDef, used: set[str], stream: Stream) -> str:
+def _pick_name(role: RoleDef, used: set[str], stream: Stream) -> str:
     """The role's best-ranked name that no earlier suspect has."""
     for name in stream.rank([e.text for e in role.names], f"name/{role.key}"):
         if name not in used:
@@ -40,7 +40,7 @@ def _record_kind_set(
     records = {d.key: d for d in pack.record_defs}
     feasible = [
         subset
-        for subset in combinations(sorted(pack.known_record_kinds), size)
+        for subset in combinations(sorted(records), size)
         if all(set(_usable_kinds(r, scene, records)) & set(subset) for r in roles)
     ]
     if not feasible:
@@ -48,17 +48,18 @@ def _record_kind_set(
     return stream.choice(feasible)
 
 
-def _trace_ok(method: MethodDef, scene: SceneType, kinds: set[str]) -> bool:
+def _trace_ok(method: MethodDef, scene: SceneType, places: set[str]) -> bool:
     """Some trace of the method fits the scene's trace kinds and a non-scene chosen place."""
     return any(
-        t.kind in scene.allowed_trace_kinds and kinds & set(t.location_kinds) for t in method.traces
+        t.kind in scene.allowed_trace_kinds and places & set(t.location_kinds)
+        for t in method.traces
     )
 
 
 def location_kinds(
     pack: Pack,
     scene: SceneType,
-    secret_kinds: list[str],
+    secret_kindss: list[str],
     methods: list[MethodDef],
     record_kinds: tuple[str, ...],
     size: int,
@@ -75,7 +76,7 @@ def location_kinds(
         chosen = set(subset)
         if not all(_trace_ok(m, scene, chosen) for m in methods):
             continue
-        if not all(chosen & set(records[kind].location_kinds) for kind in secret_kinds):
+        if not all(chosen & set(records[kind].location_kinds) for kind in secret_kindss):
             continue
         place_subject = [
             records[k] for k in record_kinds if k in records and records[k].subject == "location"
@@ -105,15 +106,15 @@ def run(ctx: GenContext, stream: Stream) -> RosterOut:
     used: set[str] = set()
     names: list[str] = []
     for role in roles:
-        names.append(_names(role, used, stream))
+        names.append(_pick_name(role, used, stream))
         used.add(names[-1])
 
     kinds = _record_kind_set(pack, scene, roles, spec.record_kinds, stream)
     records = {d.key: d for d in pack.record_defs}
-    secret_kind: list[str] = []
+    secret_kinds: list[str] = []
     for role in roles:
         options = sorted(set(_usable_kinds(role, scene, records)) & set(kinds))
-        secret_kind.append(stream.child(f"record_kind/{role.key}").choice(options))
+        secret_kinds.append(stream.child(f"record_kind/{role.key}").choice(options))
 
     method_keys = stream.rank(list(scene.allowed_methods), "methods")[: spec.methods]
     methods_by_key = {m.key: m for m in pack.method_defs}
@@ -130,7 +131,7 @@ def run(ctx: GenContext, stream: Stream) -> RosterOut:
     places = location_kinds(
         pack,
         scene,
-        secret_kind,
+        secret_kinds,
         methods,
         kinds,
         spec.locations,
@@ -148,7 +149,7 @@ def run(ctx: GenContext, stream: Stream) -> RosterOut:
             motive_pos=f"v{i}",
             record_kind=kind,
         )
-        for i, (role, name, kind) in enumerate(zip(roles, names, secret_kind, strict=True))
+        for i, (role, name, kind) in enumerate(zip(roles, names, secret_kinds, strict=True))
     )
     return RosterOut(
         scene_type=scene.key,

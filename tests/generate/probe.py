@@ -63,6 +63,9 @@ def probe_case(ctx: GenContext, truth: TruthOut, timeline: TimelineOut) -> Case:
             )
             subject_type = RecordSubjectType.LOCATION
         else:
+            # Test-only shortcut: attaching an unused suspect-subject kind to suspects[0] (the
+            # culprit) is arbitrary. The evidence stage must NOT put an extra source on the
+            # culprit: it would be a tell.
             subject, subject_type = roster.suspects[0].pos, RecordSubjectType.SUSPECT
         sources.append(RecordSource(kind=kind, subject_type=subject_type, subject=subject))
         facts.append(Fact(id=f"f_stub_{kind}", kind=FactKind.CLUE, source=_record(kind, subject)))

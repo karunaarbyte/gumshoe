@@ -187,3 +187,22 @@ def test_a_record_kind_with_no_definition_imposes_no_location_constraint(preset)
     for seed in range(40):
         _, r = draw(bare, seed, preset)
         assert all(s.record_kind in defined for s in r.suspects)
+        assert set(r.record_kinds) <= defined
+
+
+def test_no_record_kind_set_that_serves_every_role_raises_a_generation_error():
+    """Every role is eligible, but each needs its own record kind and a set holds only K."""
+    pack = castle()
+    ledger = next(d for d in pack.record_defs if d.key == "visitor_ledger")
+    keys = [f"ledger_{i}" for i in range(len(pack.roles))]
+    defs = tuple(ledger.model_copy(update={"key": key}) for key in keys)
+    roles = tuple(
+        r.model_copy(update={"record_kinds": (key,)})
+        for r, key in zip(pack.roles, keys, strict=True)
+    )
+    broken = pack.model_copy(
+        update={"record_defs": defs, "roles": roles, "record_kinds": tuple(keys)}
+    )
+    ctx = GenContext.of(broken, 1, "short")
+    with pytest.raises(GenerationError, match="record-kind set"):
+        roster_stage.run(ctx, ctx.stream("roster"))

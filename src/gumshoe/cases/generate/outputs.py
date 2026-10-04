@@ -5,6 +5,8 @@ that hides them comes in 2d-3. `TruthOut` is the only output where a position me
 `s0`, `m0` and `v0` are the culprit, the method and the motive of the truth.
 """
 
+from typing import Literal
+
 from gumshoe.cases.core.canonical import canonical_json
 from gumshoe.cases.core.hashing import domain_digest
 from gumshoe.cases.model.entities import Frozen
@@ -56,12 +58,17 @@ class RosterOut(Output):
 
 
 class TruthOut(Output):
-    """The roster reordered so the culprit is s0, the true method m0 and the culprit's motive v0."""
+    """The roster reordered so the culprit is s0, the true method m0 and the culprit's motive v0.
+
+    After the renumbering suspect s_k always has motive v_k (motive_pos is the identity mapping),
+    so the 2d-3 permutation must permute suspects and motives independently, or rely on hashed
+    ids, so that pattern never reaches a case.
+    """
 
     roster: RosterOut
-    who_pos: str = "s0"
-    how_pos: str = "m0"
-    why_pos: str = "v0"
+    who_pos: Literal["s0"] = "s0"
+    how_pos: Literal["m0"] = "m0"
+    why_pos: Literal["v0"] = "v0"
 
 
 class TimelineRow(Frozen):

@@ -35,7 +35,25 @@ def test_an_override_replaces_one_stage_and_reruns_only_the_later_ones():
     assert changed["truth"].roster.scene_type == other.scene_type  # type: ignore[attr-defined]
     assert changed["truth"] != base["truth"] and changed["timeline"] != base["timeline"]
     keep_truth = replay(3, "short", pack, override={"truth": base["truth"]})
-    assert keep_truth == base  # overriding a stage with its own output changes nothing
+    # overriding a stage with its own output changes nothing but the roster entry, which becomes
+    # the truth's (reordered) roster
+    assert keep_truth["truth"] == base["truth"] and keep_truth["timeline"] == base["timeline"]
+    assert keep_truth["roster"] == base["truth"].roster  # type: ignore[attr-defined]
+
+
+def test_a_truth_override_replaces_the_roster_entry_by_its_roster():
+    pack = castle()
+    other = replay(4, "short", pack, "truth")["truth"]
+    changed = replay(3, "short", pack, override={"truth": other})
+    assert isinstance(other, TruthOut)
+    assert changed["roster"] == other.roster
+    both = replay(
+        3,
+        "short",
+        pack,
+        override={"truth": other, "roster": replay(5, "short", pack, "roster")["roster"]},
+    )
+    assert both["roster"] == replay(5, "short", pack, "roster")["roster"]
 
 
 def test_replay_rejects_unknown_stages_and_wrongly_typed_overrides():
