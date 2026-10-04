@@ -162,7 +162,7 @@ def test_role_name_tokens_collide_with_candidate_tokens_in_any_case_or_unicode_f
     issues = hygiene.check(rich_pack(method_defs=(method,), roles=(role,)))
     assert ("ROLE_TOKEN_COLLISION", "roles.maid.names[0]") in [(i.code, i.path) for i in issues]
     decomposed = Entry(text="e\u0301pe\u0301e")  # decomposed Unicode: e + combining accent
-    epee = MethodDef(key="e", label="stabbed with an épée")
+    epee = MethodDef(key="e", label="stabbed with an \u00e9p\u00e9e")  # composed form
     role2 = rich_pack().roles[0].model_copy(update={"names": (decomposed,)})
     got = hygiene.check(rich_pack(method_defs=(epee,), roles=(role2,)))
     assert ("ROLE_TOKEN_COLLISION", "roles.maid.names[0]") in [(i.code, i.path) for i in got]
