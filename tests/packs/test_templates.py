@@ -128,3 +128,17 @@ def test_a_record_name_with_a_double_space_is_a_pool_text_issue():
     )
     got = [(i.code, i.path) for i in templates.check(rich_pack(record_defs=(record,)))]
     assert ("DOUBLE_SPACE", "record_defs.ledger.names[0]") in got
+
+
+def test_a_castle_without_record_names_has_no_spurious_double_space():
+    from gumshoe.cases.packs.check import plausibility
+    from gumshoe.cases.tools.builtin import load_builtin_pack
+
+    castle = load_builtin_pack("castle")
+    bare = castle.model_copy(
+        update={
+            "record_defs": tuple(d.model_copy(update={"names": ()}) for d in castle.record_defs)
+        }
+    )
+    assert {i.code for i in plausibility.check(bare)} >= {"RECORD_NO_NAME"}
+    assert "DOUBLE_SPACE" not in {i.code for i in templates.check(bare)}

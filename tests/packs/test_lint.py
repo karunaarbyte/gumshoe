@@ -76,4 +76,4 @@ def test_pack_sample_uses_the_first_record_name_and_survives_a_pack_without_reco
         id="e",
         capacity=Capacity(max_suspects=1, max_locations=1, max_methods=1, max_record_kinds=1),
     )
-    assert pack_sample(empty)["record"] == ""  # renders to nothing: never raises
+    assert pack_sample(empty)["record"] == "the register"  # keeps the default sample

@@ -68,7 +68,8 @@ def pack_sample(pack: Pack) -> dict[str, str]:
     phrases and the first role's first name and pronoun; anything missing keeps SAMPLES[0]."""
     sample = dict(SAMPLES[0])
     record = next((e for d in pack.record_defs for e in d.names[:1]), None)
-    sample["record"] = phrase(record) if record is not None else ""
+    if record is not None:
+        sample["record"] = phrase(record)
     place = next((e for d in pack.location_defs for e in d.names), None)
     if place is not None:
         sample["place"] = phrase(place)
