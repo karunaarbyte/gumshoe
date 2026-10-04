@@ -3,7 +3,17 @@
 from collections.abc import Mapping
 from math import sqrt
 
+from gumshoe.cases.model.pack import Pack
+from gumshoe.cases.tools.builtin import load_builtin_pack
+
+PRESET_NAMES = ("short", "standard", "long")
+SEEDS = range(200)
+GOLDEN_SEEDS = (0, 1, 2, 3, 4)
 Z_BONFERRONI = 3.29  # one-sided p = 0.0005 per test, about 0.005 over the ten statistical tests
+
+
+def castle() -> Pack:
+    return load_builtin_pack("castle")
 
 
 def chi2_critical(df: int, z: float = Z_BONFERRONI) -> float:
