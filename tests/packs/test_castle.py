@@ -354,3 +354,38 @@ def test_every_role_has_a_distinct_noun_that_collides_with_no_candidate_token(
 def test_no_role_name_collides_with_a_candidate_token(pack):
     names = {e.text for r in pack.roles for e in r.names}
     assert not token_set(*names) & _candidate_tokens(pack)
+
+
+def _usable(record, scene_kinds):
+    """Subject suspect, lists the scene's kind and at least one other kind."""
+    return record.subject == "suspect" and any(
+        k in record.location_kinds and set(record.location_kinds) - {k} for k in scene_kinds
+    )
+
+
+def _eligible_roles(pack: Pack, scene) -> list[str]:
+    records = {d.key: d for d in pack.record_defs}
+    return [
+        r.key
+        for r in pack.roles
+        if any(_usable(records[k], scene.location_kinds) for k in r.record_kinds)
+    ]
+
+
+def test_every_record_kind_has_a_display_name_and_existing_location_kinds(pack):
+    kinds = {d.key for d in pack.location_defs}
+    for record in pack.record_defs:
+        assert record.names and all(e.text.strip() for e in record.names), record.key
+        assert record.location_kinds and set(record.location_kinds) <= kinds, record.key
+
+
+def test_the_household_register_attests_every_room_and_the_gate_log_only_the_gatehouse(pack):
+    records = {d.key: d for d in pack.record_defs}
+    assert set(records["chapel_register"].location_kinds) == {d.key for d in pack.location_defs}
+    assert records["chapel_register"].names[0].text == "household register"
+    assert records["gate_log"].location_kinds == ("gatehouse",)
+
+
+def test_every_scene_leaves_at_least_seven_eligible_roles(pack):
+    for scene in pack.scene_types:
+        assert len(_eligible_roles(pack, scene)) >= 7, scene.key

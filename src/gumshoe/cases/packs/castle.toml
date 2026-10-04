@@ -83,6 +83,8 @@ descriptions = [
 [record_defs.visitor_ledger]
 subject = "suspect"
 medium = "written"
+names = [{ text = "visitor ledger", article = "the" }]
+location_kinds = ["chapel", "gatehouse", "great_hall", "keep", "kitchen"]
 presence = [
   "The visitor ledger listed {who} {place.in} {time.at}.",
   "According to the visitor ledger, {who} was {place.in} {time.at}.",
@@ -91,6 +93,8 @@ presence = [
 [record_defs.gate_log]
 subject = "location"
 medium = "written"
+names = [{ text = "gate log", article = "the" }]
+location_kinds = ["gatehouse"]
 presence = [
   "The gate log showed {who} {place.in} {time.at}.",
   "By the gate log, {who} was {place.in} {time.at}.",
@@ -99,6 +103,10 @@ presence = [
 [record_defs.chapel_register]
 subject = "suspect"
 medium = "written"
+names = [{ text = "household register", article = "the" }]
+location_kinds = [
+  "chapel", "gatehouse", "great_hall", "herb_garden", "keep", "kitchen", "undercroft",
+]
 presence = [
   "The chapel register named {who} {place.in} {time.at}.",
   "An entry in the chapel register placed {who} {place.in} {time.at}.",
