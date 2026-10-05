@@ -186,3 +186,144 @@ def test_a_facts_override_has_keys_only_at_depth_2():
     no_keys = tuple(f for f in deep.facts if not f.id.startswith("c_"))
     with pytest.raises(ValueError, match="keys only at depth 2"):
         replay(0, "long", pack, override={"facts": deep.model_copy(update={"facts": no_keys})})
+
+
+def test_a_timeline_override_must_fit_the_slots_the_suspects_and_the_places():
+    pack = castle()
+    base = replay(3, "standard", pack)
+    timeline = base["timeline"]
+    assert isinstance(timeline, TimelineOut)
+    for slot in (0, 3):  # the crime slot is neither the first nor the last of the four slots
+        with pytest.raises(ValueError, match="crime slot"):
+            replay(
+                3,
+                "standard",
+                pack,
+                override={"timeline": timeline.model_copy(update={"crime_slot": slot})},
+            )
+    first = timeline.rows[0]
+    stray = first.model_copy(update={"places": ("l99", *first.places[1:])})
+    other = first.model_copy(update={"suspect_pos": "s9"})
+    for rows, match in (
+        ((stray, *timeline.rows[1:]), "places outside the roster"),
+        ((other, *timeline.rows[1:]), "row for each"),
+    ):
+        with pytest.raises(ValueError, match=match):
+            replay(
+                3,
+                "standard",
+                pack,
+                override={"timeline": timeline.model_copy(update={"rows": rows})},
+            )
+    for opportunity in (("s0", *timeline.opportunity[1:]), ("s9", *timeline.opportunity[1:])):
+        with pytest.raises(ValueError, match="opportunity must be wrong suspects"):
+            replay(
+                3,
+                "standard",
+                pack,
+                override={"timeline": timeline.model_copy(update={"opportunity": opportunity})},
+            )
+
+
+def test_a_roster_override_must_use_defined_record_kinds_each_suspect_holds_one_and_nobody_two():
+    pack = castle()
+    base = replay(3, "standard", pack, "roster")["roster"]
+    assert isinstance(base, RosterOut)
+    subject = {d.key: d.subject for d in pack.record_defs}
+    allowed = {r.key: set(r.record_kinds) for r in pack.roles}
+
+    def fails(roster, match):
+        with pytest.raises(ValueError, match=match):
+            replay(3, "standard", pack, override={"roster": roster})
+
+    fails(
+        base.model_copy(update={"record_kinds": ("nowhere", *base.record_kinds[1:])}), "undefined"
+    )
+    # a suspect given a kind of the roster that their role does not allow
+    for s in base.suspects:
+        wrong = next((k for k in base.record_kinds if k not in allowed[s.role]), None)
+        if wrong:
+            swapped = tuple(
+                t.model_copy(update={"record_kind": wrong}) if t.pos == s.pos else t
+                for t in base.suspects
+            )
+            fails(base.model_copy(update={"suspects": swapped}), "does not allow")
+            break
+    else:
+        raise AssertionError("no suspect with a kind their role does not allow")
+    # a suspect who alone held a kind takes another, so nobody holds the first
+    for seed in range(40):
+        roster = replay(seed, "standard", pack, "roster")["roster"]
+        assert isinstance(roster, RosterOut)
+        held = [t.record_kind for t in roster.suspects]
+        for t in roster.suspects:
+            other = next(
+                (k for k in roster.record_kinds if k != t.record_kind and k in allowed[t.role]),
+                None,
+            )
+            if held.count(t.record_kind) == 1 and subject[t.record_kind] == "suspect" and other:
+                moved = tuple(
+                    u.model_copy(update={"record_kind": other}) if u.pos == t.pos else u
+                    for u in roster.suspects
+                )
+                with pytest.raises(ValueError, match="nobody holds"):
+                    replay(
+                        seed,
+                        "standard",
+                        pack,
+                        override={"roster": roster.model_copy(update={"suspects": moved})},
+                    )
+                break
+        else:
+            continue
+        break
+    else:
+        raise AssertionError("no roster with a kind held by one suspect who could take another")
+    # a kind the roster does not list
+    out_of_set = next(k for k in subject if k not in base.record_kinds)
+    for t in base.suspects:
+        if out_of_set in allowed[t.role]:
+            moved = tuple(
+                u.model_copy(update={"record_kind": out_of_set}) if u.pos == t.pos else u
+                for u in base.suspects
+            )
+            fails(base.model_copy(update={"suspects": moved}), "not a suspect record kind")
+            break
+    else:
+        raise AssertionError("no suspect can take a kind outside the roster")
+
+
+def _facts_fail(facts, match):
+    with pytest.raises(ValueError, match=match):
+        replay(3, "standard", castle(), override={"facts": facts})
+
+
+def _edit_fact(facts, fact_id, **changes):
+    edited = tuple(f.model_copy(update=changes) if f.id == fact_id else f for f in facts.facts)
+    return facts.model_copy(update={"facts": edited})
+
+
+def test_a_facts_override_has_unique_ids_the_truths_sources_once_and_references_that_resolve():
+    facts = replay(3, "standard", castle())["facts"]
+    assert isinstance(facts, FactsOut)
+    _facts_fail(facts.model_copy(update={"facts": (*facts.facts, facts.facts[0])}), "id more than")
+    twice = facts.model_copy(
+        update={"record_sources": (*facts.record_sources, facts.record_sources[0])}
+    )
+    _facts_fail(twice, "record source of the truth exactly once")
+    _facts_fail(_edit_fact(facts, "l_s0", exposed_by=("e_zz",)), "exposed_by 'e_zz'")
+    _facts_fail(_edit_fact(facts, "h_m0", requires=("p_zz",)), "requires 'p_zz'")
+    _facts_fail(_edit_fact(facts, "p_m0", apart_from="h_zz"), "apart_from 'h_zz'")
+
+
+def test_a_facts_override_has_effects_on_the_truths_candidates_and_claims_inside_the_case():
+    facts = replay(3, "standard", castle())["facts"]
+    assert isinstance(facts, FactsOut)
+    effect = facts.facts[1].effects[0]
+    for candidate, axis in (("s9", effect.axis), (effect.candidate, "how")):
+        bad = effect.model_copy(update={"candidate": candidate, "axis": axis})
+        _facts_fail(_edit_fact(facts, facts.facts[1].id, effects=(bad,)), "effect on")
+    claim = next(f.claim for f in facts.facts if f.id == "e_s0")
+    assert claim is not None
+    for change in ({"slot": 99}, {"slot": -1}, {"place": "l99"}):
+        _facts_fail(_edit_fact(facts, "e_s0", claim=claim.model_copy(update=change)), "outside")

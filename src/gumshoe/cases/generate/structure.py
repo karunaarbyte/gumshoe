@@ -88,8 +88,38 @@ def _check_roster(ctx: GenContext, stage: str, roster: RosterOut) -> None:
             )
 
 
+def _check_roster_kinds(ctx: GenContext, stage: str, roster: RosterOut) -> None:
+    """The record kinds are the pack's, and each suspect holds one their role allows."""
+    subject = {d.key: d.subject for d in ctx.pack.record_defs}
+    roles = {r.key: r for r in ctx.pack.roles}
+    unknown = sorted(set(roster.record_kinds) - set(subject))
+    if unknown:
+        raise ValueError(f"the {stage} override has undefined record kinds: {unknown}")
+    for s in roster.suspects:
+        role = roles.get(s.role)
+        if role is None or s.record_kind not in role.record_kinds:
+            raise ValueError(
+                f"the {stage} override gives {s.pos} the record kind {s.record_kind!r}, "
+                f"which their role {s.role!r} does not allow"
+            )
+        if subject.get(s.record_kind) != "suspect" or s.record_kind not in roster.record_kinds:
+            raise ValueError(
+                f"the {stage} override gives {s.pos} the record kind {s.record_kind!r}, "
+                "which is not a suspect record kind of the roster"
+            )
+    held = {s.record_kind for s in roster.suspects}
+    orphans = sorted(k for k in roster.record_kinds if subject[k] == "suspect" and k not in held)
+    if orphans:
+        raise ValueError(f"the {stage} override has suspect record kinds nobody holds: {orphans}")
+
+
 def _check_timeline(ctx: GenContext, timeline: TimelineOut) -> None:
     spec = ctx.spec
+    if timeline.crime_slot not in range(1, spec.slots - 1):
+        raise ValueError(
+            f"the timeline override has crime slot {timeline.crime_slot}, "
+            f"the {ctx.preset!r} preset has slots 0 to {spec.slots - 1} and needs one inside them"
+        )
     if len(timeline.opportunity) != spec.opportunity:
         raise ValueError(
             f"the timeline override has {len(timeline.opportunity)} opportunity suspects, "
@@ -104,11 +134,24 @@ def _check_timeline(ctx: GenContext, timeline: TimelineOut) -> None:
 
 
 def _check_timeline_rows(truth: TruthOut, timeline: Output) -> None:
-    if isinstance(timeline, TimelineOut) and len(timeline.rows) != len(truth.roster.suspects):
+    """A timeline override must be about the truth's suspects and places."""
+    if not isinstance(timeline, TimelineOut):
+        return
+    roster = truth.roster
+    if len(timeline.rows) != len(roster.suspects):
         raise ValueError(
             f"the timeline override has {len(timeline.rows)} rows for "
-            f"{len(truth.roster.suspects)} suspects"
+            f"{len(roster.suspects)} suspects"
         )
+    suspects = {s.pos for s in roster.suspects}
+    if {row.suspect_pos for row in timeline.rows} != suspects:
+        raise ValueError("the timeline override must have a row for each of the truth's suspects")
+    places = {loc.pos for loc in roster.locations}
+    stray = {p for row in timeline.rows for p in row.places} - places
+    if stray:
+        raise ValueError(f"the timeline override has places outside the roster: {sorted(stray)}")
+    if "s0" in timeline.opportunity or not set(timeline.opportunity) <= suspects:
+        raise ValueError("the timeline override's opportunity must be wrong suspects of the roster")
 
 
 def _check_facts(ctx: GenContext, truth: TruthOut, out: Output) -> None:
@@ -128,6 +171,14 @@ def _check_facts(ctx: GenContext, truth: TruthOut, out: Output) -> None:
         raise ValueError(
             "the facts override must have a record source for each of the truth's location records"
         )
+    expected = [(s.record_kind, "suspect", s.pos) for s in roster.suspects]
+    expected += [(k, "location", "") for k in roster.record_kinds if subject[k] == "location"]
+    found = [(s.kind, s.subject_type, s.subject or "") for s in out.record_sources]
+    if sorted(found) != sorted(expected):
+        raise ValueError(
+            "the facts override must have each record source of the truth exactly once"
+        )
+    _check_fact_references(ctx, roster, out)
     if any(f.id.startswith("c_") for f in out.facts) != (out.depth == 2):
         raise ValueError("the facts override has keys only at depth 2")
     location_records = sum(s.subject_type == "location" for s in out.record_sources)
@@ -137,13 +188,49 @@ def _check_facts(ctx: GenContext, truth: TruthOut, out: Output) -> None:
         )
 
 
+def _check_fact_references(ctx: GenContext, roster: RosterOut, out: FactsOut) -> None:
+    """Every fact id is unique and every reference in a fact points into the case."""
+    ids = [f.id for f in out.facts]
+    if len(set(ids)) != len(ids):
+        raise ValueError("the facts override has a fact id more than once")
+    candidates = {
+        "who": {s.pos for s in roster.suspects},
+        "how": {m.pos for m in roster.methods},
+        "why": {v.pos for v in roster.motives},
+    }
+    places = {loc.pos for loc in roster.locations}
+    for fact in out.facts:
+        for field, refs in (
+            ("exposed_by", fact.exposed_by),
+            ("requires", fact.requires),
+            ("apart_from", (fact.apart_from,) if fact.apart_from else ()),
+        ):
+            for ref in refs:
+                if ref not in ids:
+                    raise ValueError(f"the facts override: {fact.id} has {field} {ref!r}, no fact")
+        for effect in fact.effects:
+            if effect.candidate not in candidates.get(effect.axis, set()):
+                raise ValueError(
+                    f"the facts override: {fact.id} has an effect on {effect.candidate!r}, "
+                    f"not a candidate of the {effect.axis!r} axis of the truth"
+                )
+        claim = fact.claim
+        if claim and (claim.slot not in range(ctx.spec.slots) or claim.place not in places):
+            raise ValueError(
+                f"the facts override: {fact.id} claims slot {claim.slot} at {claim.place!r}, "
+                "outside the case"
+            )
+
+
 def _check_overrides(ctx: GenContext, override: Mapping[str, Output]) -> None:
     """Refuse an override that does not fit the spec, or a truth about other people."""
     roster, truth, timeline = (override.get(s) for s in ("roster", "truth", "timeline"))
     if isinstance(roster, RosterOut):
         _check_roster(ctx, "roster", roster)
+        _check_roster_kinds(ctx, "roster", roster)
     if isinstance(truth, TruthOut):
         _check_roster(ctx, "truth", truth.roster)
+        _check_roster_kinds(ctx, "truth", truth.roster)
         if isinstance(roster, RosterOut) and {s.name for s in roster.suspects} != {
             s.name for s in truth.roster.suspects
         }:
