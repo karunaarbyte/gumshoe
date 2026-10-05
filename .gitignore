@@ -27,4 +27,4 @@ logs/
 .vscode/
 
 # Design docs and plans (kept local; commit manually when ready)
-docs/
+# docs/
