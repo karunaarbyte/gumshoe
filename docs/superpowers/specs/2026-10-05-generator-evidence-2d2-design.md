@@ -237,3 +237,43 @@ and location subjects); the location enumeration budget. (These join the 2d-1 de
 - **The gate trap** of section 3 is documented, not designed away.
 - **Deferred:** `Output.digest` omits the class name (decide before the 2d-4 pin); `build_pack` test fixture lacks nouns and names; the
   statistics at 1,000 seeds (2d-4).
+
+## 12. Amendments from plan 2d-2c (2026-10-05)
+
+Written with plan `2026-10-05-generator-gating-2d2c.md`, after a prototype of gating and `build_case` was run against the real
+validator and simulator, and revised after one independent adversarial review (no blockers; findings folded in). Where this section and
+section 7 disagree, this section wins.
+
+- **Gating signature.** `gating.run(ctx, stream, truth, facts, placement) -> GatingOut`: gating needs the roster's suspects and their
+  record kinds, so the truth is passed. Gating **draws nothing** (it takes the stream only to keep the stage contract), so it needs no
+  role-blind shuffle. `GatingOut` is `depth`, `suspect_requires` (`SuspectGate(suspect, fact)`, sorted by suspect), `record_requires`
+  (`RecordGate(kind, subject, fact)`, sorted by kind and subject), `start_locations`, `start_suspects`, `start_facts` (always empty).
+- **`build_case` meta.** `id = make_id("c", seed, preset, spec_hash)` (2d-3 replaces it), `seed`, `origin = generated`, `pack_ref`,
+  `generator_version` (the stage versions in pipeline order, `"roster=2,truth=1,timeline=1,facts=1,placement=1,gating=1"`) and
+  `skeleton_algo_version`. `knows` is `(l_k, y_k)`; locations copy `decorative`; events are `e_<pos>_<slot>` with action `crime` in the
+  culprit's crime-slot cell and `present` elsewhere. `build_case` derives `Suspect.knows` from the facts (an amendment to the overview's
+  ownership table 2.5, which gives it to placement; placement has nothing to decide there). `SKELETON_ALGO_VERSION` stays 2 (adding a stage changes no existing stage version;
+  nothing is published before the 2d-4 pin).
+- **Measured on the prototype.** All 1,200 cases (seeds 0..199, each preset, each feasible depth) have zero strict issues and no skipped
+  group; the closed form of section 6 is exactly the set of depths that validate (forced infeasible depths fail with `ACTIONS_RANGE`,
+  `DEPTH_RANGE` and `SOLUTION_SIZE_RANGE` on long 0, `DEPTH_RANGE` on long 1, `PACK_SOURCE_KIND_CAPACITY` on short 2); contract (g) holds
+  (renaming every fact id three ways changes neither the verdict nor the best solution's size, depth and actions); `judge` agrees on every
+  case tried; one strict validation costs about 17 ms, so the 1,200-case test takes about 28 s. The review added seeds 200..599 (2,400
+  cases, all clean) and a full permutation of suspect, location, method and motive ids together with the fact ids (270 cases: same
+  verdict, solution shape and `judge` outcome). Only fact ids enter the validator's tie-breaks, so the 2d-2c test renames fact ids;
+  2d-3, which owns the permutation, tests the full one.
+- **The cheapest solution has exactly the closed-form shape**: size `4 + d`, depth `max(1, d)`, actions 3 (d = 0), 4 (d = 1), 4 or 5
+  (d = 2), on every case measured. The end-to-end test asserts it.
+- **A blind spot of the validator, by design.** Missing gates at a depth where a shallower one is legal (the depth-1 hints on short and
+  standard, the depth-2 keys on standard) leave a valid case of the shallower depth, so no validator code fires. Two guards cover it: the
+  gating rules restated in a structural test (`check_gating`) and the solution-shape assertion above, which fails because the cheapest
+  solution shrinks.
+- **The negative tests per rule family** (section 9) become: `x_s0` only supporting (`NO_POSITIVE_EVIDENCE`, `SHAPE_MISMATCH`); `h_m0`
+  without `requires` (`ACTIONS_RANGE`, `SOLUTION_SIZE_RANGE`); the culprit's record gated by another suspect's hint
+  (`SINGLE_POINT_OF_FAILURE`); a record gated by its own suspect's lie (`GATE_ON_OWN_LIE`). The keys-in-canonical-order classifier test is
+  2d-2b's.
+- **Replay.** A gating override may rewire the gates (that is its purpose); it is refused only when it changes the depth, refers to a
+  fact, suspect, record source or location the case lacks, gates something twice, or both locks and opens a suspect.
+  `gen_dev.skeleton(seed, preset, pack, override=None)` builds the case for a seed (spoiler by construction: `s0` is the culprit).
+- **Golden.** The snapshot gains the gating digest and the built case's `skeleton_digest` per key. Gating digests repeat for depth-0 cases
+  (there is nothing to wire), so the distinctness check excludes them.
