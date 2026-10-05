@@ -26,6 +26,19 @@ STAGE_VERSIONS: dict[str, int] = {
 SKELETON_ALGO_VERSION = 2
 
 
+def check_counters(counters: Mapping[str, int] | None) -> dict[str, int]:
+    """Stage stream counters as a dict, refusing an unknown stage or a counter that is not a
+    non-negative int (a bool is not one)."""
+    found: dict[str, int] = {}
+    for stage, value in (counters or {}).items():
+        if stage not in PIPELINE or isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"bad stage counter {stage!r}: {value!r}")
+        if value < 0:
+            raise ValueError(f"stage counter {stage!r} must not be negative, not {value}")
+        found[stage] = value
+    return found
+
+
 def require_int(name: str, value: object) -> None:
     """A bool is an int in Python but never a seed or counter anyone meant."""
     if not isinstance(value, int) or isinstance(value, bool):

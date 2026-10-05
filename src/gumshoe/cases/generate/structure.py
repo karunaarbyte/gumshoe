@@ -5,7 +5,7 @@ from collections.abc import Mapping
 
 from gumshoe.cases.generate import facts, gating, placement, roster, timeline, truth
 from gumshoe.cases.generate.facts import feasible_depths
-from gumshoe.cases.generate.gen_context import STAGES, GenContext
+from gumshoe.cases.generate.gen_context import STAGES, GenContext, check_counters
 from gumshoe.cases.generate.outputs import (
     FactsOut,
     GatingOut,
@@ -26,10 +26,40 @@ OUTPUT_TYPES: dict[str, type[Output]] = {
 }
 
 
+def run_stage(ctx: GenContext, stage: str, out: Mapping[str, Output], counter: int = 0) -> Output:
+    """One structural stage on the outputs of the stages before it, drawing from its stream with
+    the given counter (the retry controller of `pipeline.py` raises the counter on a retry)."""
+    stream = ctx.stream(stage, counter)
+    if stage == "roster":
+        return roster.run(ctx, stream)
+    if stage == "truth":
+        return truth.run(ctx, stream, need(out, "roster", RosterOut))
+    if stage == "timeline":
+        return timeline.run(ctx, stream, need(out, "truth", TruthOut))
+    if stage == "facts":
+        return facts.run(
+            ctx, stream, need(out, "truth", TruthOut), need(out, "timeline", TimelineOut)
+        )
+    if stage == "placement":
+        return placement.run(
+            ctx, stream, need(out, "truth", TruthOut), need(out, "facts", FactsOut)
+        )
+    if stage == "gating":
+        return gating.run(
+            ctx,
+            stream,
+            need(out, "truth", TruthOut),
+            need(out, "facts", FactsOut),
+            need(out, "placement", PlacementOut),
+        )
+    raise ValueError(f"unknown stage {stage!r} (stages: {', '.join(STAGES)})")
+
+
 def run_structure(
     ctx: GenContext,
     upto: str | None = None,
     override: Mapping[str, Output] | None = None,
+    counters: Mapping[str, int] | None = None,
 ) -> dict[str, Output]:
     """Run the stages in order up to and including `upto` (the last stage when None). An override
     replaces that stage's output instead of running it, and the later stages run on top of it.
@@ -39,8 +69,10 @@ def run_structure(
     stage. A truth override replaces the roster entry by its own roster (unless the roster is
     itself overridden), so the returned dict stays consistent: with a truth override and no
     roster override the returned `roster` entry is the truth's (reordered) roster, not the
-    pre-truth roster. Overrides are checked against `ctx.spec` and each other."""
+    pre-truth roster. Overrides are checked against `ctx.spec` and each other. `counters` maps a
+    stage to its stream counter (default 0: the first attempt), so a retried case replays."""
     override = override or {}
+    counters = check_counters(counters)
     upto = STAGES[-1] if upto is None else upto
     if upto not in STAGES:
         raise ValueError(f"unknown stage {upto!r} (stages: {', '.join(STAGES)})")
@@ -76,34 +108,8 @@ def run_structure(
             )
         if stage in override:
             out[stage] = override[stage]
-        elif stage == "roster":
-            out[stage] = roster.run(ctx, ctx.stream(stage))
-        elif stage == "truth":
-            out[stage] = truth.run(ctx, ctx.stream(stage), need(out, "roster", RosterOut))
-        elif stage == "timeline":
-            out[stage] = timeline.run(ctx, ctx.stream(stage), need(out, "truth", TruthOut))
-        elif stage == "facts":
-            out[stage] = facts.run(
-                ctx,
-                ctx.stream(stage),
-                need(out, "truth", TruthOut),
-                need(out, "timeline", TimelineOut),
-            )
-        elif stage == "placement":
-            out[stage] = placement.run(
-                ctx,
-                ctx.stream(stage),
-                need(out, "truth", TruthOut),
-                need(out, "facts", FactsOut),
-            )
         else:
-            out[stage] = gating.run(
-                ctx,
-                ctx.stream(stage),
-                need(out, "truth", TruthOut),
-                need(out, "facts", FactsOut),
-                need(out, "placement", PlacementOut),
-            )
+            out[stage] = run_stage(ctx, stage, out, counters.get(stage, 0))
         if stage == "truth" and stage in override and "roster" not in override:
             out["roster"] = need(out, "truth", TruthOut).roster
         if stage == upto:
@@ -359,7 +365,7 @@ def _check_overrides(ctx: GenContext, override: Mapping[str, Output]) -> None:
 
 
 # `need` exists only to narrow the type of a stage output for mypy (gen_dev uses it too).
-def need[T: Output](outputs: dict[str, Output], stage: str, kind: type[T]) -> T:
+def need[T: Output](outputs: Mapping[str, Output], stage: str, kind: type[T]) -> T:
     found = outputs[stage]
     if not isinstance(found, kind):
         raise TypeError(f"the {stage} output must be a {kind.__name__}, not {type(found).__name__}")

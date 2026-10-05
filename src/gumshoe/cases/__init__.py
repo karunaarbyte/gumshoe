@@ -5,6 +5,8 @@ Layers (imports point one way): core < model < rules < {validate, play, packs}
 tests/test_architecture.py enforces the rules.
 """
 
+from gumshoe.cases.generate.api import CaseGenerationError
+from gumshoe.cases.generate.api import generate as generate_case
 from gumshoe.cases.model.case import Case
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.serialize import dump_case, load_case, skeleton_digest, skin_hash
@@ -16,6 +18,7 @@ from gumshoe.cases.validate.runner import validate as validate_case
 __all__ = [
     "CATALOGUE",
     "Case",
+    "CaseGenerationError",
     "GameSession",
     "Issue",
     "Pack",
@@ -23,6 +26,7 @@ __all__ = [
     "Report",
     "Severity",
     "dump_case",
+    "generate_case",
     "load_case",
     "load_session",
     "skeleton_digest",

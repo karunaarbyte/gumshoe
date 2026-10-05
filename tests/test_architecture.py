@@ -447,3 +447,18 @@ def test_the_generator_replay_is_reachable_from_tools_only():
     play = sources(CASES / "play")
     assert violations(play, ("gumshoe.cases.generate", "gumshoe.cases.tools"), SRC) == []
     assert "gumshoe.cases.tools.gen_dev" not in PLAYER_ALLOWED
+
+
+def test_the_cases_public_face_offers_generate_without_hiding_the_generator_package():
+    """`generate` would shadow the subpackage of the same name, so the public name is
+    `generate_case`; the modules of `gumshoe.cases.generate` must stay importable by path."""
+    import importlib
+    import types
+
+    import gumshoe.cases as cases
+
+    assert {"generate_case", "CaseGenerationError"} <= set(cases.__all__)
+    assert callable(cases.generate_case) and issubclass(cases.CaseGenerationError, Exception)
+    assert isinstance(cases.generate, types.ModuleType)
+    for name in ("pipeline", "api", "assemble", "trace"):
+        importlib.import_module(f"gumshoe.cases.generate.{name}")
