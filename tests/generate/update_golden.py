@@ -3,10 +3,10 @@
 import json
 from pathlib import Path
 
-from gumshoe.cases.generate import facts as facts_stage
-from gumshoe.cases.generate import placement as placement_stage
+from gumshoe.cases.generate.assemble import build_case
 from gumshoe.cases.generate.gen_context import GenContext
-from tests.generate.helpers import GOLDEN_SEEDS, PRESET_NAMES, castle, stages
+from gumshoe.cases.model.serialize import skeleton_digest
+from tests.generate.helpers import GOLDEN_SEEDS, PRESET_NAMES, castle, gating_of, stages
 
 GOLDEN = Path(__file__).parent / "golden" / "castle_stages.json"
 
@@ -17,15 +17,17 @@ def stage_digests() -> dict[str, dict[str, str]]:
     for preset in PRESET_NAMES:
         for seed in GOLDEN_SEEDS:
             ctx = GenContext.of(pack, seed, preset)
-            roster, truth, timeline = stages(ctx)
-            facts = facts_stage.run(ctx, ctx.stream("facts"), truth, timeline)
-            placed = placement_stage.run(ctx, ctx.stream("placement"), truth, facts)
+            roster, _, _ = stages(ctx)
+            outputs = gating_of(ctx)
+            truth, timeline, facts, placed, gates = outputs
             found[f"{preset}/{seed}"] = {
                 "roster": roster.digest(),
                 "truth": truth.digest(),
                 "timeline": timeline.digest(),
                 "facts": facts.digest(),
                 "placement": placed.digest(),
+                "gating": gates.digest(),
+                "case": skeleton_digest(build_case(ctx, *outputs)),
             }
     return found
 
