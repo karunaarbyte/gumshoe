@@ -11,13 +11,14 @@ from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.spec import PRESETS, PresetDef, UnsupportedPreset
 from gumshoe.cases.packs.check.capacity import hosted_specs
 
-STAGES = ("roster", "truth", "timeline", "facts", "placement")  # 2d-2c appends gating
+STAGES = ("roster", "truth", "timeline", "facts", "placement", "gating")
 STAGE_VERSIONS: dict[str, int] = {
     "roster": 2,
     "truth": 1,
     "timeline": 1,
     "facts": 1,
     "placement": 1,
+    "gating": 1,
 }
 SKELETON_ALGO_VERSION = 2
 

@@ -4,10 +4,11 @@ from collections.abc import Callable, Mapping
 from math import sqrt
 from typing import Any
 
-from gumshoe.cases.generate import facts, placement, roster, timeline, truth
+from gumshoe.cases.generate import facts, gating, placement, roster, timeline, truth
 from gumshoe.cases.generate.gen_context import GenContext
 from gumshoe.cases.generate.outputs import (
     FactsOut,
+    GatingOut,
     PlacementOut,
     RosterOut,
     TimelineOut,
@@ -53,6 +54,14 @@ def placement_of(
     """Everything up to and including placement; `depth` forces the gating depth."""
     after, tl, fa = facts_of(ctx, depth)
     return after, tl, fa, placement.run(ctx, ctx.stream("placement"), after, fa)
+
+
+def gating_of(
+    ctx: GenContext, depth: int | None = None
+) -> tuple[TruthOut, TimelineOut, FactsOut, PlacementOut, GatingOut]:
+    """Every stage output for a context; `depth` forces the gating depth."""
+    after, tl, fa, placed = placement_of(ctx, depth)
+    return after, tl, fa, placed, gating.run(ctx, ctx.stream("gating"), after, fa, placed)
 
 
 def chi2_critical(df: int, z: float = Z_BONFERRONI) -> float:

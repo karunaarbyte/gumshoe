@@ -159,3 +159,27 @@ class PlacedRecord(Frozen):
 class PlacementOut(Output):
     search: tuple[PlacedFact, ...]  # every search fact, sorted by fact id
     record_sources: tuple[PlacedRecord, ...]  # the suspects' records, then the location records
+
+
+class SuspectGate(Frozen):
+    """Questioning `suspect` needs the fact `fact` (at depth 2, the suspect's key)."""
+
+    suspect: str
+    fact: str
+
+
+class RecordGate(Frozen):
+    """Reading the record source `(kind, subject)` needs the fact `fact` (the suspect's hint)."""
+
+    kind: str
+    subject: str
+    fact: str
+
+
+class GatingOut(Output):
+    depth: int
+    suspect_requires: tuple[SuspectGate, ...]  # sorted by suspect
+    record_requires: tuple[RecordGate, ...]  # sorted by (kind, subject)
+    start_locations: tuple[str, ...]
+    start_suspects: tuple[str, ...]  # the suspects nobody has to unlock
+    start_facts: tuple[str, ...]  # always empty here: no fact is known at the start

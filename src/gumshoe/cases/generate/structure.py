@@ -3,11 +3,12 @@ until then every stage runs once, with stream counter 0."""
 
 from collections.abc import Mapping
 
-from gumshoe.cases.generate import facts, placement, roster, timeline, truth
+from gumshoe.cases.generate import facts, gating, placement, roster, timeline, truth
 from gumshoe.cases.generate.facts import feasible_depths
 from gumshoe.cases.generate.gen_context import STAGES, GenContext
 from gumshoe.cases.generate.outputs import (
     FactsOut,
+    GatingOut,
     Output,
     PlacementOut,
     RosterOut,
@@ -21,6 +22,7 @@ OUTPUT_TYPES: dict[str, type[Output]] = {
     "timeline": TimelineOut,
     "facts": FactsOut,
     "placement": PlacementOut,
+    "gating": GatingOut,
 }
 
 
@@ -80,12 +82,20 @@ def run_structure(
                 _need(out, "truth", TruthOut),
                 _need(out, "timeline", TimelineOut),
             )
-        else:
+        elif stage == "placement":
             out[stage] = placement.run(
                 ctx,
                 ctx.stream(stage),
                 _need(out, "truth", TruthOut),
                 _need(out, "facts", FactsOut),
+            )
+        else:
+            out[stage] = gating.run(
+                ctx,
+                ctx.stream(stage),
+                _need(out, "truth", TruthOut),
+                _need(out, "facts", FactsOut),
+                _need(out, "placement", PlacementOut),
             )
         if stage == "truth" and stage in override and "roster" not in override:
             out["roster"] = _need(out, "truth", TruthOut).roster
