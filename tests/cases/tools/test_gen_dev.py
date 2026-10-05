@@ -6,12 +6,14 @@ from gumshoe.cases.generate.outputs import (
     FactsOut,
     GatingOut,
     PlacementOut,
+    RecordGate,
     RosterOut,
+    SuspectGate,
     TimelineOut,
     TruthOut,
 )
 from gumshoe.cases.tools.builtin import load_builtin_pack
-from gumshoe.cases.tools.gen_dev import replay
+from gumshoe.cases.tools.gen_dev import replay, skeleton
 
 
 def castle():
@@ -487,3 +489,60 @@ def test_a_placement_override_must_not_add_or_change_the_kind_of_a_record_source
     edited = placed.model_copy(update={"record_sources": (*placed.record_sources, extra)})
     with pytest.raises(ValueError, match="about neither a suspect nor a location"):
         replay(3, "long", pack, override={"placement": edited})
+
+
+def test_the_skeleton_is_build_case_over_the_replayed_stages():
+    from tests.generate.helpers import case_of
+
+    pack = castle()
+    for preset in ("short", "standard", "long"):
+        assert skeleton(5, preset, pack) == case_of(GenContext.of(pack, 5, preset))
+    base = replay(5, "standard", pack)
+    assert skeleton(5, "standard", pack, override={"gating": base["gating"]}) == skeleton(
+        5, "standard", pack
+    )
+
+
+def _gating_fails(update, match, seed=3, preset="long"):
+    pack = castle()
+    gates = replay(seed, preset, pack)["gating"]
+    assert isinstance(gates, GatingOut)
+    with pytest.raises(ValueError, match=match):
+        replay(seed, preset, pack, override={"gating": gates.model_copy(update=update(gates))})
+
+
+def test_a_gating_override_may_rewire_but_must_keep_the_depth_and_the_references():
+    pack = castle()
+    base = replay(3, "long", pack)
+    gates = base["gating"]
+    assert isinstance(gates, GatingOut) and gates.depth == 2
+    open_all = gates.model_copy(
+        update={
+            "suspect_requires": (),
+            "start_suspects": tuple(s.subject for s in gates.record_requires),
+        }
+    )
+    assert replay(3, "long", pack, override={"gating": open_all})["gating"] == open_all
+    _gating_fails(lambda g: {"depth": 1}, "depth 1, the facts were made for 2")
+    _gating_fails(
+        lambda g: {"suspect_requires": (*g.suspect_requires, g.suspect_requires[0])}, "twice"
+    )
+    _gating_fails(
+        lambda g: {"record_requires": (*g.record_requires, g.record_requires[0])}, "twice"
+    )
+    _gating_fails(
+        lambda g: {"suspect_requires": (SuspectGate(suspect="s9", fact="c_s0"),)},
+        "suspect or record source the case lacks",
+    )
+    _gating_fails(
+        lambda g: {"record_requires": (RecordGate(kind="nope", subject="s0", fact="y_s0"),)},
+        "suspect or record source the case lacks",
+    )
+    _gating_fails(
+        lambda g: {"suspect_requires": (SuspectGate(suspect="s0", fact="nothing"),)},
+        "facts the case lacks",
+    )
+    _gating_fails(lambda g: {"start_facts": ("nothing",)}, "facts the case lacks")
+    _gating_fails(lambda g: {"start_locations": ("l9",)}, "location or suspect the case lacks")
+    _gating_fails(lambda g: {"start_suspects": ("s9",)}, "location or suspect the case lacks")
+    _gating_fails(lambda g: {"start_suspects": ("s0",)}, "both locks and opens")

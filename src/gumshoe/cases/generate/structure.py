@@ -35,11 +35,11 @@ def run_structure(
     replaces that stage's output instead of running it, and the later stages run on top of it.
     An override for a stage after `upto` is type-checked (roster, truth and timeline overrides
     are also size-checked) but otherwise ignored; the checks that need a computed truth (the
-    timeline's rows, the facts and the placement) run when the loop reaches that stage. A truth
-    override replaces the roster entry by its own roster (unless the roster is itself
-    overridden), so the returned dict stays consistent: with a truth override and no roster
-    override the returned `roster` entry is the truth's (reordered) roster, not the pre-truth
-    roster. Overrides are checked against `ctx.spec` and each other."""
+    timeline's rows, the facts, the placement and the gating) run when the loop reaches that
+    stage. A truth override replaces the roster entry by its own roster (unless the roster is
+    itself overridden), so the returned dict stays consistent: with a truth override and no
+    roster override the returned `roster` entry is the truth's (reordered) roster, not the
+    pre-truth roster. Overrides are checked against `ctx.spec` and each other."""
     override = override or {}
     upto = STAGES[-1] if upto is None else upto
     if upto not in STAGES:
@@ -57,14 +57,21 @@ def run_structure(
     out: dict[str, Output] = {}
     for stage in STAGES:
         if stage == "timeline" and stage in override:
-            _check_timeline_rows(_need(out, "truth", TruthOut), override[stage])
+            _check_timeline_rows(need(out, "truth", TruthOut), override[stage])
         if stage == "facts" and stage in override:
-            _check_facts(ctx, _need(out, "truth", TruthOut), override[stage])
+            _check_facts(ctx, need(out, "truth", TruthOut), override[stage])
         if stage == "placement" and stage in override:
             _check_placement(
                 ctx,
-                _need(out, "truth", TruthOut),
-                _need(out, "facts", FactsOut),
+                need(out, "truth", TruthOut),
+                need(out, "facts", FactsOut),
+                override[stage],
+            )
+        if stage == "gating" and stage in override:
+            _check_gating(
+                need(out, "truth", TruthOut),
+                need(out, "facts", FactsOut),
+                need(out, "placement", PlacementOut),
                 override[stage],
             )
         if stage in override:
@@ -72,33 +79,33 @@ def run_structure(
         elif stage == "roster":
             out[stage] = roster.run(ctx, ctx.stream(stage))
         elif stage == "truth":
-            out[stage] = truth.run(ctx, ctx.stream(stage), _need(out, "roster", RosterOut))
+            out[stage] = truth.run(ctx, ctx.stream(stage), need(out, "roster", RosterOut))
         elif stage == "timeline":
-            out[stage] = timeline.run(ctx, ctx.stream(stage), _need(out, "truth", TruthOut))
+            out[stage] = timeline.run(ctx, ctx.stream(stage), need(out, "truth", TruthOut))
         elif stage == "facts":
             out[stage] = facts.run(
                 ctx,
                 ctx.stream(stage),
-                _need(out, "truth", TruthOut),
-                _need(out, "timeline", TimelineOut),
+                need(out, "truth", TruthOut),
+                need(out, "timeline", TimelineOut),
             )
         elif stage == "placement":
             out[stage] = placement.run(
                 ctx,
                 ctx.stream(stage),
-                _need(out, "truth", TruthOut),
-                _need(out, "facts", FactsOut),
+                need(out, "truth", TruthOut),
+                need(out, "facts", FactsOut),
             )
         else:
             out[stage] = gating.run(
                 ctx,
                 ctx.stream(stage),
-                _need(out, "truth", TruthOut),
-                _need(out, "facts", FactsOut),
-                _need(out, "placement", PlacementOut),
+                need(out, "truth", TruthOut),
+                need(out, "facts", FactsOut),
+                need(out, "placement", PlacementOut),
             )
         if stage == "truth" and stage in override and "roster" not in override:
-            out["roster"] = _need(out, "truth", TruthOut).roster
+            out["roster"] = need(out, "truth", TruthOut).roster
         if stage == upto:
             break
     return out
@@ -301,6 +308,39 @@ def _check_placement(ctx: GenContext, truth: TruthOut, out: FactsOut, placed: Ou
             raise ValueError(f"the placement override makes {record.kind!r} about a bad location")
 
 
+def _check_gating(truth: TruthOut, out: FactsOut, placed: PlacementOut, gates: Output) -> None:
+    """A gating override may wire the gates differently (that is what replay is for), but it must
+    keep the facts' depth and point only at facts, suspects, record sources and locations of the
+    case, gate each at most once, and leave no suspect both locked and open at the start. Unlike
+    `_check_placement` it does not enforce the stage's own rules: any wiring that refers to the
+    case is worth trying, and the validator judges the result."""
+    if not isinstance(gates, GatingOut):
+        return
+    roster = truth.roster
+    if gates.depth != out.depth:
+        raise ValueError(
+            f"the gating override has depth {gates.depth}, the facts were made for {out.depth}"
+        )
+    ids = {f.id for f in out.facts}
+    suspects = {s.pos for s in roster.suspects}
+    sources = {(r.kind, r.subject) for r in placed.record_sources}
+    locations = {loc.pos for loc in roster.locations}
+    gated = [g.suspect for g in gates.suspect_requires]
+    records = [(g.kind, g.subject) for g in gates.record_requires]
+    if len(set(gated)) != len(gated) or len(set(records)) != len(records):
+        raise ValueError("the gating override gates a suspect or a record source twice")
+    if not set(gated) <= suspects or not set(records) <= sources:
+        raise ValueError("the gating override gates a suspect or record source the case lacks")
+    used = [g.fact for g in gates.suspect_requires] + [g.fact for g in gates.record_requires]
+    stray = sorted(set(used + list(gates.start_facts)) - ids)
+    if stray:
+        raise ValueError(f"the gating override refers to facts the case lacks: {stray}")
+    if not set(gates.start_locations) <= locations or not set(gates.start_suspects) <= suspects:
+        raise ValueError("the gating override starts at a location or suspect the case lacks")
+    if set(gates.start_suspects) & set(gated):
+        raise ValueError("the gating override both locks and opens a suspect at the start")
+
+
 def _check_overrides(ctx: GenContext, override: Mapping[str, Output]) -> None:
     """Refuse an override that does not fit the spec, or a truth about other people."""
     roster, truth, timeline = (override.get(s) for s in ("roster", "truth", "timeline"))
@@ -318,8 +358,8 @@ def _check_overrides(ctx: GenContext, override: Mapping[str, Output]) -> None:
         _check_timeline(ctx, timeline)
 
 
-# `_need` exists only to narrow the type of a stage output for mypy.
-def _need[T: Output](outputs: dict[str, Output], stage: str, kind: type[T]) -> T:
+# `need` exists only to narrow the type of a stage output for mypy (gen_dev uses it too).
+def need[T: Output](outputs: dict[str, Output], stage: str, kind: type[T]) -> T:
     found = outputs[stage]
     if not isinstance(found, kind):
         raise TypeError(f"the {stage} output must be a {kind.__name__}, not {type(found).__name__}")
