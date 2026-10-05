@@ -7,7 +7,7 @@ is who is at the scene, where, and the gating depth.
 
 from gumshoe.cases.core.ids import is_valid_id
 from gumshoe.cases.generate.errors import GenerationError
-from gumshoe.cases.generate.gen_context import GenContext
+from gumshoe.cases.generate.gen_context import GenContext, require_int
 from gumshoe.cases.generate.outputs import (
     ClaimDesc,
     EffectDesc,
@@ -190,12 +190,13 @@ def _suspect_facts(
 
 
 def _fitting_traces(method: MethodDef, pack: Pack, roster: RosterOut) -> list[TraceDef]:
+    """The traces the scene allows that fit a chosen non-scene place (roster contract (c))."""
     scene = next(sc for sc in pack.scene_types if sc.key == roster.scene_type)
-    chosen = {loc.kind for loc in roster.locations}
+    chosen_non_scene = {loc.kind for loc in roster.locations[1:]}
     return [
         t
         for t in method.traces
-        if t.kind in scene.allowed_trace_kinds and chosen & set(t.location_kinds)
+        if t.kind in scene.allowed_trace_kinds and chosen_non_scene & set(t.location_kinds)
     ]
 
 
@@ -242,6 +243,8 @@ def run(
 ) -> FactsOut:
     """The facts of the case. `depth` forces a gating depth (tests); `None` draws one from the
     depths that fit the preset and the pack."""
+    if depth is not None:
+        require_int("depth", depth)
     roster, spec, pack = truth.roster, ctx.spec, ctx.pack
     records = {d.key: d for d in pack.record_defs}
     location_kinds = [k for k in roster.record_kinds if records[k].subject == "location"]

@@ -9,7 +9,7 @@ from gumshoe.cases.generate.errors import GenerationError
 from gumshoe.cases.generate.facts import feasible_depths
 from gumshoe.cases.generate.gen_context import GenContext
 from gumshoe.cases.generate.outputs import FactDesc, FactsOut
-from tests.generate.helpers import PRESET_NAMES, SEEDS, castle, facts_of, stages
+from tests.generate.helpers import PRESET_NAMES, SEEDS, castle, castle_with, facts_of, stages
 
 DECISIVE = ("rules_out", "proves")
 
@@ -297,3 +297,33 @@ def test_a_lie_is_as_likely_to_name_an_attested_place_whoever_the_suspect_is():
         se = sqrt(pooled * (1 - pooled) * (1 / n + 1 / away_n))
         z = (hits / n - away_hits / away_n) / se
         assert abs(z) < 3.3, (who, hits / n, away_hits / away_n, z)
+
+
+@pytest.mark.parametrize("preset", PRESET_NAMES)
+def test_a_trace_that_fits_only_the_scene_is_never_chosen(preset):
+    def add_scene_only_traces(data):
+        for scene in data["scene_types"]:
+            kind = f"only_{scene['location_kinds'][0]}"
+            scene["allowed_trace_kinds"].append(kind)
+            for method in data["method_defs"]:
+                first = method["traces"][0]
+                method["traces"].append(
+                    {
+                        "kind": kind,
+                        "location_kinds": scene["location_kinds"],
+                        "templates": list(first["templates"]),
+                    }
+                )
+
+    pack = castle_with(add_scene_only_traces)
+    for seed in SEEDS:
+        ctx = GenContext.of(pack, seed, preset)
+        _, _, out = facts_of(ctx)
+        chosen = [f.trace_kind for f in out.facts if f.id.startswith("h_")]
+        assert not any((kind or "").startswith("only_") for kind in chosen), (seed, chosen)
+
+
+@pytest.mark.parametrize("depth", [True, 1.0, "1"])
+def test_a_forced_depth_must_be_an_int(depth):
+    with pytest.raises(TypeError, match="depth must be an int"):
+        facts_of(GenContext.of(castle(), 1, "standard"), depth=depth)
