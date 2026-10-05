@@ -147,3 +147,42 @@ def test_a_facts_override_replaces_the_facts_and_must_fit_the_truth_and_the_pres
             pack,
             override={"facts": base["facts"].model_copy(update={"facts": no_trace})},
         )
+
+
+def test_a_facts_override_must_have_the_truths_location_records():
+    pack = castle()
+    base = replay(0, "short", pack)  # one location record, depth 1
+    assert isinstance(base["facts"], FactsOut)
+    facts = base["facts"]
+    located = [s for s in facts.record_sources if s.subject_type == "location"]
+    assert len(located) == 1
+    for sources in (
+        tuple(s for s in facts.record_sources if s not in located),
+        facts.record_sources + (located[0].model_copy(update={"kind": "nowhere"}),),
+    ):
+        with pytest.raises(ValueError, match="record source for each of the truth's location"):
+            replay(
+                0,
+                "short",
+                pack,
+                override={"facts": facts.model_copy(update={"record_sources": sources})},
+            )
+
+
+def test_a_facts_override_has_keys_only_at_depth_2():
+    pack = castle()
+    shallow = replay(0, "short", pack)["facts"]  # depth 1
+    deep = replay(0, "long", pack)["facts"]  # depth 2
+    assert isinstance(shallow, FactsOut) and isinstance(deep, FactsOut)
+    assert shallow.depth == 1 and deep.depth == 2
+    extra = shallow.facts[0].model_copy(update={"id": "c_s0"})
+    with pytest.raises(ValueError, match="keys only at depth 2"):
+        replay(
+            0,
+            "short",
+            pack,
+            override={"facts": shallow.model_copy(update={"facts": shallow.facts + (extra,)})},
+        )
+    no_keys = tuple(f for f in deep.facts if not f.id.startswith("c_"))
+    with pytest.raises(ValueError, match="keys only at depth 2"):
+        replay(0, "long", pack, override={"facts": deep.model_copy(update={"facts": no_keys})})

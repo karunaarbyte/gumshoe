@@ -39,6 +39,7 @@ def feasible_depths(spec: Spec, location_records: int) -> list[int]:
     The cheapest solution of a depth-d case is the incriminating item, the secret and the how
     proof (with its clue), plus the gate chain: size 4 + d, depth max(1, d), and 3 distinct
     sources (the culprit's record and the two search locations), 4 once a hint must be found."""
+    # interrogation capacity (2S facts over S sources) is implied by cap >= 3, so no clause
     limits, cap = spec.limits, spec.source_cap
     suspects, methods, locations = spec.suspects, spec.methods, spec.locations
     found = []

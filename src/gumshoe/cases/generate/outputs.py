@@ -107,6 +107,12 @@ class HomeDesc(Frozen):
 
 
 class FactDesc(Frozen):
+    """One fact. The id prefixes are a contract the later stages rely on: sec (secret), e
+    (presence or alibi at the crime slot), x (physical item), w (second presence), y (the motive
+    hint a suspect gives; it gates their record), l (the lie), h (decisive trace), p (its clue),
+    c (a key that unlocks questioning a suspect), n (neutral location-record entry), each
+    followed by `_<position or kind>`."""
+
     id: str
     kind: str  # a `FactKind` value
     effects: tuple[EffectDesc, ...] = ()

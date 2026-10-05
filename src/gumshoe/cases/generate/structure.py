@@ -23,12 +23,13 @@ def run_structure(
 ) -> dict[str, Output]:
     """Run the stages in order up to and including `upto` (the last stage when None). An override
     replaces that stage's output instead of running it, and the later stages run on top of it.
-    An override for a stage after `upto` is type- and size-checked but otherwise ignored (the
-    checks that need a computed truth, the timeline's rows and the facts, run when the loop
-    reaches that stage). A truth override replaces the roster entry by its own roster (unless the
-    roster is itself overridden), so the returned dict stays consistent: with a truth override
-    and no roster override the returned `roster` entry is the truth's (reordered) roster, not the
-    pre-truth roster. Overrides are checked against `ctx.spec` and each other."""
+    An override for a stage after `upto` is type-checked (roster, truth and timeline overrides
+    are also size-checked) but otherwise ignored; the checks that need a computed truth (the
+    timeline's rows and the facts) run when the loop reaches that stage. A truth override
+    replaces the roster entry by its own roster (unless the roster is itself overridden), so the
+    returned dict stays consistent: with a truth override and no roster override the returned
+    `roster` entry is the truth's (reordered) roster, not the pre-truth roster. Overrides are
+    checked against `ctx.spec` and each other."""
     override = override or {}
     upto = STAGES[-1] if upto is None else upto
     if upto not in STAGES:
@@ -121,6 +122,14 @@ def _check_facts(ctx: GenContext, truth: TruthOut, out: Output) -> None:
     traces = {f.id[2:] for f in out.facts if f.id.startswith("h_")}
     if traces != {m.pos for m in roster.methods}:
         raise ValueError("the facts override must have a trace for each of the truth's methods")
+    subject = {d.key: d.subject for d in ctx.pack.record_defs}
+    located = {s.kind for s in out.record_sources if s.subject_type == "location"}
+    if located != {k for k in roster.record_kinds if subject[k] == "location"}:
+        raise ValueError(
+            "the facts override must have a record source for each of the truth's location records"
+        )
+    if any(f.id.startswith("c_") for f in out.facts) != (out.depth == 2):
+        raise ValueError("the facts override has keys only at depth 2")
     location_records = sum(s.subject_type == "location" for s in out.record_sources)
     if out.depth not in feasible_depths(ctx.spec, location_records):
         raise ValueError(

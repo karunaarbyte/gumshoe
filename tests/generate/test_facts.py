@@ -1,4 +1,3 @@
-from collections import Counter
 from dataclasses import replace
 
 import pytest
@@ -195,8 +194,7 @@ def test_counts_ids_and_sources_follow_the_spec(preset):
         assert len(out.facts) == total
         ids = [f.id for f in out.facts]
         assert len(set(ids)) == len(ids) and all(is_valid_id(i) for i in ids)
-        counts = Counter((s.kind, s.subject_type) for s in out.record_sources)
-        assert counts[("suspect", "suspect")] == 0  # a record source is (record kind, subject type)
+        assert len(out.record_sources) == spec.suspects + len(location_kinds)
         held = [(s.kind, s.subject) for s in out.record_sources if s.subject_type == "suspect"]
         assert held == [(s.record_kind, s.pos) for s in roster.suspects]
         located = [(s.kind, s.subject) for s in out.record_sources if s.subject_type == "location"]
@@ -230,7 +228,7 @@ def test_the_depth_is_drawn_from_the_feasible_set_and_can_be_forced():
         facts_of(GenContext.of(pack, 1, "long"), depth=0)  # misses the size and depth windows
 
 
-def test_the_stage_is_deterministic_and_reads_only_its_stream():
+def test_the_stage_is_deterministic_and_depends_on_the_seed():
     ctx = GenContext.of(castle(), 6, "standard")
     _, _, a = facts_of(ctx)
     _, _, b = facts_of(ctx)

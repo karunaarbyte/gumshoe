@@ -68,6 +68,8 @@ def _record_kinds_and_secrets(
         feasible += [(subset, h) for h in _holder_assignments(held_kinds, usable)]
     if not feasible:
         raise GenerationError("no record-kind set gives every role a kind and every kind a holder")
+    # the list holds (subset, holders) pairs, so a subset with more holder assignments is drawn
+    # more often: intended, it is variety only (the culprit is drawn after the roster)
     subset, holders = stream.choice(feasible)
     secrets = [
         holders[i]
