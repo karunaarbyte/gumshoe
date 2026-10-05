@@ -219,3 +219,40 @@ def test_a_duplicate_in_allowed_methods_never_gives_a_duplicate_method(preset):
     for seed in range(60):
         _, r = draw(dup, seed, preset)
         assert len({m.key for m in r.methods}) == len(r.methods)
+
+
+@pytest.mark.parametrize("preset", PRESET_NAMES)
+def test_every_chosen_suspect_subject_record_kind_is_some_suspects_secret_kind(preset):
+    pack = castle()
+    subject = {d.key: d.subject for d in pack.record_defs}
+    for seed in SEEDS:
+        _, r = draw(pack, seed, preset)
+        held = {s.record_kind for s in r.suspects}
+        assert {k for k in r.record_kinds if subject[k] == "suspect"} <= held, (preset, seed)
+        assert held <= set(r.record_kinds)
+
+
+def test_holder_assignments_give_each_kind_its_own_role():
+    options = [["a"], ["a", "b"], ["b"]]
+    assert list(roster_stage._holder_assignments(["a", "b"], options)) == [
+        {0: "a", 1: "b"},
+        {0: "a", 2: "b"},
+        {1: "a", 2: "b"},
+    ]
+    assert list(roster_stage._holder_assignments(["a", "b"], [["a", "b"]])) == []
+    assert list(roster_stage._holder_assignments([], options)) == [{}]
+
+
+def test_a_roster_whose_record_kinds_cannot_all_be_held_raises_a_generation_error():
+    pack = castle()
+    ledger_only = tuple(
+        r.model_copy(update={"record_kinds": ("visitor_ledger",)}) for r in pack.roles
+    )
+    defs = tuple(d for d in pack.record_defs if d.key != "gate_log")
+    kinds = tuple(k for k in pack.record_kinds if k != "gate_log")
+    two_kinds = pack.model_copy(
+        update={"roles": ledger_only, "record_defs": defs, "record_kinds": kinds}
+    )
+    ctx = GenContext.of(two_kinds, 1, "short")  # still hosted: the ledger covers the scenes
+    with pytest.raises(GenerationError, match="holder"):
+        roster_stage.run(ctx, ctx.stream("roster"))

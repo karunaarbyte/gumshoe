@@ -1,6 +1,11 @@
 import pytest
 
-from gumshoe.cases.generate.gen_context import STAGE_VERSIONS, STAGES, GenContext
+from gumshoe.cases.generate.gen_context import (
+    SKELETON_ALGO_VERSION,
+    STAGE_VERSIONS,
+    STAGES,
+    GenContext,
+)
 from gumshoe.cases.model.spec import PRESETS, UnsupportedPreset, derive_spec
 from tests.generate.helpers import PRESET_NAMES, castle
 
@@ -56,3 +61,8 @@ def test_a_bad_counter_is_refused():
         ctx.stream("roster", -1)
     with pytest.raises(TypeError, match="counter must be an int"):
         ctx.stream("roster", True)
+
+
+def test_a_changed_stage_bumps_its_version_and_the_skeleton_algorithm_version():
+    assert STAGE_VERSIONS["roster"] == 2  # 2d-2a: secret kinds chosen with the record-kind set
+    assert SKELETON_ALGO_VERSION == 2

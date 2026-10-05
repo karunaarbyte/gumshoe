@@ -4,6 +4,7 @@ Pool samples use rendezvous `rank` (never file order). Choices among combination
 the feasible ones and `choice` one by index, so there is no re-draw loop and no cap.
 """
 
+from collections.abc import Iterator
 from itertools import combinations
 
 from gumshoe.cases.generate.errors import GenerationError
@@ -33,19 +34,48 @@ def _usable_kinds(role: RoleDef, scene: SceneType, records: dict[str, RecordDef]
     return [k for k in role.record_kinds if k in records and usable_kind(records[k], scene)]
 
 
-def _record_kind_set(
+def _holder_assignments(kinds: list[str], options: list[list[str]]) -> Iterator[dict[int, str]]:
+    """Every way to give each kind its own holder: a distinct role index whose options list it."""
+    held: dict[int, str] = {}
+
+    def go() -> Iterator[dict[int, str]]:
+        if len(held) == len(kinds):
+            yield dict(held)
+            return
+        kind = kinds[len(held)]  # one kind is placed per level, so the level is len(held)
+        for role, opts in enumerate(options):
+            if role not in held and kind in opts:
+                held[role] = kind
+                yield from go()
+                del held[role]
+
+    yield from go()
+
+
+def _record_kinds_and_secrets(
     pack: Pack, scene: SceneType, roles: list[RoleDef], size: int, stream: Stream
-) -> tuple[str, ...]:
-    """A K-subset of the pack's record kinds in which every chosen role has a usable kind."""
+) -> tuple[tuple[str, ...], list[str]]:
+    """Choose the K record kinds and every suspect's secret record kind together. Every chosen
+    role gets a usable kind, and every chosen suspect-subject kind is the secret kind of some
+    suspect, so nobody needs a second record (a second record would single them out)."""
     records = {d.key: d for d in pack.record_defs}
-    feasible = [
-        subset
-        for subset in combinations(sorted(records), size)
-        if all(set(_usable_kinds(r, scene, records)) & set(subset) for r in roles)
-    ]
+    usable = [sorted(_usable_kinds(r, scene, records)) for r in roles]
+    feasible: list[tuple[tuple[str, ...], dict[int, str]]] = []
+    for subset in combinations(sorted(records), size):
+        if any(not set(opts) & set(subset) for opts in usable):
+            continue
+        held_kinds = [k for k in subset if records[k].subject == "suspect"]
+        feasible += [(subset, h) for h in _holder_assignments(held_kinds, usable)]
     if not feasible:
-        raise GenerationError("no record-kind set gives every chosen role a usable record kind")
-    return stream.choice(feasible)
+        raise GenerationError("no record-kind set gives every role a kind and every kind a holder")
+    subset, holders = stream.choice(feasible)
+    secrets = [
+        holders[i]
+        if i in holders
+        else stream.child(f"record_kind/{role.key}").choice(sorted(set(usable[i]) & set(subset)))
+        for i, role in enumerate(roles)
+    ]
+    return subset, secrets
 
 
 def _trace_ok(method: MethodDef, scene: SceneType, places: set[str]) -> bool:
@@ -109,12 +139,7 @@ def run(ctx: GenContext, stream: Stream) -> RosterOut:
         names.append(_pick_name(role, used, stream))
         used.add(names[-1])
 
-    kinds = _record_kind_set(pack, scene, roles, spec.record_kinds, stream)
-    records = {d.key: d for d in pack.record_defs}
-    secret_kinds: list[str] = []
-    for role in roles:
-        options = sorted(set(_usable_kinds(role, scene, records)) & set(kinds))
-        secret_kinds.append(stream.child(f"record_kind/{role.key}").choice(options))
+    kinds, secret_kinds = _record_kinds_and_secrets(pack, scene, roles, spec.record_kinds, stream)
 
     method_keys = stream.rank(sorted(set(scene.allowed_methods)), "methods")[: spec.methods]
     methods_by_key = {m.key: m for m in pack.method_defs}

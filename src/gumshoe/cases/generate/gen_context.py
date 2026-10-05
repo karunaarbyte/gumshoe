@@ -12,8 +12,8 @@ from gumshoe.cases.model.spec import PRESETS, PresetDef, UnsupportedPreset
 from gumshoe.cases.packs.check.capacity import hosted_specs
 
 STAGES = ("roster", "truth", "timeline")  # 2d-2 and 2d-3 append facts, placement, ...
-STAGE_VERSIONS: dict[str, int] = {"roster": 1, "truth": 1, "timeline": 1}
-SKELETON_ALGO_VERSION = 1
+STAGE_VERSIONS: dict[str, int] = {"roster": 2, "truth": 1, "timeline": 1}
+SKELETON_ALGO_VERSION = 2
 
 
 def _require_int(name: str, value: object) -> None:

@@ -1,5 +1,7 @@
 import pytest
 
+from gumshoe.cases.generate import timeline as timeline_stage
+from gumshoe.cases.generate.gen_context import GenContext
 from gumshoe.cases.generate.outputs import RosterOut, TimelineOut, TruthOut
 from gumshoe.cases.tools.builtin import load_builtin_pack
 from gumshoe.cases.tools.gen_dev import replay
@@ -31,9 +33,13 @@ def test_an_override_replaces_one_stage_and_reruns_only_the_later_ones():
     other = replay(4, "short", pack, "roster")["roster"]
     changed = replay(3, "short", pack, override={"roster": other})
     assert changed["roster"] == other
-    assert isinstance(changed["truth"], TruthOut)
-    assert changed["truth"].roster.scene_type == other.scene_type  # type: ignore[attr-defined]
-    assert changed["truth"] != base["truth"] and changed["timeline"] != base["timeline"]
+    new_truth = changed["truth"]
+    assert isinstance(new_truth, TruthOut)
+    assert new_truth.roster.scene_type == other.scene_type  # type: ignore[attr-defined]
+    assert new_truth != base["truth"]
+    ctx = GenContext.of(pack, 3, "short")
+    # the later stage ran on the truth built from the overridden roster
+    assert changed["timeline"] == timeline_stage.run(ctx, ctx.stream("timeline"), new_truth)
     keep_truth = replay(3, "short", pack, override={"truth": base["truth"]})
     # overriding a stage with its own output changes nothing but the roster entry, which becomes
     # the truth's (reordered) roster
