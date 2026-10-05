@@ -33,11 +33,11 @@ def run_structure(
     replaces that stage's output instead of running it, and the later stages run on top of it.
     An override for a stage after `upto` is type-checked (roster, truth and timeline overrides
     are also size-checked) but otherwise ignored; the checks that need a computed truth (the
-    timeline's rows and the facts) run when the loop reaches that stage. A truth override
-    replaces the roster entry by its own roster (unless the roster is itself overridden), so the
-    returned dict stays consistent: with a truth override and no roster override the returned
-    `roster` entry is the truth's (reordered) roster, not the pre-truth roster. Overrides are
-    checked against `ctx.spec` and each other."""
+    timeline's rows, the facts and the placement) run when the loop reaches that stage. A truth
+    override replaces the roster entry by its own roster (unless the roster is itself
+    overridden), so the returned dict stays consistent: with a truth override and no roster
+    override the returned `roster` entry is the truth's (reordered) roster, not the pre-truth
+    roster. Overrides are checked against `ctx.spec` and each other."""
     override = override or {}
     upto = STAGES[-1] if upto is None else upto
     if upto not in STAGES:
@@ -58,6 +58,13 @@ def run_structure(
             _check_timeline_rows(_need(out, "truth", TruthOut), override[stage])
         if stage == "facts" and stage in override:
             _check_facts(ctx, _need(out, "truth", TruthOut), override[stage])
+        if stage == "placement" and stage in override:
+            _check_placement(
+                ctx,
+                _need(out, "truth", TruthOut),
+                _need(out, "facts", FactsOut),
+                override[stage],
+            )
         if stage in override:
             out[stage] = override[stage]
         elif stage == "roster":
@@ -235,6 +242,53 @@ def _check_fact_references(ctx: GenContext, roster: RosterOut, out: FactsOut) ->
                 f"the facts override: {fact.id} claims slot {claim.slot} at {claim.place!r}, "
                 "outside the case"
             )
+
+
+def _check_placement(ctx: GenContext, truth: TruthOut, out: FactsOut, placed: Output) -> None:
+    """A placement override must place exactly the search facts, within the cap, with no empty
+    location, and give every record source a subject its record kind can be about."""
+    if not isinstance(placed, PlacementOut):
+        return
+    kind_of = {loc.pos: loc.kind for loc in truth.roster.locations}
+    search = {f.id: f for f in out.facts if f.home.kind == "search"}
+    ids = [p.fact for p in placed.search]
+    if sorted(ids) != sorted(search):
+        raise ValueError("the placement override must place each search fact exactly once")
+    where = {p.fact: p.location for p in placed.search}
+    if not set(where.values()) <= set(kind_of):
+        raise ValueError("the placement override puts a fact at a location the roster lacks")
+    for fact in search.values():
+        if fact.place_kinds and kind_of[where[fact.id]] not in fact.place_kinds:
+            raise ValueError(f"the placement override puts {fact.id} where its trace cannot be")
+        if fact.apart_from and where[fact.apart_from] == where[fact.id]:
+            raise ValueError(f"the placement override puts {fact.id} beside {fact.apart_from}")
+    load = {loc: sum(1 for w in where.values() if w == loc) for loc in kind_of}
+    if max(load.values()) > ctx.spec.source_cap or min(load.values()) == 0:
+        raise ValueError("the placement override overfills or leaves a location empty")
+    records = {d.key: d for d in ctx.pack.record_defs}
+    if any(r.subject_type not in ("suspect", "location") for r in placed.record_sources):
+        raise ValueError(
+            "the placement override has a record source about neither a suspect nor a location"
+        )
+    expected = sorted(
+        (s.kind, s.subject_type, s.subject or "") for s in out.record_sources if s.subject
+    )
+    got = sorted(
+        (r.kind, r.subject_type, r.subject)
+        for r in placed.record_sources
+        if r.subject_type == "suspect"
+    )
+    if got != expected:
+        raise ValueError("the placement override must keep the suspects' record sources")
+    wanted = sorted(s.kind for s in out.record_sources if s.subject is None)
+    located = [r for r in placed.record_sources if r.subject_type == "location"]
+    if sorted(r.kind for r in located) != wanted:
+        raise ValueError("the placement override must have a source for each location record")
+    for record in located:
+        if record.subject not in kind_of or kind_of[record.subject] not in (
+            records[record.kind].location_kinds
+        ):
+            raise ValueError(f"the placement override makes {record.kind!r} about a bad location")
 
 
 def _check_overrides(ctx: GenContext, override: Mapping[str, Output]) -> None:

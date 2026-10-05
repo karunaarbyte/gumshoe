@@ -323,3 +323,162 @@ def test_a_facts_override_has_effects_on_the_truths_candidates_and_claims_inside
     assert claim is not None
     for change in ({"slot": 99}, {"slot": -1}, {"place": "l99"}):
         _facts_fail(_edit_fact(facts, "e_s0", claim=claim.model_copy(update=change)), "outside")
+
+
+def test_a_placement_override_replaces_the_placement_and_must_fit_the_facts():
+    pack = castle()
+    base = replay(3, "standard", pack)
+    assert replay(3, "standard", pack, override={"placement": base["placement"]}) == base
+    placed = base["placement"]
+    assert isinstance(placed, PlacementOut)
+    first = placed.search[0]
+
+    def fails(update, match):
+        edited = placed.model_copy(update=update)
+        with pytest.raises(ValueError, match=match):
+            replay(3, "standard", pack, override={"placement": edited})
+
+    fails({"search": placed.search[1:]}, "each search fact exactly once")
+    fails({"search": (*placed.search, first)}, "each search fact exactly once")
+    moved = placed.search[1:] + (first.model_copy(update={"location": "l9"}),)
+    fails({"search": moved}, "location the roster lacks")
+    crowded = tuple(p.model_copy(update={"location": "l0"}) for p in placed.search)
+    fails(
+        {"search": crowded}, "beside|cannot be|overfills"
+    )  # a rule breaks, whichever is seen first
+    fails({"record_sources": placed.record_sources[1:]}, "keep the suspects' record sources")
+    wrong_subject = tuple(
+        r.model_copy(update={"subject": "s0"}) if r.subject_type == "suspect" else r
+        for r in placed.record_sources
+    )
+    fails({"record_sources": wrong_subject}, "keep the suspects' record sources")
+
+
+def test_a_placement_override_must_respect_the_trace_places_and_the_clue_rule():
+    pack = castle()
+    base = replay(3, "standard", pack)
+    placed, facts = base["placement"], base["facts"]
+    assert isinstance(placed, PlacementOut) and isinstance(facts, FactsOut)
+    by_id = {f.id: f for f in facts.facts}
+    where = {p.fact: p.location for p in placed.search}
+    clue = next(f for f in facts.facts if f.id.startswith("p_"))
+    trace = by_id[clue.apart_from or ""]
+    beside = tuple(
+        p.model_copy(update={"location": where[trace.id]}) if p.fact == clue.id else p
+        for p in placed.search
+    )
+    with pytest.raises(ValueError, match="beside"):
+        replay(
+            3,
+            "standard",
+            pack,
+            override={"placement": placed.model_copy(update={"search": beside})},
+        )
+    kind_of = {loc.pos: loc.kind for loc in base["roster"].locations}  # type: ignore[attr-defined]
+    for decisive in (f for f in facts.facts if f.id.startswith("h_")):
+        bad = [loc for loc, kind in kind_of.items() if kind not in decisive.place_kinds]
+        if bad:
+            break
+    else:
+        pytest.fail("every trace fits every location here")
+    elsewhere = tuple(
+        p.model_copy(update={"location": bad[0]}) if p.fact == decisive.id else p
+        for p in placed.search
+    )
+    edited = placed.model_copy(update={"search": elsewhere})
+    with pytest.raises(ValueError, match="cannot be"):
+        replay(3, "standard", pack, override={"placement": edited})
+
+
+def test_a_placement_override_must_not_overfill_or_empty_a_location():
+    pack = castle()
+    for seed in range(60):
+        base = replay(seed, "standard", pack)
+        placed, facts = base["placement"], base["facts"]
+        assert isinstance(placed, PlacementOut) and isinstance(facts, FactsOut)
+        where = {p.fact: p.location for p in placed.search}
+        load = {loc: list(where.values()).count(loc) for loc in set(where.values())}
+        apart = {f.id: f.apart_from for f in facts.facts if f.apart_from}
+        for clue, trace in apart.items():
+            if load[where[clue]] != 1:
+                continue
+            target = next(loc for loc in load if loc not in (where[clue], where[trace or ""]))
+            moved = tuple(
+                p.model_copy(update={"location": target}) if p.fact == clue else p
+                for p in placed.search
+            )
+            edited = placed.model_copy(update={"search": moved})
+            with pytest.raises(ValueError, match="leaves a location empty"):
+                replay(seed, "standard", pack, override={"placement": edited})
+            return
+    pytest.fail("no standard seed has a clue alone at its location")
+
+
+def test_a_placement_override_must_give_each_location_record_a_fitting_subject():
+    pack = castle()
+    for seed in range(200):
+        base = replay(seed, "long", pack)
+        placed, roster = base["placement"], base["roster"]
+        assert isinstance(placed, PlacementOut)
+        located = [r for r in placed.record_sources if r.subject_type == "location"]
+        if not located:
+            continue
+        records = {d.key: d for d in pack.record_defs}
+        kind_of = {loc.pos: loc.kind for loc in roster.locations}  # type: ignore[attr-defined]
+        record = located[0]
+        bad = [
+            loc for loc, kind in kind_of.items() if kind not in records[record.kind].location_kinds
+        ]
+        if not bad:
+            continue
+        wrong = tuple(
+            r.model_copy(update={"subject": bad[0]}) if r == record else r
+            for r in placed.record_sources
+        )
+        with pytest.raises(ValueError, match="bad location"):
+            replay(
+                seed,
+                "long",
+                pack,
+                override={"placement": placed.model_copy(update={"record_sources": wrong})},
+            )
+        missing = tuple(r for r in placed.record_sources if r != record)
+        with pytest.raises(ValueError, match="source for each location record"):
+            replay(
+                seed,
+                "long",
+                pack,
+                override={"placement": placed.model_copy(update={"record_sources": missing})},
+            )
+        return
+    pytest.fail("no long seed has a location record with a disallowed location")
+
+
+def test_a_placement_override_must_not_overfill_a_location():
+    pack = castle()
+    base = replay(3, "long", pack)
+    placed, facts = base["placement"], base["facts"]
+    assert isinstance(placed, PlacementOut) and isinstance(facts, FactsOut)
+    where = {p.fact: p.location for p in placed.search}
+    keys = sorted(f.id for f in facts.facts if f.id.startswith("c_"))  # a key may sit anywhere
+    target = where[keys[0]]
+    for key in keys[1:]:
+        values = list(where.values())
+        if values.count(target) <= 4 and values.count(where[key]) >= 2:
+            where[key] = target
+    assert list(where.values()).count(target) > 4
+    moved = tuple(p.model_copy(update={"location": where[p.fact]}) for p in placed.search)
+    edited = placed.model_copy(update={"search": moved})
+    with pytest.raises(ValueError, match="overfills"):
+        replay(3, "long", pack, override={"placement": edited})
+
+
+def test_a_placement_override_must_not_add_or_change_the_kind_of_a_record_source():
+    pack = castle()
+    base = replay(3, "long", pack)
+    placed = base["placement"]
+    assert isinstance(placed, PlacementOut)
+    extra = placed.record_sources[0].model_copy(update={"subject_type": "event"})
+    edited = placed.model_copy(update={"record_sources": (*placed.record_sources, extra)})
+    with pytest.raises(ValueError, match="about neither a suspect nor a location"):
+        replay(3, "long", pack, override={"placement": edited})
