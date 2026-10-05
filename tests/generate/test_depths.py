@@ -38,3 +38,26 @@ def test_a_source_cap_below_three_or_a_window_that_fits_no_depth_gives_an_empty_
         update={"limits": standard.limits.model_copy(update={"solution_max": 3})}
     )
     assert feasible_depths(narrow, 0) == []  # every depth needs at least 4 facts
+
+
+def test_depth_2_needs_room_for_a_five_action_solution():
+    standard = castle_spec("standard")
+    tight = standard.model_copy(
+        update={"limits": standard.limits.model_copy(update={"actions_max": 4})}
+    )
+    assert feasible_depths(tight, 0) == [0, 1]  # the key may sit at a third location
+
+
+def test_a_depth_is_dropped_when_the_decisive_facts_exceed_their_share():
+    standard = castle_spec("standard")
+    strict = standard.model_copy(
+        update={"limits": standard.limits.model_copy(update={"decisive_pct_max": 8})}
+    )
+    # three decisive facts out of 33 (depth 0 and 1) or 38 (depth 2) with no location record
+    assert feasible_depths(strict, 0) == [2]
+
+
+def test_more_than_two_locations_per_method_is_never_feasible():
+    standard = castle_spec("standard")  # four methods
+    assert feasible_depths(standard.model_copy(update={"locations": 8}), 0) != []
+    assert feasible_depths(standard.model_copy(update={"locations": 9}), 0) == []
