@@ -139,3 +139,23 @@ class FactsOut(Output):
     depth: int  # the gating depth, one value for every suspect
     facts: tuple[FactDesc, ...]
     record_sources: tuple[RecordSourceDesc, ...]
+
+
+class PlacedFact(Frozen):
+    """A search fact and the location it is found at."""
+
+    fact: str
+    location: str  # a location position: l0 is the scene
+
+
+class PlacedRecord(Frozen):
+    """A record source whose subject is now known (a suspect, or the location a record is about)."""
+
+    kind: str
+    subject_type: str  # "suspect" | "location"
+    subject: str
+
+
+class PlacementOut(Output):
+    search: tuple[PlacedFact, ...]  # every search fact, sorted by fact id
+    record_sources: tuple[PlacedRecord, ...]  # the suspects' records, then the location records

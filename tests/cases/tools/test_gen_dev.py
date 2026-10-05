@@ -2,7 +2,7 @@ import pytest
 
 from gumshoe.cases.generate import timeline as timeline_stage
 from gumshoe.cases.generate.gen_context import GenContext
-from gumshoe.cases.generate.outputs import FactsOut, RosterOut, TimelineOut, TruthOut
+from gumshoe.cases.generate.outputs import FactsOut, PlacementOut, RosterOut, TimelineOut, TruthOut
 from gumshoe.cases.tools.builtin import load_builtin_pack
 from gumshoe.cases.tools.gen_dev import replay
 
@@ -17,9 +17,9 @@ def test_replay_returns_every_stage_up_to_the_requested_one():
     assert list(replay(3, "short", pack, "truth")) == ["roster", "truth"]
     assert list(replay(3, "short", pack, "timeline")) == ["roster", "truth", "timeline"]
     full = replay(3, "short", pack)  # the default is every stage
-    assert list(full) == ["roster", "truth", "timeline", "facts"]
+    assert list(full) == ["roster", "truth", "timeline", "facts", "placement"]
     assert isinstance(full["roster"], RosterOut) and isinstance(full["timeline"], TimelineOut)
-    assert isinstance(full["facts"], FactsOut)
+    assert isinstance(full["facts"], FactsOut) and isinstance(full["placement"], PlacementOut)
 
 
 def test_replay_is_deterministic_and_a_prefix_of_the_full_run():
@@ -67,11 +67,9 @@ def test_a_truth_override_replaces_the_roster_entry_by_its_roster():
 def test_replay_rejects_unknown_stages_and_wrongly_typed_overrides():
     pack = castle()
     with pytest.raises(ValueError, match="unknown stage"):
-        replay(3, "short", pack, "placement")
+        replay(3, "short", pack, "gating")
     with pytest.raises(ValueError, match="unknown override"):
-        replay(
-            3, "short", pack, override={"placement": replay(3, "short", pack, "roster")["roster"]}
-        )
+        replay(3, "short", pack, override={"gating": replay(3, "short", pack, "roster")["roster"]})
     roster = replay(3, "short", pack, "roster")["roster"]
     with pytest.raises(TypeError, match="truth override must be a TruthOut"):
         replay(3, "short", pack, override={"truth": roster})
@@ -80,19 +78,17 @@ def test_replay_rejects_unknown_stages_and_wrongly_typed_overrides():
 
 
 def test_the_fold_gives_what_calling_the_stages_one_by_one_gives():
-    from tests.generate.helpers import facts_of, stages
+    from tests.generate.helpers import placement_of, stages
 
     pack = castle()
     for preset in ("short", "standard", "long"):
         ctx = GenContext.of(pack, 8, preset)
         roster, truth, timeline = stages(ctx)
-        _, _, facts = facts_of(ctx)
+        _, _, facts, placed = placement_of(ctx)
         full = replay(8, preset, pack)
-        assert (full["roster"], full["truth"], full["timeline"], full["facts"]) == (
-            roster,
-            truth,
-            timeline,
-            facts,
+        expected = (roster, truth, timeline, facts, placed)
+        assert tuple(full[s] for s in ("roster", "truth", "timeline", "facts", "placement")) == (
+            expected
         )
 
 

@@ -4,9 +4,15 @@ from collections.abc import Callable, Mapping
 from math import sqrt
 from typing import Any
 
-from gumshoe.cases.generate import facts, roster, timeline, truth
+from gumshoe.cases.generate import facts, placement, roster, timeline, truth
 from gumshoe.cases.generate.gen_context import GenContext
-from gumshoe.cases.generate.outputs import FactsOut, RosterOut, TimelineOut, TruthOut
+from gumshoe.cases.generate.outputs import (
+    FactsOut,
+    PlacementOut,
+    RosterOut,
+    TimelineOut,
+    TruthOut,
+)
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.tools.builtin import load_builtin_pack
 
@@ -39,6 +45,14 @@ def facts_of(ctx: GenContext, depth: int | None = None) -> tuple[TruthOut, Timel
     """The truth, the timeline and the facts for a context; `depth` forces the gating depth."""
     _, after, tl = stages(ctx)
     return after, tl, facts.run(ctx, ctx.stream("facts"), after, tl, depth)
+
+
+def placement_of(
+    ctx: GenContext, depth: int | None = None
+) -> tuple[TruthOut, TimelineOut, FactsOut, PlacementOut]:
+    """Everything up to and including placement; `depth` forces the gating depth."""
+    after, tl, fa = facts_of(ctx, depth)
+    return after, tl, fa, placement.run(ctx, ctx.stream("placement"), after, fa)
 
 
 def chi2_critical(df: int, z: float = Z_BONFERRONI) -> float:
