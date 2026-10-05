@@ -1,7 +1,8 @@
 """Shared helpers for the generator tests."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from math import sqrt
+from typing import Any
 
 from gumshoe.cases.generate import facts, roster, timeline, truth
 from gumshoe.cases.generate.gen_context import GenContext
@@ -48,3 +49,10 @@ def chi2_critical(df: int, z: float = Z_BONFERRONI) -> float:
 def chi2_statistic[K](observed: Mapping[K, int], expected: Mapping[K, float]) -> float:
     """Pearson's statistic over the cells whose expected count is at least 5."""
     return sum((observed.get(cell, 0) - e) ** 2 / e for cell, e in expected.items() if e >= 5)
+
+
+def castle_with(change: Callable[[dict[str, Any]], None]) -> Pack:
+    """A copy of the castle pack after `change` edited its dumped form."""
+    data = castle().model_dump(mode="json")
+    change(data)
+    return Pack.model_validate(data)

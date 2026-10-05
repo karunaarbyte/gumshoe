@@ -6,7 +6,7 @@ from gumshoe.cases.generate.gen_context import GenContext
 from gumshoe.cases.generate.outputs import RosterOut
 from gumshoe.cases.model.pack import Pack, TraceDef
 from gumshoe.cases.packs.check.capacity import eligible_roles, hosting_scenes, usable_kind
-from tests.generate.helpers import PRESET_NAMES, SEEDS, castle, roster_of
+from tests.generate.helpers import PRESET_NAMES, SEEDS, castle, castle_with, roster_of
 
 
 def draw(pack: Pack, seed: int, preset: str) -> tuple[GenContext, RosterOut]:
@@ -256,3 +256,27 @@ def test_a_roster_whose_record_kinds_cannot_all_be_held_raises_a_generation_erro
     ctx = GenContext.of(two_kinds, 1, "short")  # still hosted: the ledger covers the scenes
     with pytest.raises(GenerationError, match="holder"):
         roster_stage.run(ctx, ctx.stream("roster"))
+
+
+@pytest.mark.parametrize("preset", PRESET_NAMES)
+def test_an_event_subject_record_kind_is_never_chosen(preset):
+    def add_event_kind(data):
+        first = data["record_defs"][0]
+        data["record_defs"].append(
+            {
+                "key": "bell_book",
+                "subject": "event",
+                "medium": "written",
+                "presence": list(first["presence"]),
+                "names": list(first["names"]),
+                "location_kinds": ["chapel", "keep"],
+            }
+        )
+        for role in data["roles"]:
+            role["record_kinds"] = [*role["record_kinds"], "bell_book"]
+
+    pack = castle_with(add_event_kind)
+    assert "bell_book" in {d.key for d in pack.record_defs}
+    for seed in SEEDS:
+        ctx = GenContext.of(pack, seed, preset)
+        assert "bell_book" not in roster_of(ctx).record_kinds

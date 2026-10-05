@@ -61,7 +61,9 @@ def _record_kinds_and_secrets(
     records = {d.key: d for d in pack.record_defs}
     usable = [sorted(_usable_kinds(r, scene, records)) for r in roles]
     feasible: list[tuple[tuple[str, ...], dict[int, str]]] = []
-    for subset in combinations(sorted(records), size):
+    # an event-subject record kind has no source in the facts stage, so it is never chosen
+    choosable = sorted(k for k, d in records.items() if d.subject in ("suspect", "location"))
+    for subset in combinations(choosable, size):
         if any(not set(opts) & set(subset) for opts in usable):
             continue
         held_kinds = [k for k in subset if records[k].subject == "suspect"]
