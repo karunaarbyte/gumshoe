@@ -1,6 +1,7 @@
 import pytest
 
 from gumshoe.cases.generate.gen_context import (
+    PIPELINE,
     SKELETON_ALGO_VERSION,
     STAGE_VERSIONS,
     STAGES,
@@ -46,8 +47,9 @@ def test_streams_are_keyed_by_stage_counter_and_seed():
 
 
 def test_every_stage_has_a_version():
-    assert set(STAGE_VERSIONS) == set(STAGES)
-    assert set(STAGES) == {"roster", "truth", "timeline", "facts", "placement", "gating"}
+    assert set(STAGE_VERSIONS) == set(PIPELINE)
+    assert (*STAGES, "assemble", "skin") == PIPELINE
+    assert STAGES == ("roster", "truth", "timeline", "facts", "placement", "gating")
 
 
 @pytest.mark.parametrize("seed", [True, "1", None, 1.5])

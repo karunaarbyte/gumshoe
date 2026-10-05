@@ -16,8 +16,12 @@ from gumshoe.cases.generate.outputs import (
     TruthOut,
 )
 from gumshoe.cases.model.case import Case
+from gumshoe.cases.model.index import CaseIndex
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.tools.builtin import load_builtin_pack
+from gumshoe.cases.validate.graph import build_graph
+from gumshoe.cases.validate.reach import compute_reach
+from gumshoe.cases.validate.routes import best_solution
 
 PRESET_NAMES = ("short", "standard", "long")
 SEEDS = range(200)
@@ -86,3 +90,11 @@ def castle_with(change: Callable[[dict[str, Any]], None]) -> Pack:
     data = castle().model_dump(mode="json")
     change(data)
     return Pack.model_validate(data)
+
+
+def solution_shape(case: Case) -> tuple[int, int, int]:
+    """The cheapest solution's size, depth and actions, as the validator measures them."""
+    ix = CaseIndex.of(case)
+    best = best_solution(ix, build_graph(ix), compute_reach(ix).facts)
+    assert best is not None
+    return best.size, best.depth, best.actions

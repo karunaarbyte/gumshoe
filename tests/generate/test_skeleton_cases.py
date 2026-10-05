@@ -19,12 +19,17 @@ from gumshoe.cases.model.index import CaseIndex
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.simulate.oracle import judge
 from gumshoe.cases.validate.graph import build_graph
-from gumshoe.cases.validate.reach import compute_reach
 from gumshoe.cases.validate.report import Profile
-from gumshoe.cases.validate.routes import best_solution
 from gumshoe.cases.validate.runner import validate
 from tests.cases.helpers import replace_fact, replace_record_source
-from tests.generate.helpers import PRESET_NAMES, SEEDS, case_of, castle, facts_of
+from tests.generate.helpers import (
+    PRESET_NAMES,
+    SEEDS,
+    case_of,
+    castle,
+    facts_of,
+    solution_shape,
+)
 
 CLOSED_FORM = {"short": [0, 1], "standard": [0, 1, 2], "long": [2]}  # the castle (spec section 6)
 
@@ -116,13 +121,6 @@ def rename_facts(case: Case, rng: random.Random) -> Case:
         location["requires"] = ids(location["requires"])
     data["start"]["facts"] = ids(data["start"]["facts"])
     return Case.model_validate(data)
-
-
-def solution_shape(case: Case) -> tuple[int, int, int]:
-    ix = CaseIndex.of(case)
-    best = best_solution(ix, build_graph(ix), compute_reach(ix).facts)
-    assert best is not None
-    return best.size, best.depth, best.actions
 
 
 @pytest.mark.parametrize("preset", PRESET_NAMES)

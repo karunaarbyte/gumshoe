@@ -1,14 +1,26 @@
-"""`build_case`: a skeleton-only `Case` from the stage outputs.
+"""The assemble stage: a skeleton-only `Case` from the stage outputs, then its final ids.
 
-Every skin field stays blank and every id is the neutral position the stages use (`s0`, `m1`,
-`l2`, `e_s3_1`, `sec_s0`), so the culprit is still `s0`: the permutation and the final ids are
-2d-3's `assemble`. A blank-skin case validates exactly like a skinned one (overview 2.4), which
-is how the evidence stages get real validator feedback before any wording exists.
+`build_case` writes every skin field blank and every id as the neutral position the stages use
+(`s0`, `m1`, `l2`, `e_s3_1`, `sec_s0`), so the culprit is still `s0`. A blank-skin case validates
+exactly like a skinned one (overview 2.4), which is how the evidence stages get real validator
+feedback before any wording exists. `assemble` then gives every entity its final id, a hash of
+the case's code (seed, preset, pack), the kind of entity and its place in the sorted neutral
+ids, so no id says who the culprit is, what a fact is or how early a stage drew it, and the
+same seed gives other ids in another preset or pack. It draws nothing.
 """
+
+from collections.abc import Mapping
+
+from pydantic import ValidationError
 
 from gumshoe.cases.core.ids import make_id
 from gumshoe.cases.generate.errors import GenerationError
-from gumshoe.cases.generate.gen_context import SKELETON_ALGO_VERSION, STAGE_VERSIONS, GenContext
+from gumshoe.cases.generate.gen_context import (
+    PIPELINE,
+    SKELETON_ALGO_VERSION,
+    STAGE_VERSIONS,
+    GenContext,
+)
 from gumshoe.cases.generate.outputs import (
     FactDesc,
     FactsOut,
@@ -49,7 +61,19 @@ CRIME, PRESENT = "crime", "present"
 
 def generator_version() -> str:
     """Every stage version in pipeline order, as `Case.generator_version` records it."""
-    return ",".join(f"{stage}={version}" for stage, version in STAGE_VERSIONS.items())
+    return ",".join(f"{stage}={STAGE_VERSIONS[stage]}" for stage in PIPELINE)
+
+
+# the id prefix of each kind of entity; every kind of fact shares one prefix, so a fact's final id
+# says nothing about what the fact is
+PREFIXES = {
+    "suspect": "s",
+    "method": "m",
+    "motive": "v",
+    "location": "l",
+    "event": "e",
+    "fact": "f",
+}
 
 
 def _source(
@@ -157,7 +181,7 @@ def build_case(
         for r in placement.record_sources
     )
     return Case(
-        id=make_id("c", ctx.seed, ctx.preset, ctx.spec_hash),
+        id=make_id("c", ctx.seed, ctx.preset, ctx.pack.id, ctx.pack.skeleton_hash(), ctx.spec_hash),
         seed=ctx.seed,
         origin=Origin.GENERATED,
         pack_ref=PackRef(id=ctx.pack.id, skeleton_hash=ctx.pack.skeleton_hash()),
@@ -186,3 +210,97 @@ def build_case(
         timeline=_events(truth, timeline),
         facts=built,
     )
+
+
+def id_map(case: Case) -> dict[str, str]:
+    """Neutral id -> final id for every entity: `make_id(prefix, case.id, kind, index, salt)`,
+    with `index` the entity's place among the sorted neutral ids of its kind and `case.id` the
+    skeleton case's id (a hash of seed, preset, pack and spec). The hash is what hides the neutral
+    order (the culprit is index 0 of the suspects), so the order of the final ids is as good as
+    random; a collision with an earlier id raises the salt until the id is free, which is
+    deterministic and in practice never happens."""
+    groups = {
+        "suspect": [s.id for s in case.suspects],
+        "method": [m.id for m in case.methods],
+        "motive": [v.id for v in case.motives],
+        "location": [loc.id for loc in case.locations],
+        "event": [e.id for e in case.timeline],
+        "fact": [f.id for f in case.facts],
+    }
+    final: dict[str, str] = {}
+    taken: set[str] = set()
+    for kind, neutral in groups.items():
+        for index, ident in enumerate(sorted(neutral)):
+            salt = 0
+            while (new := make_id(PREFIXES[kind], case.id, kind, index, salt)) in taken:
+                salt += 1
+            taken.add(new)
+            final[ident] = new
+    if len(final) != sum(len(g) for g in groups.values()):
+        raise GenerationError("two entities share a neutral id")
+    return final
+
+
+def _ref(ref: dict[str, object], names: Mapping[str, str]) -> None:
+    """Rename the ids inside a dumped `SourceRef` (a record's target is a kind, not an id)."""
+    if ref["kind"] == SourceKind.RECORD.value:
+        ref["subject"] = names[str(ref["subject"])]
+    else:
+        ref["target"] = names[str(ref["target"])]
+
+
+def rename(case: Case, names: Mapping[str, str]) -> Case:
+    """The same case with every id replaced, field by field. It goes through the dumped form and
+    `Case.model_validate`, so every list comes out sorted by its new ids."""
+    data = case.model_dump(mode="json")
+
+    def many(ids: list[str]) -> list[str]:
+        return [names[i] for i in ids]
+
+    for s in data["suspects"]:
+        for key in ("id", "motive", "secret_fact"):
+            s[key] = names[s[key]]
+        s["requires"], s["knows"] = many(s["requires"]), many(s["knows"])
+    for loc in data["locations"]:
+        loc["id"], loc["requires"] = names[loc["id"]], many(loc["requires"])
+    for r in data["record_sources"]:
+        r["subject"], r["requires"] = names[r["subject"]], many(r["requires"])
+    for entity in (*data["methods"], *data["motives"]):
+        entity["id"] = names[entity["id"]]
+    for e in data["timeline"]:
+        for key in ("id", "actor", "place"):
+            e[key] = names[e[key]]
+    for f in data["facts"]:
+        f["id"] = names[f["id"]]
+        f["requires"], f["exposed_by"] = many(f["requires"]), many(f["exposed_by"])
+        f["timeline_ref"] = many(f["timeline_ref"])
+        if f["speaker"] is not None:
+            f["speaker"] = names[f["speaker"]]
+        for effect in f["effects"]:
+            effect["candidate"] = names[effect["candidate"]]
+        if f["claim"] is not None:
+            for key in ("actor", "place"):
+                f["claim"][key] = names[f["claim"][key]]
+        _ref(f["source"], names)
+        if f["exposure_hook"] is not None:
+            _ref(f["exposure_hook"], names)
+    data["truth"] = {axis: names[ident] for axis, ident in data["truth"].items()}
+    data["start"] = {part: many(ids) for part, ids in data["start"].items()}
+    return Case.model_validate(data)
+
+
+def assemble(
+    ctx: GenContext,
+    truth: TruthOut,
+    timeline: TimelineOut,
+    facts: FactsOut,
+    placement: PlacementOut,
+    gating: GatingOut,
+) -> Case:
+    """The skeleton-only case with its final ids: `build_case`, then `id_map` and `rename`. A
+    stage output that does not make a case (a reference to nothing) is a `GenerationError`."""
+    try:
+        skeleton = build_case(ctx, truth, timeline, facts, placement, gating)
+        return rename(skeleton, id_map(skeleton))
+    except (KeyError, ValidationError) as error:
+        raise GenerationError(f"a stage output does not make a case: {error!r}") from error

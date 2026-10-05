@@ -11,7 +11,8 @@ from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.spec import PRESETS, PresetDef, UnsupportedPreset
 from gumshoe.cases.packs.check.capacity import hosted_specs
 
-STAGES = ("roster", "truth", "timeline", "facts", "placement", "gating")
+STAGES = ("roster", "truth", "timeline", "facts", "placement", "gating")  # the fold in structure.py
+PIPELINE = (*STAGES, "assemble", "skin")  # every stage with a stream counter; the retry order
 STAGE_VERSIONS: dict[str, int] = {
     "roster": 2,
     "truth": 1,
@@ -19,6 +20,8 @@ STAGE_VERSIONS: dict[str, int] = {
     "facts": 1,
     "placement": 1,
     "gating": 1,
+    "assemble": 1,
+    "skin": 1,  # 1: the identity skin; 2d-3b brings the template skin
 }
 SKELETON_ALGO_VERSION = 2
 
