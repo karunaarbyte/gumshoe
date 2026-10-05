@@ -144,3 +144,67 @@ def test_a_handle_collision_makes_play_exit_two(good, capsys, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("game started"))
     assert main(["play", str(good), "--salt", "s"]) == 2
     assert "handle collision" in capsys.readouterr().err
+
+
+def test_generate_writes_a_case_that_validates_with_its_pack(tmp_path, capsys):
+    from gumshoe.cases.model.serialize import load_case
+    from gumshoe.cases.validate.report import Profile
+    from gumshoe.cases.validate.runner import validate
+    from tests.generate.helpers import castle
+
+    path = tmp_path / "case.json"
+    assert main(["generate", "5", "--preset", "short", "-o", str(path)]) == 0
+    case = load_case(path.read_bytes())
+    assert case.seed == 5 and case.spec.preset == "short"
+    assert validate(case, castle(), Profile.STRICT).issues == ()
+    assert main(["validate", str(path), "--profile", "custom"]) == 0
+    assert capsys.readouterr().out.strip().endswith("ok")
+
+
+def test_generate_prints_the_case_when_no_file_is_given(capsys):
+    from gumshoe.cases.model.serialize import load_case
+
+    assert main(["generate", "2"]) == 0
+    assert load_case(capsys.readouterr().out.encode()).spec.preset == "standard"
+
+
+def test_generate_refuses_an_unknown_pack_and_an_unwritable_file(tmp_path, capsys):
+    assert main(["generate", "1", "--pack", "nowhere"]) == 2
+    assert "no bundled pack" in capsys.readouterr().err
+    assert main(["generate", "1", "-o", str(tmp_path / "missing" / "case.json")]) == 2
+    assert "cannot write" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["generate", "1", "--preset", "epic"])
+
+
+def test_smoke_reports_the_attempts_and_exits_zero_when_all_is_well(capsys):
+    assert main(["smoke", "--preset", "short", "--seeds", "6"]) == 0
+    out = capsys.readouterr().out
+    assert "short: 6 cases, attempts mean 1.00 max 1, 0 failed" in out
+    assert "1 attempt(s): 6 case(s)" in out
+    assert main(["smoke", "--pack", "nowhere"]) == 2
+    assert main(["smoke", "--preset", "short", "--seeds", "0"]) == 1  # no case is not a pass
+    assert "no case was made" in capsys.readouterr().out
+
+
+def test_generate_reports_a_generation_failure_on_stderr(monkeypatch, capsys):
+    from gumshoe.cases.generate.trace import CaseGenerationError, GenerationTrace
+    from gumshoe.cases.tools import cli
+
+    def refuse(seed, preset, pack):
+        raise CaseGenerationError("no stage can fix PACK_MISMATCH", GenerationTrace(()))
+
+    monkeypatch.setattr(cli, "generate", refuse)
+    assert main(["generate", "1"]) == 2
+    assert "no stage can fix PACK_MISMATCH" in capsys.readouterr().err
+
+
+def test_smoke_exits_one_when_the_criterion_fails(monkeypatch, capsys):
+    from gumshoe.cases.tools import cli
+    from gumshoe.cases.tools.gen_dev import SmokeReport
+
+    slow = SmokeReport("short", ((1, 1), (3, 2)), (("FACTS_X", 4),), ())  # mean 2.33
+    monkeypatch.setattr(cli, "smoke", lambda pack, preset, seeds: slow)
+    assert main(["smoke", "--preset", "short"]) == 1
+    out = capsys.readouterr().out
+    assert "mean 2.33 max 3" in out and "FACTS_X: 4" in out

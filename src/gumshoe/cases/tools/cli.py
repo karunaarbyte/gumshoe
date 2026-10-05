@@ -9,11 +9,15 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from gumshoe.cases.generate.api import CaseGenerationError, generate
 from gumshoe.cases.model.case import Case
 from gumshoe.cases.model.pack import Pack
-from gumshoe.cases.model.serialize import load_case
+from gumshoe.cases.model.serialize import dump_case, load_case
+from gumshoe.cases.model.spec import PRESET_ORDER, UnsupportedPreset
 from gumshoe.cases.play import load_session
+from gumshoe.cases.tools.builtin import BuiltinPackError, load_builtin_pack
 from gumshoe.cases.tools.dev import simulate_lines
+from gumshoe.cases.tools.gen_dev import smoke
 from gumshoe.cases.tools.pack_cli import run_pack_check
 from gumshoe.cases.tools.play_cli import run_play
 from gumshoe.cases.validate.catalogue import CATALOGUE
@@ -43,6 +47,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     simulate.add_argument("path", type=Path)
     simulate.set_defaults(handler=_simulate)
+    gen = sub.add_parser("generate", help="developer: generate a case (it names the truth)")
+    gen.add_argument("seed", type=int)
+    gen.add_argument("--preset", choices=PRESET_ORDER, default="standard")
+    gen.add_argument("--pack", default="castle", help="name of a bundled pack")
+    gen.add_argument("-o", "--output", type=Path, help="write the case here instead of stdout")
+    gen.set_defaults(handler=_generate)
+    smoke_cmd = sub.add_parser("smoke", help="developer: attempts and failures over a run of seeds")
+    smoke_cmd.add_argument("--preset", choices=PRESET_ORDER, default="standard")
+    smoke_cmd.add_argument("--pack", default="castle", help="name of a bundled pack")
+    smoke_cmd.add_argument("--seeds", type=int, default=200, help="seeds 0 up to this number")
+    smoke_cmd.set_defaults(handler=_smoke)
     packs = sub.add_parser("packs", help="work with theme packs")
     packs_sub = packs.add_subparsers(dest="packs_command", required=True)
     pack_check = packs_sub.add_parser("check", help="check a pack file and list every issue")
@@ -143,6 +158,35 @@ def _simulate(args: argparse.Namespace) -> int:
     for line in simulate_lines(loaded[1]):
         print(line)
     return 0
+
+
+def _generate(args: argparse.Namespace) -> int:
+    try:
+        case = generate(args.seed, args.preset, load_builtin_pack(args.pack))
+    except (BuiltinPackError, UnsupportedPreset, CaseGenerationError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    data = dump_case(case)
+    if args.output is None:
+        print(data.decode("utf-8"))
+        return 0
+    try:
+        args.output.write_bytes(data)
+    except OSError as exc:
+        print(f"error: cannot write {exc.filename}: {exc.strerror}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _smoke(args: argparse.Namespace) -> int:
+    try:
+        report = smoke(load_builtin_pack(args.pack), args.preset, range(args.seeds))
+    except (BuiltinPackError, UnsupportedPreset) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    for line in report.lines():
+        print(line)
+    return 0 if report.ok else 1
 
 
 def _packs_check(args: argparse.Namespace) -> int:

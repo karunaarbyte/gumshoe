@@ -546,3 +546,74 @@ def test_a_gating_override_may_rewire_but_must_keep_the_depth_and_the_references
     _gating_fails(lambda g: {"start_locations": ("l9",)}, "location or suspect the case lacks")
     _gating_fails(lambda g: {"start_suspects": ("s9",)}, "location or suspect the case lacks")
     _gating_fails(lambda g: {"start_suspects": ("s0",)}, "both locks and opens")
+
+
+def test_replay_with_a_stage_counter_redraws_that_stage_and_leaves_the_earlier_ones():
+    from gumshoe.cases.generate import facts as facts_stage
+    from tests.generate.helpers import facts_of
+
+    pack = castle()
+    ctx = GenContext.of(pack, 3, "standard")
+    truth, timeline, first = facts_of(ctx)
+    again = facts_stage.run(ctx, ctx.stream("facts", 1), truth, timeline)
+    assert again != first  # a new counter is a new draw
+    plain = replay(3, "standard", pack, "facts")
+    redrawn = replay(3, "standard", pack, "facts", counters={"facts": 1})
+    assert redrawn["facts"] == again and plain["facts"] == first
+    assert all(redrawn[s] == plain[s] for s in ("roster", "truth", "timeline"))
+    with pytest.raises(ValueError, match="unknown stage"):
+        replay(3, "standard", pack, "skin")
+
+
+def test_the_smoke_report_counts_attempts_codes_and_failures(monkeypatch):
+    from gumshoe.cases.generate.trace import Attempt, CaseGenerationError, GenerationTrace
+    from gumshoe.cases.tools import gen_dev
+
+    def trace(*codes):
+        counters = (0,) * 8
+        attempts = [Attempt(i + 1, "roster", counters, c, "facts") for i, c in enumerate(codes)]
+        attempts.append(Attempt(len(attempts) + 1, "facts", counters, (), None))
+        return GenerationTrace(tuple(attempts))
+
+    def fake(seed, preset, pack, presets):
+        if seed == 3:
+            raise CaseGenerationError("no stage can fix PACK_MISMATCH", trace(("PACK_MISMATCH",)))
+        return None, trace(*[("FACTS_X",)] * (2 if seed == 2 else 0))
+
+    monkeypatch.setattr(gen_dev, "generate_traced", fake)
+    report = gen_dev.smoke(castle(), "short", range(5))
+    assert report.attempts == ((1, 3), (3, 1)) and report.cases == 4
+    assert report.mean_attempts == pytest.approx(6 / 4) and report.max_attempts == 3
+    assert report.codes == (("FACTS_X", 2), ("PACK_MISMATCH", 1))
+    assert report.errors == ((3, "no stage can fix PACK_MISMATCH"),) and not report.ok
+    assert report.lines()[0] == "short: 4 cases, attempts mean 1.50 max 3, 1 failed"
+
+
+def test_the_smoke_criterion_is_a_mean_of_two_and_a_maximum_of_ten():
+    from gumshoe.cases.tools.gen_dev import SmokeReport
+
+    assert SmokeReport("short", ((1, 5), (2, 3)), (), ()).ok
+    assert not SmokeReport("short", ((1, 1), (3, 2)), (), ()).ok  # mean 2.33
+    assert not SmokeReport("short", ((1, 50), (11, 1)), (), ()).ok  # max 11
+    assert not SmokeReport("short", ((1, 5),), (), ((7, "why"),)).ok  # a seed failed
+    assert SmokeReport("short", (), (), ()).mean_attempts == 0
+    assert SmokeReport("short", (), (), ()).lines()[-1] == "  no case was made"
+
+
+def test_replay_refuses_a_counter_for_no_stage_or_a_negative_one():
+    pack = castle()
+    for counters, match in (
+        ({"factz": 1}, "bad stage counter"),
+        ({"facts": -1}, "must not be negative"),
+        ({"facts": True}, "bad stage counter"),
+    ):
+        with pytest.raises(ValueError, match=match):
+            replay(3, "short", pack, "roster", counters=counters)
+    replay(3, "short", pack, counters={"assemble": 2, "skin": 1})  # every pipeline stage is known
+
+
+def test_a_smoke_run_over_no_seeds_is_not_a_pass():
+    from gumshoe.cases.tools.gen_dev import smoke
+
+    report = smoke(castle(), "short", range(0))
+    assert report.cases == 0 and not report.ok
