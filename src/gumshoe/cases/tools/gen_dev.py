@@ -13,7 +13,7 @@ def replay(
     seed: int,
     preset: str,
     pack: Pack,
-    upto: str = "timeline",
+    upto: str | None = None,
     override: Mapping[str, Output] | None = None,
     presets: Mapping[str, PresetDef] = PRESETS,
 ) -> dict[str, Output]:

@@ -2,7 +2,7 @@ import pytest
 
 from gumshoe.cases.generate import timeline as timeline_stage
 from gumshoe.cases.generate.gen_context import GenContext
-from gumshoe.cases.generate.outputs import RosterOut, TimelineOut, TruthOut
+from gumshoe.cases.generate.outputs import FactsOut, RosterOut, TimelineOut, TruthOut
 from gumshoe.cases.tools.builtin import load_builtin_pack
 from gumshoe.cases.tools.gen_dev import replay
 
@@ -15,9 +15,11 @@ def test_replay_returns_every_stage_up_to_the_requested_one():
     pack = castle()
     assert list(replay(3, "short", pack, "roster")) == ["roster"]
     assert list(replay(3, "short", pack, "truth")) == ["roster", "truth"]
-    full = replay(3, "short", pack)
-    assert list(full) == ["roster", "truth", "timeline"]
+    assert list(replay(3, "short", pack, "timeline")) == ["roster", "truth", "timeline"]
+    full = replay(3, "short", pack)  # the default is every stage
+    assert list(full) == ["roster", "truth", "timeline", "facts"]
     assert isinstance(full["roster"], RosterOut) and isinstance(full["timeline"], TimelineOut)
+    assert isinstance(full["facts"], FactsOut)
 
 
 def test_replay_is_deterministic_and_a_prefix_of_the_full_run():
@@ -78,15 +80,20 @@ def test_replay_rejects_unknown_stages_and_wrongly_typed_overrides():
 
 
 def test_the_fold_gives_what_calling_the_stages_one_by_one_gives():
-    from gumshoe.cases.generate.gen_context import GenContext
-    from tests.generate.helpers import stages
+    from tests.generate.helpers import facts_of, stages
 
     pack = castle()
     for preset in ("short", "standard", "long"):
         ctx = GenContext.of(pack, 8, preset)
         roster, truth, timeline = stages(ctx)
+        _, _, facts = facts_of(ctx)
         full = replay(8, preset, pack)
-        assert (full["roster"], full["truth"], full["timeline"]) == (roster, truth, timeline)
+        assert (full["roster"], full["truth"], full["timeline"], full["facts"]) == (
+            roster,
+            truth,
+            timeline,
+            facts,
+        )
 
 
 def test_overrides_that_do_not_fit_the_spec_or_each_other_are_refused():
@@ -108,3 +115,35 @@ def test_overrides_that_do_not_fit_the_spec_or_each_other_are_refused():
     thin = timeline.model_copy(update={"opportunity": ()})
     with pytest.raises(ValueError, match="timeline override"):
         replay(3, "short", pack, override={"timeline": thin})
+
+
+def test_a_facts_override_replaces_the_facts_and_must_fit_the_truth_and_the_preset():
+    pack = castle()
+    base = replay(3, "standard", pack)
+    assert replay(3, "standard", pack, override={"facts": base["facts"]}) == base
+    short_facts = replay(3, "short", pack)["facts"]
+    with pytest.raises(ValueError, match="facts override must have a record"):
+        replay(3, "standard", pack, override={"facts": short_facts})  # 4 suspects, not 5
+    assert isinstance(base["facts"], FactsOut)
+    deep = base["facts"].model_copy(update={"depth": 7})
+    with pytest.raises(ValueError, match="depth 7"):
+        replay(3, "standard", pack, override={"facts": deep})
+    wrong_kind = tuple(
+        src.model_copy(update={"kind": "nowhere"}) if src.subject == "s0" else src
+        for src in base["facts"].record_sources
+    )
+    with pytest.raises(ValueError, match="record for each"):
+        replay(
+            3,
+            "standard",
+            pack,
+            override={"facts": base["facts"].model_copy(update={"record_sources": wrong_kind})},
+        )
+    no_trace = tuple(f for f in base["facts"].facts if f.id != "h_m0")
+    with pytest.raises(ValueError, match="trace for each"):
+        replay(
+            3,
+            "standard",
+            pack,
+            override={"facts": base["facts"].model_copy(update={"facts": no_trace})},
+        )

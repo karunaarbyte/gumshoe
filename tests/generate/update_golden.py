@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+from gumshoe.cases.generate import facts as facts_stage
 from gumshoe.cases.generate.gen_context import GenContext
 from tests.generate.helpers import GOLDEN_SEEDS, PRESET_NAMES, castle, stages
 
@@ -14,11 +15,14 @@ def stage_digests() -> dict[str, dict[str, str]]:
     found: dict[str, dict[str, str]] = {}
     for preset in PRESET_NAMES:
         for seed in GOLDEN_SEEDS:
-            roster, truth, timeline = stages(GenContext.of(pack, seed, preset))
+            ctx = GenContext.of(pack, seed, preset)
+            roster, truth, timeline = stages(ctx)
+            facts = facts_stage.run(ctx, ctx.stream("facts"), truth, timeline)
             found[f"{preset}/{seed}"] = {
                 "roster": roster.digest(),
                 "truth": truth.digest(),
                 "timeline": timeline.digest(),
+                "facts": facts.digest(),
             }
     return found
 
