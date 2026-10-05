@@ -65,9 +65,11 @@ def test_a_truth_override_replaces_the_roster_entry_by_its_roster():
 def test_replay_rejects_unknown_stages_and_wrongly_typed_overrides():
     pack = castle()
     with pytest.raises(ValueError, match="unknown stage"):
-        replay(3, "short", pack, "facts")
+        replay(3, "short", pack, "placement")
     with pytest.raises(ValueError, match="unknown override"):
-        replay(3, "short", pack, override={"facts": replay(3, "short", pack, "roster")["roster"]})
+        replay(
+            3, "short", pack, override={"placement": replay(3, "short", pack, "roster")["roster"]}
+        )
     roster = replay(3, "short", pack, "roster")["roster"]
     with pytest.raises(TypeError, match="truth override must be a TruthOut"):
         replay(3, "short", pack, override={"truth": roster})

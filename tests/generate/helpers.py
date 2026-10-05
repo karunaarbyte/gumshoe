@@ -3,9 +3,9 @@
 from collections.abc import Mapping
 from math import sqrt
 
-from gumshoe.cases.generate import roster, timeline, truth
+from gumshoe.cases.generate import facts, roster, timeline, truth
 from gumshoe.cases.generate.gen_context import GenContext
-from gumshoe.cases.generate.outputs import RosterOut, TimelineOut, TruthOut
+from gumshoe.cases.generate.outputs import FactsOut, RosterOut, TimelineOut, TruthOut
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.tools.builtin import load_builtin_pack
 
@@ -32,6 +32,12 @@ def stages(ctx: GenContext) -> tuple[RosterOut, TruthOut, TimelineOut]:
     """The three structural stages, called directly (the fold in `structure.py` is tested apart)."""
     before, after = truth_of(ctx)
     return before, after, timeline.run(ctx, ctx.stream("timeline"), after)
+
+
+def facts_of(ctx: GenContext, depth: int | None = None) -> tuple[TruthOut, TimelineOut, FactsOut]:
+    """The truth, the timeline and the facts for a context; `depth` forces the gating depth."""
+    _, after, tl = stages(ctx)
+    return after, tl, facts.run(ctx, ctx.stream("facts"), after, tl, depth)
 
 
 def chi2_critical(df: int, z: float = Z_BONFERRONI) -> float:

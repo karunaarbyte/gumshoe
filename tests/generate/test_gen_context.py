@@ -46,7 +46,7 @@ def test_streams_are_keyed_by_stage_counter_and_seed():
 
 
 def test_every_stage_has_a_version():
-    assert set(STAGE_VERSIONS) == set(STAGES) == {"roster", "truth", "timeline"}
+    assert set(STAGE_VERSIONS) == set(STAGES) == {"roster", "truth", "timeline", "facts"}
 
 
 @pytest.mark.parametrize("seed", [True, "1", None, 1.5])

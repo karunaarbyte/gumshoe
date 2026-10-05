@@ -3,14 +3,15 @@ until then every stage runs once, with stream counter 0."""
 
 from collections.abc import Mapping
 
-from gumshoe.cases.generate import roster, timeline, truth
+from gumshoe.cases.generate import facts, roster, timeline, truth
 from gumshoe.cases.generate.gen_context import STAGES, GenContext
-from gumshoe.cases.generate.outputs import Output, RosterOut, TimelineOut, TruthOut
+from gumshoe.cases.generate.outputs import FactsOut, Output, RosterOut, TimelineOut, TruthOut
 
 OUTPUT_TYPES: dict[str, type[Output]] = {
     "roster": RosterOut,
     "truth": TruthOut,
     "timeline": TimelineOut,
+    "facts": FactsOut,
 }
 
 
@@ -49,8 +50,15 @@ def run_structure(
             out[stage] = roster.run(ctx, ctx.stream(stage))
         elif stage == "truth":
             out[stage] = truth.run(ctx, ctx.stream(stage), _need(out, "roster", RosterOut))
-        else:
+        elif stage == "timeline":
             out[stage] = timeline.run(ctx, ctx.stream(stage), _need(out, "truth", TruthOut))
+        else:
+            out[stage] = facts.run(
+                ctx,
+                ctx.stream(stage),
+                _need(out, "truth", TruthOut),
+                _need(out, "timeline", TimelineOut),
+            )
         if stage == "truth" and stage in override and "roster" not in override:
             out["roster"] = _need(out, "truth", TruthOut).roster
         if stage == upto:
@@ -99,7 +107,7 @@ def _check_timeline_rows(truth: TruthOut, timeline: Output) -> None:
 
 def _check_overrides(ctx: GenContext, override: Mapping[str, Output]) -> None:
     """Refuse an override that does not fit the spec, or a truth about other people."""
-    roster, truth, timeline = (override.get(s) for s in STAGES)
+    roster, truth, timeline = (override.get(s) for s in ("roster", "truth", "timeline"))
     if isinstance(roster, RosterOut):
         _check_roster(ctx, "roster", roster)
     if isinstance(truth, TruthOut):
