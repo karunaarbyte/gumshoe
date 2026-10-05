@@ -80,3 +80,56 @@ class TimelineOut(Output):
     crime_slot: int
     rows: tuple[TimelineRow, ...]  # every suspect in every slot
     opportunity: tuple[str, ...]  # the wrong suspects at the scene (l0) in the crime slot
+
+
+class EffectDesc(Frozen):
+    axis: str  # "who" | "how" | "why"
+    candidate: str  # a neutral position: s0, m1, v2
+    kind: str  # "rules_out" | "supports" | "proves"
+
+
+class ClaimDesc(Frozen):
+    """A presence claim: `actor` was at the location `place` in time slot `slot`."""
+
+    actor: str
+    slot: int
+    place: str
+
+
+class HomeDesc(Frozen):
+    """Where a fact is found. `kind` is "record", "interrogate" or "search". A record's `target`
+    is its record kind and its `subject` a suspect or location position (None until placement
+    picks it); an interrogation's `target` is the suspect; a search fact has no home yet."""
+
+    kind: str
+    target: str | None = None
+    subject: str | None = None
+
+
+class FactDesc(Frozen):
+    id: str
+    kind: str  # a `FactKind` value
+    effects: tuple[EffectDesc, ...] = ()
+    claim: ClaimDesc | None = None
+    truthful: bool = True
+    speaker: str | None = None
+    exposed_by: tuple[str, ...] = ()
+    exposure_hook: HomeDesc | None = None
+    timeline_ref: tuple[str, ...] = ()  # event ids "e_<pos>_<slot>"
+    trace_kind: str | None = None
+    requires: tuple[str, ...] = ()  # only a decisive trace requires its supporting clue
+    home: HomeDesc
+    place_kinds: tuple[str, ...] = ()  # a search fact: the location kinds it may be found in
+    apart_from: str | None = None  # a search fact: another fact it must not share a location with
+
+
+class RecordSourceDesc(Frozen):
+    kind: str
+    subject_type: str  # "suspect" | "location"
+    subject: str | None  # None for a location record until placement picks the location
+
+
+class FactsOut(Output):
+    depth: int  # the gating depth, one value for every suspect
+    facts: tuple[FactDesc, ...]
+    record_sources: tuple[RecordSourceDesc, ...]
