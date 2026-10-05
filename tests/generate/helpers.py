@@ -5,6 +5,7 @@ from math import sqrt
 from typing import Any
 
 from gumshoe.cases.generate import facts, gating, placement, roster, timeline, truth
+from gumshoe.cases.generate.assemble import build_case
 from gumshoe.cases.generate.gen_context import GenContext
 from gumshoe.cases.generate.outputs import (
     FactsOut,
@@ -14,6 +15,7 @@ from gumshoe.cases.generate.outputs import (
     TimelineOut,
     TruthOut,
 )
+from gumshoe.cases.model.case import Case
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.tools.builtin import load_builtin_pack
 
@@ -62,6 +64,11 @@ def gating_of(
     """Every stage output for a context; `depth` forces the gating depth."""
     after, tl, fa, placed = placement_of(ctx, depth)
     return after, tl, fa, placed, gating.run(ctx, ctx.stream("gating"), after, fa, placed)
+
+
+def case_of(ctx: GenContext, depth: int | None = None) -> Case:
+    """The skeleton-only case of a context, built from the stages called one by one."""
+    return build_case(ctx, *gating_of(ctx, depth))
 
 
 def chi2_critical(df: int, z: float = Z_BONFERRONI) -> float:
