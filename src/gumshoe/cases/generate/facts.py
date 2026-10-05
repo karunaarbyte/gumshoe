@@ -145,7 +145,23 @@ def _suspect_facts(
                 home=ask,
             )
         )
-        lie_places = [loc.pos for loc in roster.locations[1:] if loc.pos != true_place]
+        non_scene = [loc.pos for loc in roster.locations[1:]]
+        if not non_scene:
+            raise GenerationError(f"{k} has no non-scene place to lie about")
+        # every suspect's lie avoids one decoy place, so the lie's place does not tell who was
+        # at the scene: an away suspect's decoy is their crime place, which the timeline drew
+        # among the places their record attests, and an at-scene suspect gets a place their
+        # record attests too
+        if at_scene:
+            attested_places = [
+                p for p in non_scene if kind_of[p] in records[s.record_kind].location_kinds
+            ]
+            if not attested_places:
+                raise GenerationError(f"{k}'s record kind attests no non-scene place")
+            decoy = stream.child(f"decoy/{k}").choice(attested_places)
+        else:
+            decoy = true_place
+        lie_places = [p for p in non_scene if p != decoy]
         if not lie_places:
             raise GenerationError(f"{k} has no non-scene place to lie about")
         out.append(

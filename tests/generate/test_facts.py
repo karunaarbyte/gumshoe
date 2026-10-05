@@ -1,4 +1,5 @@
 from dataclasses import replace
+from math import sqrt
 
 import pytest
 
@@ -262,3 +263,35 @@ def test_a_preset_with_no_feasible_depth_raises_a_generation_error():
     cramped = replace(ctx, spec=ctx.spec.model_copy(update={"source_cap": 2}))  # a record holds 3
     with pytest.raises(GenerationError, match="no gating depth fits"):
         facts_stage.run(cramped, cramped.stream("facts"), truth, timeline)
+
+
+def _attested_lie_rates(preset, seeds):
+    """Per class (culprit, opportunity, away): lies whose place kind the suspect's own record
+    kind attests, as (hits, trials)."""
+    pack = castle()
+    records = {d.key: d for d in pack.record_defs}
+    rates = {c: [0, 0] for c in ("culprit", "opportunity", "away")}
+    for seed in seeds:
+        ctx = GenContext.of(pack, seed, preset)
+        truth, timeline, out = facts_of(ctx)
+        kind_of = {loc.pos: loc.kind for loc in truth.roster.locations}
+        lies = {f.id: f for f in out.facts if f.id.startswith("l_")}
+        for s in truth.roster.suspects:
+            where = "culprit" if s.pos == "s0" else "away"
+            if s.pos in timeline.opportunity:
+                where = "opportunity"
+            place = lies[f"l_{s.pos}"].claim.place
+            rates[where][0] += kind_of[place] in records[s.record_kind].location_kinds
+            rates[where][1] += 1
+    return rates
+
+
+def test_a_lie_is_as_likely_to_name_an_attested_place_whoever_the_suspect_is():
+    rates = _attested_lie_rates("standard", range(6000))
+    away_hits, away_n = rates["away"]
+    for who in ("culprit", "opportunity"):
+        hits, n = rates[who]
+        pooled = (hits + away_hits) / (n + away_n)
+        se = sqrt(pooled * (1 - pooled) * (1 / n + 1 / away_n))
+        z = (hits / n - away_hits / away_n) / se
+        assert abs(z) < 3.3, (who, hits / n, away_hits / away_n, z)
