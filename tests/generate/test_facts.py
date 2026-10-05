@@ -280,7 +280,9 @@ def _attested_lie_rates(preset, seeds):
             where = "culprit" if s.pos == "s0" else "away"
             if s.pos in timeline.opportunity:
                 where = "opportunity"
-            place = lies[f"l_{s.pos}"].claim.place
+            claim = lies[f"l_{s.pos}"].claim
+            assert claim is not None
+            place = claim.place
             rates[where][0] += kind_of[place] in records[s.record_kind].location_kinds
             rates[where][1] += 1
     return rates
