@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+from gumshoe.cases.generate.api import generate
 from gumshoe.cases.generate.assemble import build_case
 from gumshoe.cases.generate.gen_context import GenContext
 from gumshoe.cases.model.serialize import skeleton_digest
@@ -28,6 +29,7 @@ def stage_digests() -> dict[str, dict[str, str]]:
                 "placement": placed.digest(),
                 "gating": gates.digest(),
                 "case": skeleton_digest(build_case(ctx, *outputs)),
+                "final": skeleton_digest(generate(seed, preset, pack)),
             }
     return found
 
