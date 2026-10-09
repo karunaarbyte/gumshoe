@@ -273,8 +273,8 @@ templates = [
   "A tall stand lay toppled {place.in}, cold wax spattered round its dented foot.",
 ]
 absent = [
-  "A tall stand {place.in} stood upright, its drip pan flat and its foot whole.",
-  "The brass holders {place.in} stood in a tidy row, their wax smooth and unbroken.",
+  "A tall stand {place.in} stood upright on its round foot, its brass gleaming.",
+  "A heavy stand {place.in} sat firm by the wall, its drip pan level.",
 ]
 
 [method_defs.poison_wine]
@@ -294,8 +294,8 @@ templates = [
   "A jug {place.in} held a purple film and gave off a sour smell.",
 ]
 absent = [
-  "The cups {place.in} stood upright and clean, their rims dry and bright.",
-  "A jug {place.in} held clear water and gave off a fresh, clean smell.",
+  "A cup {place.in} stood upright on the board, its inside pale and its rim dry.",
+  "A jug {place.in} held clear water and smelled faintly of apples.",
 ]
 
 [method_defs.dagger]
@@ -303,7 +303,7 @@ label = "stabbed with a dagger"
 aliases = ["knife", "blade"]
 clues = [
   "A whetstone {place.in} was still wet, with fresh grey streaks across its face.",
-  "A strip of oiled cloth {place.in} smelled of steel and lay twisted in a knot.",
+  "A strip of oiled cloth {place.in} smelled of steel and lay flat on the bench.",
   "A belt hook {place.in} swung empty on its nail.",
 ]
 
@@ -315,8 +315,8 @@ templates = [
   "A slim steel point had snapped off and lay glinting {place.in}.",
 ]
 absent = [
-  "A leather sheath {place.in} hung full on its peg, its slim steel point whole and bright.",
-  "Slim steel points {place.in} lay in a neat rank, whole and bright.",
+  "A leather sheath {place.in} hung full on its peg, snug round a slim blade.",
+  "A slim steel blade {place.in} lay glinting on a shelf, its point sharp.",
 ]
 
 [method_defs.rope]
@@ -336,16 +336,16 @@ templates = [
   "A shiny worn groove ran round a post {place.in}, and frayed strands lay beneath.",
 ]
 absent = [
-  "A rough post {place.in} stood smooth and clean, its surface bright and whole.",
-  "The posts {place.in} were smooth to the touch, with firm wood and tidy corners.",
+  "A rough post {place.in} stood firm and dry, its grain pale and tight.",
+  "A post {place.in} rose straight from the floor, its surface dull and even.",
 ]
 
 [method_defs.crossbow]
 label = "shot with a crossbow"
 aliases = ["arbalest", "bolt"]
 clues = [
-  "A coil of waxed string lay {place.in}, cut to the length of a bow.",
-  "A watchman said a small iron winch had gone from the armoury and was last seen {place.in}.",
+  "A bent iron winch handle lay {place.in}, its grip worn by use.",
+  "A watchman said a small winch had left the armoury and turned up {place.in}.",
   "A fresh patch of new wood {place.in} had been pegged over an old hole in a door.",
 ]
 
@@ -357,8 +357,8 @@ templates = [
   "A neat splintered hole had been punched clean through a door {place.in}.",
 ]
 absent = [
-  "The door {place.in} hung smooth and whole, its planks gleaming with fresh oil.",
-  "A row of doors {place.in} stood clean, every plank fresh and tight.",
+  "A stout door {place.in} hung flat on its hinges, its planks dark with fresh oil.",
+  "A door {place.in} stood shut and solid, its oak face dark and even.",
 ]
 
 [method_defs.fall_from_height]
@@ -378,8 +378,8 @@ templates = [
   "A rail hung broken over a drop {place.in}, its upright snapped clean off.",
 ]
 absent = [
-  "The high ledge {place.in} looked smooth, and the grit below lay in a neat line.",
-  "A rail over a drop {place.in} stood firm, its uprights whole and tight.",
+  "A high ledge {place.in} looked grey and even, with grit in a neat line below.",
+  "A rail {place.in} ran firm over a drop, its uprights straight and deep set.",
 ]
 
 [scene_types.murder_in_chapel]

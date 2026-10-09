@@ -176,3 +176,11 @@ def test_every_method_has_as_many_absent_texts_as_templates_and_three_clues(pack
             assert "place.in" in _slots(text), text
         for text in method.clues:
             assert "place.in" in _slots(text), text
+
+
+def test_absent_texts_open_like_the_trace_templates(pack):
+    openers = {t.split()[0] for m in pack.method_defs for tr in m.traces for t in tr.templates}
+    for method in pack.method_defs:
+        for trace in method.traces:
+            for text in trace.absent:
+                assert text.split()[0] in openers, (method.key, text)
