@@ -215,7 +215,7 @@ secrets = [
 hints = [
   "{^who} started whenever a messenger crossed the yard.",
   "{^who} burned each scrap of paper in the nearest fire.",
-  "{^who} counted out small coins twice and hid them in a sock.",
+  "{^who} kept a sealed letter stitched into the lining of an old coat.",
 ]
 
 [motive_defs.debt]
@@ -252,9 +252,9 @@ secrets = [
   "{^who} slept with a stool wedged against the door.",
 ]
 hints = [
-  "{^who} checked the latch on the door twice before sleeping.",
-  "{^who} jumped at the slam of a shutter.",
-  "{^who} kept to the middle of the corridor and away from each corner.",
+  "{^who} left a small lamp burning in {who.poss} room until the dawn bell.",
+  "{^who} was unwilling to cross the yard once dusk had fallen.",
+  "{^who} always chose a seat that faced the entrance of the hall.",
 ]
 
 [motive_defs.inheritance]

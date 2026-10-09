@@ -194,3 +194,5 @@ def test_every_motive_has_three_hints_that_carry_no_place_or_time(pack):
         for hint in motive.hints:
             assert set(PLACEHOLDER.findall(hint)) <= ALLOWED_SECRET_SLOTS, hint
             assert "who" in _slots(hint), hint
+            assert hint not in motive.secrets, hint
+            assert hint.startswith("{^who}") and hint.endswith("."), hint
