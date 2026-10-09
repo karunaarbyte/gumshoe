@@ -16,11 +16,13 @@ from gumshoe.cases.packs.check.lint import (
 )
 from gumshoe.cases.tools.builtin import load_builtin_pack
 from tests.packs.test_castle import (
+    ALLOWED_SECRET_SLOTS,
     AUDIENCES,
     BODY_WORDS,
     CERTAINTY_WORDS,
     HARD_CODED_RECORD_NAMES,
     NEGATIONS,
+    PLACEHOLDER,
     SAMPLE,
     WITNESS_NOUNS,
     _found,
@@ -184,3 +186,11 @@ def test_absent_texts_open_like_the_trace_templates(pack):
         for trace in method.traces:
             for text in trace.absent:
                 assert text.split()[0] in openers, (method.key, text)
+
+
+def test_every_motive_has_three_hints_that_carry_no_place_or_time(pack):
+    for motive in pack.motive_defs:
+        assert len(motive.hints) == 3, motive.key
+        for hint in motive.hints:
+            assert set(PLACEHOLDER.findall(hint)) <= ALLOWED_SECRET_SLOTS, hint
+            assert "who" in _slots(hint), hint

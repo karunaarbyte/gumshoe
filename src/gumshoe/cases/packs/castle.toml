@@ -199,6 +199,11 @@ secrets = [
   "{^who} had tried on the lord's chain of office when alone.",
   "{^who} had quietly courted the favour of every guest of rank.",
 ]
+hints = [
+  "{^who} watched the lord's high seat at meals with a long, quiet look.",
+  "{^who} kept a set of good clothes ready for a day of higher rank.",
+  "{^who} asked many questions about who sat nearest the lord.",
+]
 
 [motive_defs.blackmail]
 label = "to escape blackmail"
@@ -206,6 +211,11 @@ aliases = ["blackmail", "extortion"]
 secrets = [
   "{^who} had been paying someone in secret to keep an old letter hidden.",
   "{^who} had received a note demanding payment to keep an old shame from the lord.",
+]
+hints = [
+  "{^who} started whenever a messenger crossed the yard.",
+  "{^who} burned each scrap of paper in the nearest fire.",
+  "{^who} counted out small coins twice and hid them in a sock.",
 ]
 
 [motive_defs.debt]
@@ -215,6 +225,11 @@ secrets = [
   "{^who} had pawned a silver ring and could not buy it back.",
   "{^who} had lost a whole season's wages at dice.",
 ]
+hints = [
+  "{^who} avoided the pedlars who came to the gate with their trays of goods.",
+  "{^who} sold small things from {who.poss} room one by one.",
+  "{^who} looked away whenever dice were mentioned at the long table.",
+]
 
 [motive_defs.faith]
 label = "out of faith"
@@ -222,6 +237,11 @@ aliases = ["faith", "devotion"]
 secrets = [
   "{^who} wore a hair shirt in secret and fasted for days.",
   "{^who} spoke of a holy duty that outweighed all earthly law.",
+]
+hints = [
+  "{^who} rose before the bell and knelt on the cold flags.",
+  "{^who} gave most of {who.poss} bread to the poor at the gate.",
+  "{^who} was often found murmuring over a string of beads.",
 ]
 
 [motive_defs.fear]
@@ -231,6 +251,11 @@ secrets = [
   "{^who} flinched at every footstep in the corridor.",
   "{^who} slept with a stool wedged against the door.",
 ]
+hints = [
+  "{^who} checked the latch on the door twice before sleeping.",
+  "{^who} jumped at the slam of a shutter.",
+  "{^who} kept to the middle of the corridor and away from each corner.",
+]
 
 [motive_defs.inheritance]
 label = "to claim an inheritance"
@@ -238,6 +263,11 @@ aliases = ["inheritance", "legacy"]
 secrets = [
   "{^who} was the last living kin of the old lord's brother.",
   "{^who} had kept a copy of the lord's will with one line underlined.",
+]
+hints = [
+  "{^who} knew the names in the lord's family tree by heart.",
+  "{^who} asked often after the lord's health with a thoughtful frown.",
+  "{^who} kept a close count of the lord's years.",
 ]
 
 [motive_defs.jealousy]
@@ -247,6 +277,11 @@ secrets = [
   "{^who} stared at the lord's favourites with narrowed eyes.",
   "{^who} was heard muttering that the lord's favourite had stolen a sweetheart.",
 ]
+hints = [
+  "{^who} fell silent whenever the lord's favourite was praised.",
+  "{^who} sat close to the lord's favourite at meals and watched each gesture.",
+  "{^who} found fault with the dress of the lord's favourite.",
+]
 
 [motive_defs.revenge]
 label = "to take revenge"
@@ -254,6 +289,11 @@ aliases = ["revenge", "vengeance"]
 secrets = [
   "{^who} had never forgiven the lord for a sister sent away in disgrace.",
   "{^who} was heard swearing that someone would answer for it one day.",
+]
+hints = [
+  "{^who} kept an old scrap of cloth from a bad day and looked at it often.",
+  "{^who} recited a list of old wrongs under {who.poss} breath.",
+  "{^who} marked each slight on a notched stick.",
 ]
 
 [method_defs.candlestick]
