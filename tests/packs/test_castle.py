@@ -113,6 +113,9 @@ SAMPLE = {
     "time.at": "at vespers",
     "time.during": "during vespers",
     "record": "the household register",
+    "victim": "Lord Aldric",
+    "victim.subj": "he",
+    "victim.poss": "his",
 }
 
 

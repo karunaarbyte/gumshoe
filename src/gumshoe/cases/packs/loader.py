@@ -1,9 +1,10 @@
 """Pack text to a `Pack` plus every issue. Pure: it takes bytes, never touches a file.
 
 The TOML layout: `[meta]` (its `META_FIELDS` are flattened into the pack), `[capacity]`, array
-tables `slot_defs` and `families`, and keyed tables (`location_defs.<key>`, `record_defs`,
-`method_defs`, `motive_defs`, `roles`, `scene_types`) that become keyed lists. Pydantic errors are
-rewritten as pack issues with key paths. Any stage 1 issue stops the load (spec 5): no pack."""
+tables `slot_defs`, `families` and `victims`, and keyed tables (`location_defs.<key>`,
+`record_defs`, `method_defs`, `motive_defs`, `roles`, `scene_types`) that become keyed lists.
+Pydantic errors are rewritten as pack issues with key paths. Any stage 1 issue stops the load
+(spec 5): no pack."""
 
 import tomllib
 from collections.abc import Mapping
@@ -20,9 +21,9 @@ from gumshoe.cases.packs.runner import check_pack, sorted_issues
 from gumshoe.cases.packs.suggest import did_you_mean
 
 KEYED = ("location_defs", "record_defs", "method_defs", "motive_defs", "roles", "scene_types")
-LISTS = ("slot_defs", "families")
+LISTS = ("slot_defs", "families", "victims")
 SECTIONS = frozenset({"meta", "capacity", *KEYED, *LISTS})
-META_FIELDS = frozenset({"id", "skeleton_rev", "skin_rev", "slots", "presets"})
+META_FIELDS = frozenset({"id", "skeleton_rev", "skin_rev", "slots", "presets", "smalltalk_allow"})
 
 
 @dataclass(frozen=True)

@@ -20,6 +20,9 @@ KNOWN_PLACEHOLDERS = frozenset(
         "time.at",
         "time.during",
         "record",
+        "victim",
+        "victim.subj",
+        "victim.poss",
     }
 )
 _PLACEHOLDER = re.compile(r"\{(\^?)([^{}]*)\}")
@@ -38,6 +41,9 @@ SAMPLES: tuple[dict[str, str], ...] = (
         "time.at": "at vespers",
         "time.during": "during vespers",
         "record": "the register",
+        "victim": "Lord Aldric",
+        "victim.subj": "he",
+        "victim.poss": "his",
     },
     {
         "who": "Maud",
@@ -51,6 +57,9 @@ SAMPLES: tuple[dict[str, str], ...] = (
         "time.at": "at the feast",
         "time.during": "during the feast",
         "record": "the old gate log",
+        "victim": "Lady Maud",
+        "victim.subj": "she",
+        "victim.poss": "her",
     },
 )
 
@@ -74,6 +83,12 @@ def pack_sample(pack: Pack) -> dict[str, str]:
     if place is not None:
         sample["place"] = phrase(place)
         sample["place.in"] = f"in {phrase(place)}"
+    if pack.victims:
+        lord = pack.victims[0]
+        subject = lord.pronoun or "they"
+        sample.update(
+            {"victim": phrase(lord), "victim.subj": subject, "victim.poss": _POSSESSIVE[subject]}
+        )
     if pack.slot_defs:
         slot = pack.slot_defs[0]
         sample.update({"time.phrase": slot.at, "time.at": slot.at, "time.during": slot.during})

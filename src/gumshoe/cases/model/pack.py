@@ -65,12 +65,14 @@ class RecordDef(Frozen):
     presence: tuple[str, ...] = ()
     names: tuple[Entry, ...] = ()  # display names; the first one is what `{record}` renders
     location_kinds: SetTexts = ()  # the kinds of place this record kind can attest
+    entries: tuple[str, ...] = ()  # neutral lines a record about a place holds (skin only)
 
 
 class TraceDef(Frozen):
     kind: str
     location_kinds: SetTexts = ()
     templates: tuple[str, ...] = ()
+    absent: tuple[str, ...] = ()  # what the trace would have left and is not there
 
 
 class MethodDef(Frozen):
@@ -78,6 +80,7 @@ class MethodDef(Frozen):
     label: str
     aliases: SetTexts = ()
     traces: tuple[TraceDef, ...] = ()
+    clues: tuple[str, ...] = ()  # supporting texts that belong to this method and hold no trace
 
     @field_validator("traces", mode="after")
     @classmethod
@@ -90,6 +93,7 @@ class MotiveDef(Frozen):
     label: str
     aliases: SetTexts = ()
     secrets: tuple[str, ...] = ()
+    hints: tuple[str, ...] = ()  # evoke the motive; a secret proves it
 
 
 class FamilyDef(Frozen):
@@ -106,6 +110,7 @@ class RoleDef(Frozen):
     names: tuple[Entry, ...] = ()
     traits: tuple[str, ...] = ()
     noun: str = ""  # display noun: a suspect's label is "<name> the <noun>"
+    style: str = ""  # how the suspect talks (the persona brief)
 
     @field_validator("record_kinds", "motive_types", mode="after")
     @classmethod
@@ -129,6 +134,8 @@ class Pack(Frozen):
     method_defs: tuple[MethodDef, ...] = ()
     motive_defs: tuple[MotiveDef, ...] = ()
     families: tuple[FamilyDef, ...] = ()
+    victims: tuple[Entry, ...] = ()  # the lord, with his title: "Lord Aldric"
+    smalltalk_allow: SetTexts = ()  # single words `reply_check` never flags
 
     @field_validator("record_kinds", mode="after")
     @classmethod
