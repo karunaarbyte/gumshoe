@@ -4,6 +4,37 @@ skeleton_rev = 1
 skin_rev = 2
 slots = 4
 presets = ["long", "short", "standard"]
+smalltalk_allow = [
+  "ale",
+  "bread",
+  "breakfast",
+  "castle",
+  "cheers",
+  "cold",
+  "dinner",
+  "evening",
+  "fire",
+  "garden",
+  "goodbye",
+  "hello",
+  "household",
+  "indeed",
+  "morning",
+  "music",
+  "pardon",
+  "please",
+  "rain",
+  "soup",
+  "sunshine",
+  "supper",
+  "thanks",
+  "today",
+  "tomorrow",
+  "warm",
+  "weather",
+  "welcome",
+  "yesterday",
+]
 
 [capacity]
 max_suspects = 8
@@ -99,6 +130,11 @@ presence = [
   "{^record} showed {who} {place.in} {time.at}.",
   "By {record}, {who} was {place.in} {time.at}.",
 ]
+entries = [
+  "{^record} lay open on a slanted desk, its pages soft with handling.",
+  "{^record} was kept in a leather binding and ruled in neat columns.",
+  "Several hands had written in {record}, some bold and some cramped.",
+]
 
 [record_defs.chapel_register]
 subject = "suspect"
@@ -118,6 +154,7 @@ names = [
   { text = "Wynne", pronoun = "she", proper = true },
 ]
 noun = "bard"
+style = "chatty and playful; answers with a joke or a snatch of song"
 traits = ["lean and bright-eyed", "carrying a worn lute"]
 record_kinds = ["visitor_ledger", "chapel_register"]
 motive_types = ["ambition", "blackmail", "faith", "inheritance", "jealousy"]
@@ -128,6 +165,7 @@ names = [
   { text = "Maud", pronoun = "she", proper = true },
 ]
 noun = "clerk"
+style = "precise and formal; gives details in order"
 traits = ["ink-stained and neat", "thin and stooped"]
 record_kinds = ["visitor_ledger", "gate_log", "chapel_register"]
 motive_types = ["ambition", "blackmail", "debt", "fear", "inheritance"]
@@ -138,6 +176,7 @@ names = [
   { text = "Gilbert", pronoun = "he", proper = true },
 ]
 noun = "cook"
+style = "blunt and warm; grumbles about the long hours"
 traits = ["broad and ruddy", "forever smelling of onions"]
 record_kinds = ["chapel_register", "gate_log"]
 motive_types = ["debt", "faith", "fear", "jealousy", "revenge"]
@@ -148,6 +187,7 @@ names = [
   { text = "Piers", pronoun = "he", proper = true },
 ]
 noun = "falconer"
+style = "terse and watchful; speaks of birds and weather"
 traits = ["weathered and wiry", "always with a glove on one hand"]
 record_kinds = ["chapel_register", "gate_log"]
 motive_types = ["ambition", "faith", "inheritance", "jealousy", "revenge"]
@@ -158,6 +198,7 @@ names = [
   { text = "Alys", pronoun = "she", proper = true },
 ]
 noun = "groom"
+style = "easygoing and shy; gives short answers about horses"
 traits = ["sturdy and sunburnt", "smelling of hay and horses"]
 record_kinds = ["chapel_register", "gate_log"]
 motive_types = ["faith", "fear", "inheritance", "jealousy", "revenge"]
@@ -168,6 +209,7 @@ names = [
   { text = "Isolde", pronoun = "she", proper = true },
 ]
 noun = "maid"
+style = "quick and chatty; passes on household talk"
 traits = ["freckled and brisk", "with a kerchief over her hair"]
 record_kinds = ["chapel_register", "visitor_ledger"]
 motive_types = ["blackmail", "debt", "faith", "fear", "jealousy"]
@@ -178,6 +220,7 @@ names = [
   { text = "Roger", pronoun = "he", proper = true },
 ]
 noun = "priest"
+style = "slow and gentle; speaks like someone used to sermons"
 traits = ["grey-haired and soft-spoken", "with a slow, steady gait"]
 record_kinds = ["chapel_register"]
 motive_types = ["ambition", "blackmail", "debt", "fear", "revenge"]
@@ -188,6 +231,7 @@ names = [
   { text = "Hugh", pronoun = "he", proper = true },
 ]
 noun = "steward"
+style = "stiff and proud; speaks like someone used to giving orders"
 traits = ["tall and upright", "with a heavy bunch of keys at his belt"]
 record_kinds = ["visitor_ledger", "gate_log"]
 motive_types = ["ambition", "blackmail", "debt", "inheritance", "revenge"]
@@ -696,3 +740,38 @@ variants = [
   "{^victim} was killed {place.in} {time.during}, and the gates were closed at once.",
   "Someone had ended the life of {victim} {place.in} {time.during}, and the castle held its breath.",
 ]
+
+[[victims]]
+text = "Lord Aldric"
+pronoun = "he"
+proper = true
+
+[[victims]]
+text = "Lord Godwin"
+pronoun = "he"
+proper = true
+
+[[victims]]
+text = "Lord Osmund"
+pronoun = "he"
+proper = true
+
+[[victims]]
+text = "Lord Baldric"
+pronoun = "he"
+proper = true
+
+[[victims]]
+text = "Lord Ranulf"
+pronoun = "he"
+proper = true
+
+[[victims]]
+text = "Lord Wulfric"
+pronoun = "he"
+proper = true
+
+[[victims]]
+text = "Lord Hamo"
+pronoun = "he"
+proper = true

@@ -196,3 +196,24 @@ def test_every_motive_has_three_hints_that_carry_no_place_or_time(pack):
             assert "who" in _slots(hint), hint
             assert hint not in motive.secrets, hint
             assert hint.startswith("{^who}") and hint.endswith("."), hint
+
+
+def test_the_location_record_entries_are_neutral(pack):
+    entries = [e for d in pack.record_defs if d.subject == "location" for e in d.entries]
+    assert len(entries) >= 3
+    for entry in entries:
+        assert _slots(entry) <= {"record"}, entry
+    suspect_entries = [e for d in pack.record_defs if d.subject != "location" for e in d.entries]
+    assert suspect_entries == []
+
+
+def test_the_victims_are_lords_with_a_title_and_a_pronoun(pack):
+    assert len(pack.victims) >= 6
+    for victim in pack.victims:
+        assert victim.text.startswith("Lord ") and victim.pronoun == "he" and victim.proper
+    assert len({v.text for v in pack.victims}) == len(pack.victims)
+
+
+def test_every_role_has_its_own_style(pack):
+    styles = [r.style for r in pack.roles]
+    assert all(len(s) >= 10 for s in styles) and len(set(styles)) == len(styles)

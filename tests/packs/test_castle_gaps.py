@@ -4,12 +4,7 @@ from gumshoe.cases.packs.check import skin_inputs
 from gumshoe.cases.tools.builtin import load_builtin_pack
 
 # Each chunk of plan 2c.1b removes its prefix from this tuple; the last one empties it.
-PENDING = (
-    "record_defs",
-    "victims",
-    "meta.smalltalk_allow",
-    "roles",
-)
+PENDING: tuple[str, ...] = ()
 
 
 def _paths() -> list[str]:
@@ -18,8 +13,3 @@ def _paths() -> list[str]:
 
 def test_every_gap_belongs_to_a_chunk_that_is_still_pending():
     assert [p for p in _paths() if not p.startswith(PENDING)] == []
-
-
-def test_every_pending_chunk_still_has_a_gap():
-    paths = _paths()
-    assert [prefix for prefix in PENDING if not any(p.startswith(prefix) for p in paths)] == []
