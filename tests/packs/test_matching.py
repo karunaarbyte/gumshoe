@@ -108,10 +108,13 @@ def _wide_pack(roles: int, motives: int, suspects: int) -> Pack:
                     noun=f"n{i:02}",
                     record_kinds=("ledger",),
                     motive_types=keys,
+                    style="calm",
                 )
                 for i in range(roles)
             ),
-            "motive_defs": tuple(MotiveDef(key=k, label=f"motive {k}") for k in keys),
+            "motive_defs": tuple(
+                MotiveDef(key=k, label=f"motive {k}", hints=base.motive_defs[0].hints) for k in keys
+            ),
         }
     )
 
@@ -121,7 +124,7 @@ def test_a_matching_check_over_the_budget_is_an_unsupported_preset_and_is_fast()
     start = time.perf_counter()
     issues = check_pack(_wide_pack(12, 8, 7), presets)
     elapsed = time.perf_counter() - start
-    (issue,) = [i for i in issues if i.stage >= 6]
+    (issue,) = [i for i in issues if 6 <= i.stage <= 7]
     assert (issue.code, issue.path) == ("PRESET_UNSUPPORTED", "meta.presets[big]")
     bound = comb(12, 7) * perm(8, 7)
     assert (
@@ -152,5 +155,5 @@ def test_a_pack_just_inside_the_budget_is_still_enumerated_exactly(monkeypatch, 
     monkeypatch.setattr(capacity, "MATCHING_BUDGET", bound)
     assert check_pack(pack, TEST_PRESETS) == before
     monkeypatch.setattr(capacity, "MATCHING_BUDGET", bound - 1)
-    after = [(i.code, i.path) for i in check_pack(pack, TEST_PRESETS) if i.stage >= 6]
+    after = [(i.code, i.path) for i in check_pack(pack, TEST_PRESETS) if 6 <= i.stage <= 7]
     assert after == [("PRESET_UNSUPPORTED", "meta.presets[quad]")]

@@ -131,12 +131,14 @@ mutation(
     "TRACE_COUNT_SKEW",
     replace('  "A frayed length of hemp was found coiled up {place.in} near the door.",\n', ""),
 )
+# the longer template also pulls the mean of the templates away from the mean of the absent texts
 mutation(
     "TRACE_LENGTH_SKEW",
     replace(
         "in a long arc.",
         "in a long arc. It was the kind of mark that takes a long and careful look to notice.",
     ),
+    {"TRACE_LENGTH_SKEW", "TEXT_LENGTH_SKEW"},
 )
 
 # "stabbing" stems to the dagger's distinctive token "stab"
@@ -295,19 +297,3 @@ mutation(
 )
 # "wine" is a token of the poison method's alias "laced wine"
 mutation("BAD_SMALLTALK_WORD", replace('"warm", "weather",', '"warm", "wine",'))
-
-# stage 8 joins the load pipeline in the last task of plan 2c.1b; until then these run directly
-# against the stage 8 module (tests/packs/test_skin_inputs.py) and not through `load_pack`
-STAGE_8_CODES = frozenset(
-    {
-        "MISSING_FAMILY",
-        "DUPLICATE_FAMILY_KIND",
-        "TOO_FEW_TEXTS",
-        "ENTRY_INCOMPLETE",
-        "TEXT_COUNT_SKEW",
-        "TEXT_LENGTH_SKEW",
-        "PAIR_COUNT_SKEW",
-        "PAIR_LENGTH_SKEW",
-        "BAD_SMALLTALK_WORD",
-    }
-)

@@ -1,10 +1,7 @@
-import pytest
-
 from gumshoe.cases.model.pack import Entry, FamilyDef, Pack
 from gumshoe.cases.packs.check import skin_inputs
 from gumshoe.cases.packs.loader import load_pack
 from tests.packs.fixtures import SKIN_BASE_TOML, TEST_PRESETS
-from tests.packs.mutations import MUTATIONS, STAGE_8_CODES
 from tests.packs.test_skin_texts import with_method, with_motive, with_trace
 
 
@@ -151,12 +148,3 @@ def test_the_small_talk_list_may_hold_only_one_plain_word_that_is_no_candidates_
 def test_a_repeated_small_talk_word_is_reported():
     pack = base().model_copy(update={"smalltalk_allow": (*base().smalltalk_allow, "ale")})
     assert found(pack) == [("BAD_SMALLTALK_WORD", "meta.smalltalk_allow[20]")]
-
-
-@pytest.mark.parametrize("code", sorted(STAGE_8_CODES))
-def test_stage_8_mutation_reports_exactly_its_declared_cascade(code):
-    mutation = MUTATIONS[code]
-    result = load_pack(mutation.apply(SKIN_BASE_TOML).encode(), TEST_PRESETS)
-    assert result.pack is not None
-    codes = {i.code for i in result.issues} | {i.code for i in skin_inputs.check(result.pack)}
-    assert codes == mutation.expected, found(result.pack)

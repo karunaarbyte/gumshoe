@@ -11,7 +11,15 @@ import pytest
 
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.packs.catalogue import PACK_CATALOGUE, make
-from gumshoe.cases.packs.check import capacity, hygiene, matching, plausibility, refs, templates
+from gumshoe.cases.packs.check import (
+    capacity,
+    hygiene,
+    matching,
+    plausibility,
+    refs,
+    skin_inputs,
+    templates,
+)
 from gumshoe.cases.packs.issues import PackIssue
 from gumshoe.cases.packs.loader import load_pack
 from gumshoe.cases.packs.runner import check_pack
@@ -45,6 +53,7 @@ _STAGES = {
     5: plausibility,
     6: capacity,
     7: matching,
+    8: skin_inputs,
 }
 
 
@@ -72,12 +81,12 @@ def test_a_stage_2_issue_stops_every_later_stage(monkeypatch):
     assert _run_with_issues_at(monkeypatch, {2}) == [2]
 
 
-def test_a_stage_5_issue_stops_stages_6_and_7_but_not_3_and_4(monkeypatch):
-    assert _run_with_issues_at(monkeypatch, {5}) == [2, 3, 4, 5]
+def test_a_stage_5_issue_stops_stages_6_and_7_but_not_3_4_and_8(monkeypatch):
+    assert _run_with_issues_at(monkeypatch, {5}) == [2, 3, 4, 8, 5]
 
 
-def test_stage_3_and_4_issues_do_not_stop_stages_6_and_7(monkeypatch):
-    assert _run_with_issues_at(monkeypatch, {3, 4}) == [2, 3, 4, 5, 6, 7]
+def test_stage_3_4_and_8_issues_do_not_stop_stages_6_and_7(monkeypatch):
+    assert _run_with_issues_at(monkeypatch, {3, 4, 8}) == [2, 3, 4, 8, 5, 6, 7]
 
 
 def _castle_text() -> str:
