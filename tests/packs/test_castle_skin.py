@@ -5,8 +5,15 @@ from collections.abc import Iterator
 
 import pytest
 
+from gumshoe.cases.core.labels import token_set
 from gumshoe.cases.model.pack import FamilyDef, Pack
-from gumshoe.cases.packs.check.lint import KNOWN_PLACEHOLDERS, SAMPLES, placeholders, render
+from gumshoe.cases.packs.check.lint import (
+    KNOWN_PLACEHOLDERS,
+    SAMPLES,
+    blank_placeholders,
+    placeholders,
+    render,
+)
 from gumshoe.cases.tools.builtin import load_builtin_pack
 from tests.packs.test_castle import (
     AUDIENCES,
@@ -84,6 +91,9 @@ def test_the_two_physical_families_pair_up_variant_by_variant(pack):
     for a, b in zip(proof.variants, clear.variants, strict=True):
         assert _slots(a) == _slots(b) == {"who", "record"}, (a, b)
         assert _union([a], PHYSICAL_NOUNS) == _union([b], PHYSICAL_NOUNS), (a, b)
+    mean_proof = sum(len(render(t, SAMPLES[0])) for t in proof.variants) / len(proof.variants)
+    mean_clear = sum(len(render(t, SAMPLES[0])) for t in clear.variants) / len(clear.variants)
+    assert abs(mean_proof - mean_clear) <= 0.1 * max(mean_proof, mean_clear)
 
 
 def test_the_physical_and_contradiction_texts_name_their_record_by_placeholder(pack):
@@ -110,6 +120,11 @@ def test_the_intro_names_no_suspect_role_and_says_who_died_where_and_when(pack):
     assert _found(variants, roles) == []
     for variant in variants:
         assert {"victim", "place.in", "time.during"} <= _slots(variant)
+    named = token_set(
+        *(x for d in (*pack.method_defs, *pack.motive_defs) for x in (d.label, *d.aliases))
+    )
+    for variant in variants:
+        assert not token_set(blank_placeholders(variant)) & named, variant
 
 
 def test_no_new_text_states_a_certainty_or_a_negation(pack):
