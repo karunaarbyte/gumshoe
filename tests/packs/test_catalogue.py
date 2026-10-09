@@ -14,9 +14,9 @@ def test_pack_codes_never_collide_with_case_codes():
     assert set(PACK_CATALOGUE) & set(CATALOGUE) == set()
 
 
-def test_every_code_names_a_stage_one_to_seven_and_a_one_line_message():
+def test_every_code_names_a_stage_one_to_eight_and_a_one_line_message():
     for spec in PACK_CATALOGUE.values():
-        assert 1 <= spec.stage <= 7 and spec.message and "\n" not in spec.message
+        assert 1 <= spec.stage <= 8 and spec.message and "\n" not in spec.message
 
 
 @pytest.mark.parametrize("code", sorted(PACK_CATALOGUE))

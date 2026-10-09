@@ -143,6 +143,56 @@ _ROWS = (
         "roster",
         "percent",
     ),
+    # stage 8: skin inputs
+    _row("MISSING_FAMILY", 8, "the pack has no family of the required kind {kind!r}", "kind"),
+    _row(
+        "DUPLICATE_FAMILY_KIND",
+        8,
+        "{count} families carry the kind {kind!r}; a required kind needs exactly one",
+        "count",
+        "kind",
+    ),
+    _row(
+        "TOO_FEW_TEXTS",
+        8,
+        "this list has {count} texts; needs at least {needed}",
+        "count",
+        "needed",
+    ),
+    _row("ENTRY_INCOMPLETE", 8, "{what}", "what"),
+    _row(
+        "TEXT_COUNT_SKEW",
+        8,
+        "this candidate has {count} {what}; the largest count is {target}",
+        "what",
+        "count",
+        "target",
+    ),
+    _row(
+        "TEXT_LENGTH_SKEW",
+        8,
+        "mean length of the {what} is {mean}; {against} is {overall} (allowed gap {percent}%)",
+        "what",
+        "mean",
+        "against",
+        "overall",
+        "percent",
+    ),
+    _row(
+        "PAIR_COUNT_SKEW",
+        8,
+        "physical_proof has {proof} variants and physical_clear has {clear}",
+        "proof",
+        "clear",
+    ),
+    _row("PAIR_LENGTH_SKEW", 8, "the physical pair is shaped differently: {reason}", "reason"),
+    _row(
+        "BAD_SMALLTALK_WORD",
+        8,
+        "the small-talk entry {word!r} is not allowed: {reason}",
+        "word",
+        "reason",
+    ),
 )
 
 PACK_CATALOGUE: dict[str, PackIssueSpec] = {spec.code: spec for spec in _ROWS}

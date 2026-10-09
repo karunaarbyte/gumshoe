@@ -40,3 +40,12 @@
 | PRESET_UNSUPPORTED | 6 | error | the pack cannot host this preset: {reason} |
 | MOTIVE_TOO_PREDICTABLE | 7 | error | in roster {roster} this role gets this motive {percent}% of the time; the cap is 50% |
 | NO_PERFECT_MATCHING | 7 | error | no suspect-to-motive matching exists for roster {roster} |
+| BAD_SMALLTALK_WORD | 8 | error | the small-talk entry {word!r} is not allowed: {reason} |
+| DUPLICATE_FAMILY_KIND | 8 | error | {count} families carry the kind {kind!r}; a required kind needs exactly one |
+| ENTRY_INCOMPLETE | 8 | error | {what} |
+| MISSING_FAMILY | 8 | error | the pack has no family of the required kind {kind!r} |
+| PAIR_COUNT_SKEW | 8 | error | physical_proof has {proof} variants and physical_clear has {clear} |
+| PAIR_LENGTH_SKEW | 8 | error | the physical pair is shaped differently: {reason} |
+| TEXT_COUNT_SKEW | 8 | error | this candidate has {count} {what}; the largest count is {target} |
+| TEXT_LENGTH_SKEW | 8 | error | mean length of the {what} is {mean}; {against} is {overall} (allowed gap {percent}%) |
+| TOO_FEW_TEXTS | 8 | error | this list has {count} texts; needs at least {needed} |

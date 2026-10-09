@@ -142,7 +142,7 @@ TEST_PRESETS = {
     "quad": preset("quad", 4, 3),
 }
 
-BASE_TOML = """\
+BASE_TOML_NO_SKIN = """\
 [meta]
 id = "tiny"
 skeleton_rev = 1
@@ -310,3 +310,178 @@ variants = [
   "Records place {who} nearby {time.at}.",
 ]
 """
+
+
+# What stage 8 asks of a pack, added to the base pack. Edits are (old, new) pairs applied once each,
+# in order; every `old` is a unique anchor in `BASE_TOML_NO_SKIN`.
+_FAMILIES = """
+[[families]]
+id = "physical_proof"
+kind = "physical_proof"
+claim_slots = ["who", "record"]
+variants = [
+  "{^record} noted the cloak of {who}, damp and torn at the hem.",
+  "An entry in {record} described the boots of {who}: caked with mud along the soles.",
+  "{^record} listed the gloves of {who} as scuffed and creased across the palms.",
+  "{^record} recorded that the belt of {who} was smeared and its buckle bent.",
+  "{^record} mentioned the cap of {who}, crushed with a bent brim.",
+]
+
+[[families]]
+id = "physical_clear"
+kind = "physical_clear"
+claim_slots = ["who", "record"]
+variants = [
+  "{^record} noted the cloak of {who}, dry and whole at the hem.",
+  "An entry in {record} described the boots of {who}: clean and polished along the soles.",
+  "{^record} listed the gloves of {who} as smooth and supple across the palms.",
+  "{^record} recorded that the belt of {who} was clean and its buckle bright.",
+  "{^record} mentioned the cap of {who}, neat with a straight brim.",
+]
+
+[[families]]
+id = "key"
+kind = "key"
+claim_slots = ["who"]
+variants = [
+  "A scrap of paper with the name of {who} on it was found tucked into a book.",
+  "{^who} was named in a note that had been left on a table.",
+  "A servant remembered that {who} had asked for a word with the lord.",
+  "The name of {who} was scratched on a slate by the pantry door.",
+  "A message addressed to {who} was waiting unopened on a shelf.",
+]
+
+[[families]]
+id = "contradiction"
+kind = "contradiction"
+claim_slots = ["who", "place.in", "time.at", "record"]
+variants = [
+  "But {record} put {who} {place.in} {time.at}.",
+  "Yet an entry in {record} placed {who} {place.in} {time.at}.",
+  "However, {record} listed {who} {place.in} {time.at}.",
+  "Against that, {record} showed {who} {place.in} {time.at}.",
+  "Still, {record} named {who} {place.in} {time.at}.",
+]
+
+[[families]]
+id = "intro"
+kind = "intro"
+claim_slots = ["victim", "place.in", "time.during"]
+variants = [
+  "{^victim} was found dead {place.in}, and the crime was done {time.during}.",
+  "The household woke to the news that {victim} had been killed {place.in} {time.during}.",
+  "{^victim} died {place.in} {time.during}, and the whole castle was shaken.",
+  "Word spread that {victim} had been murdered {place.in} {time.during}.",
+  "{^victim} was killed {place.in} {time.during}, and the gates were closed at once.",
+]
+""" + "".join(
+    f'\n[[victims]]\ntext = "Lord {name}"\npronoun = "he"\nproper = true\n'
+    for name in ("Aldric", "Godwin", "Osmund", "Baldric", "Ranulf", "Wulfric")
+)
+
+_SKIN_EDITS: tuple[tuple[str, str], ...] = (
+    (
+        'presets = ["tiny"]\n\n[capacity]',
+        'presets = ["tiny"]\nsmalltalk_allow = [\n'
+        '  "ale", "bread", "breakfast", "cheers", "cold", "dinner", "evening", "fire", "goodbye",\n'
+        '  "hello", "morning", "pardon", "please", "rain", "soup", "sunshine", "supper",\n'
+        '  "thanks", "warm", "weather",\n]\n\n[capacity]',
+    ),
+    (
+        'presence = ["The gate log shows {who} {time.at}."]',
+        'presence = ["The gate log shows {who} {time.at}."]\nentries = [\n'
+        '  "{^record} lay open on a slanted desk.",\n'
+        '  "{^record} was kept in a leather binding.",\n'
+        '  "Several hands had written in {record}.",\n]',
+    ),
+    (
+        '  "Dark stains {place.in} were smeared across the floor in a long arc.",\n]',
+        '  "Dark stains {place.in} were smeared across the floor in a long arc.",\n]\nabsent = [\n'
+        '  "The clothing {place.in} hung whole, and the floor was swept clean.",\n'
+        '  "The floor {place.in} was scrubbed pale, with every board smooth.",\n]',
+    ),
+    (
+        '  "Pale crust has dried along the rim of a cup {place.in} this week.",\n]',
+        '  "Pale crust has dried along the rim of a cup {place.in} this week.",\n]\nabsent = [\n'
+        '  "A cup {place.in} stood clean and dry on a shelf, left alone for days.",\n'
+        '  "The rim of a cup {place.in} was smooth and bright, wiped this week.",\n]',
+    ),
+    (
+        '  "A frayed length of hemp was found coiled up {place.in} near the door.",\n]',
+        '  "A frayed length of hemp was found coiled up {place.in} near the door.",\n]\n'
+        "absent = [\n"
+        '  "A hook {place.in} hung clean, and a length of hemp lay straight near it.",\n'
+        '  "The threads {place.in} were firm and tidy, wound up on a clean reel.",\n]',
+    ),
+    (
+        'aliases = ["knife", "blade"]\n',
+        'aliases = ["knife", "blade"]\nclues = [\n'
+        '  "A whetstone {place.in} was still wet, with fresh grey streaks.",\n'
+        '  "A strip of oiled cloth {place.in} smelled of steel and lay in a knot.",\n'
+        '  "A belt hook {place.in} swung empty on its nail.",\n]\n',
+    ),
+    (
+        'aliases = ["poison", "laced wine"]\n',
+        'aliases = ["poison", "laced wine"]\nclues = [\n'
+        '  "A small stoppered phial lay {place.in}, rinsed and set on its side.",\n'
+        '  "A servant said the casks {place.in} had been tapped a day early.",\n'
+        '  "A damp cloth {place.in} smelled sharp and sour.",\n]\n',
+    ),
+    (
+        'aliases = ["rope", "garrote"]\n',
+        'aliases = ["rope", "garrote"]\nclues = [\n'
+        '  "A length of spare hemp had been cut from a coil {place.in}.",\n'
+        '  "A knot of heavy twine lay {place.in}, tied by a practised hand.",\n'
+        '  "A stable boy said a coil had gone from its hook {place.in}.",\n]\n',
+    ),
+    (
+        'secrets = ["{^who.poss} purse has stood empty since the autumn fair."]',
+        'secrets = ["{^who.poss} purse has stood empty since the autumn fair."]\nhints = [\n'
+        '  "{^who} avoided the pedlars who came to the gate.",\n'
+        '  "{^who} sold small things from {who.poss} room one by one.",\n'
+        '  "{^who} looked away whenever dice were mentioned.",\n]',
+    ),
+    (
+        'secrets = ["{^who} has read the old will many times over."]',
+        'secrets = ["{^who} has read the old will many times over."]\nhints = [\n'
+        '  "{^who} knew the names in the lord\'s family tree by heart.",\n'
+        '  "{^who} asked often after the lord\'s health with a frown.",\n'
+        '  "{^who} kept a close count of the lord\'s years.",\n]',
+    ),
+    (
+        'secrets = ["{^who} cannot bear to watch the master\'s favourites."]',
+        'secrets = ["{^who} cannot bear to watch the master\'s favourites."]\nhints = [\n'
+        '  "{^who} fell silent whenever the favourite was praised.",\n'
+        '  "{^who} sat close to the favourite at meals and watched each gesture.",\n'
+        '  "{^who} found fault with the dress of the favourite.",\n]',
+    ),
+    (
+        'noun = "maid"\ntraits',
+        'noun = "maid"\nstyle = "quick and chatty; passes on household talk"\ntraits',
+    ),
+    (
+        'noun = "steward"\ntraits',
+        'noun = "steward"\nstyle = "stiff and proud; speaks like someone used to giving orders"\n'
+        "traits",
+    ),
+    (
+        'noun = "cook"\ntraits',
+        'noun = "cook"\nstyle = "blunt and warm; grumbles about the long hours"\ntraits',
+    ),
+    (
+        '  "Records place {who} nearby {time.at}.",\n]\n',
+        '  "Records place {who} nearby {time.at}.",\n]\n' + _FAMILIES,
+    ),
+)
+
+
+def skin_ready(text: str) -> str:
+    """The base pack with every text stage 8 asks for (it is clean through stages 1 to 8)."""
+    for old, new in _SKIN_EDITS:
+        assert old in text, f"not in the base pack: {old!r}"
+        text = text.replace(old, new, 1)
+    return text
+
+
+SKIN_BASE_TOML = skin_ready(BASE_TOML_NO_SKIN)
+BASE_TOML = SKIN_BASE_TOML

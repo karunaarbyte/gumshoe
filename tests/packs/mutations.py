@@ -45,6 +45,14 @@ def mutation(code: str, apply: Edit, expected: set[str] | None = None) -> None:
     MUTATIONS[code] = PackMutation(code, apply, frozenset(expected or {code}))
 
 
+# a new motive needs hints, like the three of the base pack
+_HINTS = (
+    'hints = [\n  "{^who} watched every coin go by with a thoughtful look.",\n'
+    '  "{^who} sold small things from a room one by one.",\n'
+    '  "{^who} looked away whenever dice were mentioned.",\n]\n'
+)
+
+
 # ---- stage 1: schema ------------------------------------------------------------------------
 
 mutation("TOML_SYNTAX", append("[[[bad"))
@@ -156,7 +164,9 @@ mutation(
 )
 mutation(
     "MOTIVE_UNREACHABLE",
-    append('[motive_defs.greed]\nlabel = "from greed"\naliases = ["greedy"]\nsecrets = []\n'),
+    append(
+        '[motive_defs.greed]\nlabel = "from greed"\naliases = ["greedy"]\nsecrets = []\n' + _HINTS
+    ),
 )
 mutation("SCENE_NO_CRIME_LOCATION", replace('location_kinds = ["study"]', "location_kinds = []"))
 mutation(
@@ -207,16 +217,18 @@ _QUAD = chain(
     replace('presets = ["tiny"]', 'presets = ["quad"]'),
     append(
         '[motive_defs.greed]\nlabel = "from greed"\naliases = ["greedy"]\n'
-        'secrets = ["{^who} counts every coin twice."]\n'
+        'secrets = ["{^who} counts every coin twice."]\n' + _HINTS
     ),
     append(
         '[roles.groom]\nnames = [{ text = "Wat", pronoun = "he", proper = true }]\nnoun = "groom"\n'
+        'style = "easygoing and shy"\n'
         'traits = ["gentle with horses"]\nrecord_kinds = ["ledger"]\n'
         'motive_types = ["debt", "greed", "inheritance"]\n'
     ),
 )
 _PAGE = append(
     '[roles.page]\nnames = [{ text = "Piers", pronoun = "he", proper = true }]\nnoun = "page"\n'
+    'style = "quick and eager"\n'
     'traits = ["fast on his feet"]\nrecord_kinds = ["ledger"]\n'
     'motive_types = ["debt", "inheritance", "jealousy"]\n'
 )
@@ -230,4 +242,72 @@ mutation(
     "NO_PERFECT_MATCHING",
     chain(_QUAD, _PAGE),
     {"NO_PERFECT_MATCHING", "MOTIVE_TOO_PREDICTABLE"},
+)
+
+# ---- stage 8: skin inputs ----------------------------------------------------------------------
+
+mutation(
+    "MISSING_FAMILY",
+    replace('id = "intro"\nkind = "intro"', 'id = "intro"\nkind = "scene"'),
+)
+# the key family takes the kind of the intro family, so the key kind is missing too
+mutation(
+    "DUPLICATE_FAMILY_KIND",
+    replace('id = "key"\nkind = "key"', 'id = "key"\nkind = "intro"'),
+    {"DUPLICATE_FAMILY_KIND", "MISSING_FAMILY"},
+)
+mutation(
+    "TOO_FEW_TEXTS",
+    replace('[[victims]]\ntext = "Lord Wulfric"\npronoun = "he"\nproper = true\n', ""),
+)
+mutation("ENTRY_INCOMPLETE", replace('style = "quick and chatty; passes on household talk"\n', ""))
+mutation(
+    "TEXT_COUNT_SKEW",
+    replace(
+        '  "A belt hook {place.in} swung empty on its nail.",\n',
+        '  "A belt hook {place.in} swung empty on its nail.",\n'
+        '  "A rag {place.in} was oiled and folded small.",\n',
+    ),
+)
+_LONG = (
+    "The floor {place.in} was scrubbed pale, with every board smooth and every crack filled "
+    "with fresh lime, so that a visitor could have eaten a meal off it."
+)
+mutation(
+    "TEXT_LENGTH_SKEW",
+    replace("The floor {place.in} was scrubbed pale, with every board smooth.", _LONG),
+)
+mutation(
+    "PAIR_COUNT_SKEW",
+    replace(
+        '  "{^record} mentioned the cap of {who}, crushed with a bent brim.",\n',
+        '  "{^record} mentioned the cap of {who}, crushed with a bent brim.",\n'
+        '  "{^record} noted the hat of {who}, crushed with a bent brim.",\n',
+    ),
+)
+_LONG_PROOF = (
+    "{^record} noted the cloak of {who}, damp and torn at the hem, with a long rip running up "
+    "the back and thorns caught in every fold of the cloth."
+)
+mutation(
+    "PAIR_LENGTH_SKEW",
+    replace("{^record} noted the cloak of {who}, damp and torn at the hem.", _LONG_PROOF),
+)
+# "wine" is a token of the poison method's alias "laced wine"
+mutation("BAD_SMALLTALK_WORD", replace('"warm", "weather",', '"warm", "wine",'))
+
+# stage 8 joins the load pipeline in the last task of plan 2c.1b; until then these run directly
+# against the stage 8 module (tests/packs/test_skin_inputs.py) and not through `load_pack`
+STAGE_8_CODES = frozenset(
+    {
+        "MISSING_FAMILY",
+        "DUPLICATE_FAMILY_KIND",
+        "TOO_FEW_TEXTS",
+        "ENTRY_INCOMPLETE",
+        "TEXT_COUNT_SKEW",
+        "TEXT_LENGTH_SKEW",
+        "PAIR_COUNT_SKEW",
+        "PAIR_LENGTH_SKEW",
+        "BAD_SMALLTALK_WORD",
+    }
 )
