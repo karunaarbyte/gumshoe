@@ -164,9 +164,13 @@ def pool_items(pack: Pack) -> Iterator[tuple[str, str]]:
             yield f"roles.{role.key}.names[{i}]", phrase(entry)
         for i, trait in enumerate(role.traits):
             yield f"roles.{role.key}.traits[{i}]", trait
+        if role.style:
+            yield f"roles.{role.key}.style", role.style
     for record_def in pack.record_defs:
         for i, entry in enumerate(record_def.names):
             yield f"record_defs.{record_def.key}.names[{i}]", phrase(entry)
+    for i, entry in enumerate(pack.victims):
+        yield f"victims[{i}]", phrase(entry)
     for table, defs in (("method_defs", pack.method_defs), ("motive_defs", pack.motive_defs)):
         for d in defs:
             yield f"{table}.{d.key}.label", d.label
@@ -185,10 +189,18 @@ def template_items(pack: Pack) -> Iterator[tuple[str, str]]:
     for record in pack.record_defs:
         for i, text in enumerate(record.presence):
             yield f"record_defs.{record.key}.presence[{i}]", text
+        for i, text in enumerate(record.entries):
+            yield f"record_defs.{record.key}.entries[{i}]", text
     for method in pack.method_defs:
         for trace in method.traces:
             for i, text in enumerate(trace.templates):
                 yield f"method_defs.{method.key}.traces[{trace.kind}].templates[{i}]", text
+            for i, text in enumerate(trace.absent):
+                yield f"method_defs.{method.key}.traces[{trace.kind}].absent[{i}]", text
+        for i, text in enumerate(method.clues):
+            yield f"method_defs.{method.key}.clues[{i}]", text
     for motive in pack.motive_defs:
         for i, text in enumerate(motive.secrets):
             yield f"motive_defs.{motive.key}.secrets[{i}]", text
+        for i, text in enumerate(motive.hints):
+            yield f"motive_defs.{motive.key}.hints[{i}]", text

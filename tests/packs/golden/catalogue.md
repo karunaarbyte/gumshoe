@@ -22,7 +22,7 @@
 | UNRESOLVED_BRACE | 3 | error | unbalanced or unresolved brace in the text |
 | LABEL_TOKEN_LEAK | 4 | error | this text uses the token {token!r}, distinctive to candidate {candidate!r} |
 | ROLE_TOKEN_COLLISION | 4 | error | a token ({token!r}) of this role's {what} is also used by {other!r} |
-| SECRET_REUSES_LABEL | 4 | error | the secret of {candidate!r} reuses its own label token {token!r} |
+| SECRET_REUSES_LABEL | 4 | error | an owned text of {candidate!r}, a secret or a hint, reuses its own label token {token!r} |
 | TRACE_COUNT_SKEW | 4 | error | this method has {count} trace templates; the largest count is {target} |
 | TRACE_LENGTH_SKEW | 4 | error | mean trace length {mean} is more than 20% from the overall mean {overall} |
 | METHOD_TOO_RARE | 5 | error | the method is allowed in {count} scene types; needs at least {needed} |

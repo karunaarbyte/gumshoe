@@ -63,7 +63,7 @@ _ROWS = (
     _row(
         "SECRET_REUSES_LABEL",
         4,
-        "the secret of {candidate!r} reuses its own label token {token!r}",
+        "an owned text of {candidate!r}, a secret or a hint, reuses its own label token {token!r}",
         "candidate",
         "token",
     ),

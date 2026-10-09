@@ -9,7 +9,7 @@ from gumshoe.cases.model.pack import (
     RoleDef,
     TraceDef,
 )
-from gumshoe.cases.packs.check import templates
+from gumshoe.cases.packs.check import hygiene, templates
 from gumshoe.cases.packs.check.lint import KNOWN_PLACEHOLDERS, SAMPLES, pack_sample
 from gumshoe.cases.packs.issues import PackIssue
 from gumshoe.cases.packs.loader import load_pack
@@ -188,3 +188,99 @@ def test_the_skeleton_hash_changes_when_a_family_is_added():
     pack = base()
     fewer = pack.model_copy(update={"families": pack.families[:-1]})
     assert fewer.skeleton_hash() != pack.skeleton_hash()
+
+
+# ---- stage 3 reaches the new texts ----------------------------------------------------------
+
+
+def test_a_doubled_word_in_an_absent_text_is_reported_at_its_path():
+    pack = with_trace(base(), "dagger", absent=("The the floor {place.in} was clean.",))
+    assert ("DOUBLED_WORD", "method_defs.dagger.traces[wound].absent[0]") in found(
+        templates.check(pack)
+    )
+
+
+def test_an_unknown_placeholder_in_a_clue_is_reported():
+    pack = with_method(base(), "rope", clues=("A {plce} was wet.",))
+    assert ("UNKNOWN_PLACEHOLDER", "method_defs.rope.clues[0]") in found(templates.check(pack))
+
+
+def test_an_article_mismatch_in_a_hint_is_reported():
+    pack = with_motive(base(), "debt", hints=("{^who} ate a apple.",))
+    assert ("ARTICLE_MISMATCH", "motive_defs.debt.hints[0]") in found(templates.check(pack))
+
+
+def test_a_double_space_in_a_record_entry_is_reported():
+    records = tuple(
+        r.model_copy(update={"entries": ("{^record}  lay open.",)}) if r.key == "gate_log" else r
+        for r in base().record_defs
+    )
+    pack = base().model_copy(update={"record_defs": records})
+    assert ("DOUBLE_SPACE", "record_defs.gate_log.entries[0]") in found(templates.check(pack))
+
+
+def test_a_victim_and_a_style_are_linted_as_pool_texts():
+    pack = with_victims(base(), "Lord  Aldric")
+    assert ("DOUBLE_SPACE", "victims[0]") in found(templates.check(pack))
+    roles = tuple(
+        r.model_copy(update={"style": "quick {and chatty"}) if r.key == "maid" else r
+        for r in base().roles
+    )
+    pack = base().model_copy(update={"roles": roles})
+    assert ("UNRESOLVED_BRACE", "roles.maid.style") in found(templates.check(pack))
+
+
+# ---- stage 4 leak-scans the new texts -------------------------------------------------------
+
+
+def test_another_methods_token_in_a_clue_or_an_absent_text_is_a_leak():
+    pack = with_method(base(), "rope", clues=("A knife lay {place.in}.",))
+    assert ("LABEL_TOKEN_LEAK", "method_defs.rope.clues[0]") in found(hygiene.check(pack))
+    pack = with_trace(base(), "dagger", absent=("The rope {place.in} was clean.", "Fine."))
+    assert ("LABEL_TOKEN_LEAK", "method_defs.dagger.traces[wound].absent[0]") in found(
+        hygiene.check(pack)
+    )
+
+
+def test_a_methods_own_token_in_its_own_clue_is_allowed():
+    pack = with_method(base(), "dagger", clues=("A knife lay {place.in}.",) * 3)
+    assert [p for c, p in found(hygiene.check(pack)) if c == "LABEL_TOKEN_LEAK"] == []
+
+
+def test_a_hint_reusing_its_own_label_token_is_reported_with_the_secret_code():
+    pack = with_motive(base(), "debt", hints=("{^who} hid a debt.",) * 3)
+    assert ("SECRET_REUSES_LABEL", "motive_defs.debt.hints[0]") in found(hygiene.check(pack))
+
+
+def test_another_motives_token_in_a_hint_is_a_leak():
+    pack = with_motive(base(), "debt", hints=("{^who} felt envy.",) * 3)
+    assert ("LABEL_TOKEN_LEAK", "motive_defs.debt.hints[0]") in found(hygiene.check(pack))
+
+
+def test_a_style_and_an_entry_are_leak_scanned():
+    roles = tuple(
+        r.model_copy(update={"style": "likes a dagger"}) if r.key == "maid" else r
+        for r in base().roles
+    )
+    pack = base().model_copy(update={"roles": roles})
+    assert ("LABEL_TOKEN_LEAK", "roles.maid.style") in found(hygiene.check(pack))
+    records = tuple(
+        r.model_copy(update={"entries": ("A rope lay by {record}.",)}) if r.key == "gate_log" else r
+        for r in base().record_defs
+    )
+    pack = base().model_copy(update={"record_defs": records})
+    assert ("LABEL_TOKEN_LEAK", "record_defs.gate_log.entries[0]") in found(hygiene.check(pack))
+
+
+def test_a_victim_named_like_a_candidate_a_role_name_or_a_role_noun_is_reported():
+    for name in ("Lord Dagger", "Lord Edmund", "Lord Steward"):
+        pack = with_victims(base(), name)
+        assert ("ROLE_TOKEN_COLLISION", "victims[0]") in found(hygiene.check(pack)), name
+    assert ("LABEL_TOKEN_LEAK", "victims[0]") in found(
+        hygiene.check(with_victims(base(), "Lord Dagger"))
+    )
+    assert [p for c, p in found(hygiene.check(with_victims(base(), "Lord Aldric")))] == []
+
+
+def test_the_clean_skin_base_has_no_stage_3_or_4_issues():
+    assert templates.check(base()) == [] and hygiene.check(base()) == []

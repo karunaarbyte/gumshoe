@@ -37,19 +37,30 @@ def _texts(pack: Pack) -> Iterator[tuple[str, str, str | None]]:
             for i in range(len(trace.templates)):
                 path = f"method_defs.{method.key}.traces[{trace.kind}].templates[{i}]"
                 owners[path] = f"method:{method.key}"
+            for i in range(len(trace.absent)):
+                path = f"method_defs.{method.key}.traces[{trace.kind}].absent[{i}]"
+                owners[path] = f"method:{method.key}"
+        for i in range(len(method.clues)):
+            owners[f"method_defs.{method.key}.clues[{i}]"] = f"method:{method.key}"
     for motive in pack.motive_defs:
         for i in range(len(motive.secrets)):
             owners[f"motive_defs.{motive.key}.secrets[{i}]"] = f"motive:{motive.key}"
+        for i in range(len(motive.hints)):
+            owners[f"motive_defs.{motive.key}.hints[{i}]"] = f"motive:{motive.key}"
     for path, text in template_items(pack):
         yield path, blank_placeholders(text), owners.get(path)
     for location in pack.location_defs:
         for i, entry in enumerate(location.names):
             yield f"location_defs.{location.key}.names[{i}]", entry.text, None
+    for i, entry in enumerate(pack.victims):
+        yield f"victims[{i}]", entry.text, None
     for role in pack.roles:
         for i, entry in enumerate(role.names):
             yield f"roles.{role.key}.names[{i}]", entry.text, None
         for i, trait in enumerate(role.traits):
             yield f"roles.{role.key}.traits[{i}]", trait, None
+        if role.style:
+            yield f"roles.{role.key}.style", role.style, None
     for record_def in pack.record_defs:
         for i, entry in enumerate(record_def.names):
             yield f"record_defs.{record_def.key}.names[{i}]", entry.text, None
@@ -151,6 +162,23 @@ def _role_collisions(pack: Pack) -> list[PackIssue]:
                             other=candidate_tokens[token],
                         )
                     )
+    role_tokens: dict[str, str] = {}
+    for role in sorted(pack.roles, key=lambda r: r.key):
+        for token in sorted(token_set(role.noun, *(e.text for e in role.names))):
+            role_tokens.setdefault(token, f"role:{role.key}")
+    for i, entry in enumerate(pack.victims):
+        for token in sorted(token_set(entry.text)):
+            other = candidate_tokens.get(token) or role_tokens.get(token)
+            if other:
+                out.append(
+                    make(
+                        "ROLE_TOKEN_COLLISION",
+                        f"victims[{i}]",
+                        what="name",
+                        token=token,
+                        other=other,
+                    )
+                )
     return out
 
 
