@@ -17,6 +17,7 @@ from gumshoe.cases.packs.check.lint import (
 from gumshoe.cases.tools.builtin import load_builtin_pack
 from tests.packs.test_castle import (
     AUDIENCES,
+    BODY_WORDS,
     CERTAINTY_WORDS,
     HARD_CODED_RECORD_NAMES,
     NEGATIONS,
@@ -159,3 +160,19 @@ def test_a_wording_edit_keeps_the_skeleton_hash_and_dropping_a_family_changes_it
     assert pack.model_copy(update={"motive_defs": motives}).skeleton_hash() == pack.skeleton_hash()
     kept = tuple(f for f in pack.families if f.kind != "intro")
     assert pack.model_copy(update={"families": kept}).skeleton_hash() != pack.skeleton_hash()
+
+
+def test_absent_texts_and_clues_describe_objects_not_bodies(pack):
+    owned = [t for p, t in _owned(pack) if ".absent[" in p or ".clues[" in p]
+    assert owned and _found(owned, BODY_WORDS) == []
+
+
+def test_every_method_has_as_many_absent_texts_as_templates_and_three_clues(pack):
+    for method in pack.method_defs:
+        for trace in method.traces:
+            assert len(trace.absent) == len(trace.templates) == 2, method.key
+        assert len(method.clues) == 3, method.key
+        for text in (t for tr in method.traces for t in tr.absent):
+            assert "place.in" in _slots(text), text
+        for text in method.clues:
+            assert "place.in" in _slots(text), text

@@ -259,6 +259,11 @@ secrets = [
 [method_defs.candlestick]
 label = "bludgeoned with a candlestick"
 aliases = ["candle stand", "brass holder"]
+clues = [
+  "A servant had polished the brass holders {place.in} until they shone.",
+  "A rag {place.in} was thick with hot wax and smelled of brass polish.",
+  "A tall stand had been moved {place.in} and set beside the door.",
+]
 
 [[method_defs.candlestick.traces]]
 kind = "bruise"
@@ -267,10 +272,19 @@ templates = [
   "A heavy stand lay overturned {place.in}, its drip pan bent and dented.",
   "A tall stand lay toppled {place.in}, cold wax spattered round its dented foot.",
 ]
+absent = [
+  "A tall stand {place.in} stood upright, its drip pan flat and its foot whole.",
+  "The brass holders {place.in} stood in a tidy row, their wax smooth and unbroken.",
+]
 
 [method_defs.poison_wine]
 label = "poisoned in wine"
 aliases = ["poison", "draught", "tainted cup"]
+clues = [
+  "A small stoppered phial lay {place.in}, rinsed and set on its side.",
+  "A servant said the wine casks {place.in} had been tapped a day early.",
+  "A damp cloth {place.in} smelled sharp and sour.",
+]
 
 [[method_defs.poison_wine.traces]]
 kind = "residue"
@@ -279,10 +293,19 @@ templates = [
   "A cup lay tipped over {place.in}, with a bitter white crust inside.",
   "A jug {place.in} held a purple film and gave off a sour smell.",
 ]
+absent = [
+  "The cups {place.in} stood upright and clean, their rims dry and bright.",
+  "A jug {place.in} held clear water and gave off a fresh, clean smell.",
+]
 
 [method_defs.dagger]
 label = "stabbed with a dagger"
 aliases = ["knife", "blade"]
+clues = [
+  "A whetstone {place.in} was still wet, with fresh grey streaks across its face.",
+  "A strip of oiled cloth {place.in} smelled of steel and lay twisted in a knot.",
+  "A belt hook {place.in} swung empty on its nail.",
+]
 
 [[method_defs.dagger.traces]]
 kind = "wound"
@@ -291,10 +314,19 @@ templates = [
   "An empty leather sheath, slim and short, lay dropped {place.in}.",
   "A slim steel point had snapped off and lay glinting {place.in}.",
 ]
+absent = [
+  "A leather sheath {place.in} hung full on its peg, its slim steel point whole and bright.",
+  "Slim steel points {place.in} lay in a neat rank, whole and bright.",
+]
 
 [method_defs.rope]
 label = "strangled with a rope"
 aliases = ["cord", "noose"]
+clues = [
+  "A length of spare cord had been cut from a coil {place.in}.",
+  "A knot of heavy hemp lay {place.in}, tied by a practised hand.",
+  "A stable boy said a coil of rope had gone from its hook {place.in}.",
+]
 
 [[method_defs.rope.traces]]
 kind = "fibre"
@@ -303,10 +335,19 @@ templates = [
   "Coarse hairy fibres clung to a rough post {place.in}, snagged and loose.",
   "A shiny worn groove ran round a post {place.in}, and frayed strands lay beneath.",
 ]
+absent = [
+  "A rough post {place.in} stood smooth and clean, its surface bright and whole.",
+  "The posts {place.in} were smooth to the touch, with firm wood and tidy corners.",
+]
 
 [method_defs.crossbow]
 label = "shot with a crossbow"
 aliases = ["arbalest", "bolt"]
+clues = [
+  "A coil of waxed string lay {place.in}, cut to the length of a bow.",
+  "A watchman said a small iron winch had gone from the armoury and was last seen {place.in}.",
+  "A fresh patch of new wood {place.in} had been pegged over an old hole in a door.",
+]
 
 [[method_defs.crossbow.traces]]
 kind = "bolt"
@@ -315,10 +356,19 @@ templates = [
   "A short feathered shaft stood buried deep in a door {place.in}.",
   "A neat splintered hole had been punched clean through a door {place.in}.",
 ]
+absent = [
+  "The door {place.in} hung smooth and whole, its planks gleaming with fresh oil.",
+  "A row of doors {place.in} stood clean, every plank fresh and tight.",
+]
 
 [method_defs.fall_from_height]
 label = "pushed from a height"
 aliases = ["shove", "fall", "thrown down"]
+clues = [
+  "A loose stone had been set back on a high ledge {place.in}, its mortar still wet.",
+  "A mason said the rail {place.in} had been loose since spring.",
+  "A single glove lay wedged in a crack on a stair {place.in}.",
+]
 
 [[method_defs.fall_from_height.traces]]
 kind = "scuff"
@@ -326,6 +376,10 @@ location_kinds = ["great_hall", "chapel", "keep", "gatehouse"]
 templates = [
   "Pale scrapes marked a high ledge {place.in}, with loose grit on the floor below.",
   "A rail hung broken over a drop {place.in}, its upright snapped clean off.",
+]
+absent = [
+  "The high ledge {place.in} looked smooth, and the grit below lay in a neat line.",
+  "A rail over a drop {place.in} stood firm, its uprights whole and tight.",
 ]
 
 [scene_types.murder_in_chapel]
