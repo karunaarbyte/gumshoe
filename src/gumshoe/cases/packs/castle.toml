@@ -1,7 +1,7 @@
 [meta]
 id = "castle"
 skeleton_rev = 1
-skin_rev = 1
+skin_rev = 2
 slots = 4
 presets = ["long", "short", "standard"]
 
@@ -531,4 +531,74 @@ variants = [
   "A wooden toy was discovered {place.in}.",
   "A broken comb was picked up {place.in} by a page.",
   "A snapped bootlace lay {place.in}.",
+]
+
+[[families]]
+id = "physical_proof"
+kind = "physical_proof"
+claim_slots = ["who", "record"]
+variants = [
+  "{^record} noted the cloak of {who}, damp and torn at the hem.",
+  "An entry in {record} described the boots of {who}: caked with mud along the soles.",
+  "{^record} listed the gloves of {who} as scuffed and creased across the palms.",
+  "A porter reading {record} said the left sleeve of {who} was ripped, with loose threads hanging.",
+  "{^record} recorded that the belt of {who} was smeared and its buckle bent.",
+  "A page reading from {record} said the apron of {who} was spattered and hung crooked.",
+  "{^record} mentioned the cap of {who}, crushed with a bent brim.",
+]
+
+[[families]]
+id = "physical_clear"
+kind = "physical_clear"
+claim_slots = ["who", "record"]
+variants = [
+  "{^record} noted the cloak of {who}, dry and whole at the hem.",
+  "An entry in {record} described the boots of {who}: clean and polished along the soles.",
+  "{^record} listed the gloves of {who} as smooth and supple across the palms.",
+  "A porter reading {record} said the left sleeve of {who} was whole, pressed flat and tight.",
+  "{^record} recorded that the belt of {who} was clean and its buckle bright.",
+  "A page reading from {record} said the apron of {who} was spotless and hung straight.",
+  "{^record} mentioned the cap of {who}, neat with a straight brim.",
+]
+
+[[families]]
+id = "key"
+kind = "key"
+claim_slots = ["who"]
+variants = [
+  "A scrap of paper with the name of {who} on it was found tucked into a book.",
+  "{^who} was named in a note that had been left on a table.",
+  "A servant remembered that {who} had asked for a word with the lord.",
+  "The name of {who} was scratched on a slate by the pantry door.",
+  "A neighbour mentioned that {who} had been talking with the lord of late.",
+  "A message addressed to {who} was waiting unopened on a shelf.",
+  "A small tag marked with the initial of {who} hung from a hook by the door.",
+]
+
+[[families]]
+id = "contradiction"
+kind = "contradiction"
+claim_slots = ["who", "place.in", "time.at", "record"]
+variants = [
+  "But {record} put {who} {place.in} {time.at}.",
+  "Yet an entry in {record} placed {who} {place.in} {time.at}.",
+  "However, {record} listed {who} {place.in} {time.at}.",
+  "Against that, {record} showed {who} {place.in} {time.at}.",
+  "Still, {record} named {who} {place.in} {time.at}.",
+  "But a line in {record} had {who} {place.in} {time.at}.",
+  "Even so, {record} held {who} {place.in} {time.at}.",
+]
+
+[[families]]
+id = "intro"
+kind = "intro"
+claim_slots = ["victim", "place.in", "time.during"]
+variants = [
+  "{^victim} was found dead {place.in}, and the crime was done {time.during}.",
+  "The household woke to the news that {victim} had been killed {place.in} {time.during}.",
+  "{^victim} died {place.in} {time.during}, and the whole castle was shaken.",
+  "Word spread that {victim} had been murdered {place.in} {time.during}.",
+  "A servant raised the cry that {victim} lay dead {place.in}, killed {time.during}.",
+  "{^victim} was killed {place.in} {time.during}, and the gates were closed at once.",
+  "Someone had ended the life of {victim} {place.in} {time.during}, and the castle held its breath.",
 ]

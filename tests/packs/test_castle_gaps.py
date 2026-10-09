@@ -5,7 +5,6 @@ from gumshoe.cases.tools.builtin import load_builtin_pack
 
 # Each chunk of plan 2c.1b removes its prefix from this tuple; the last one empties it.
 PENDING = (
-    "families",
     "method_defs",
     "motive_defs",
     "record_defs",
