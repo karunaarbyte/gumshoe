@@ -1,6 +1,7 @@
 """Enforces the import rules from src/gumshoe/decider/__init__.py by reading the source."""
 
 import ast
+import sys
 from pathlib import Path
 
 SRC = Path(__file__).parent.parent / "src"
@@ -462,3 +463,75 @@ def test_the_cases_public_face_offers_generate_without_hiding_the_generator_pack
     assert isinstance(cases.generate, types.ModuleType)
     for name in ("pipeline", "api", "assemble", "trace"):
         importlib.import_module(f"gumshoe.cases.generate.{name}")
+
+
+# --- the MCP server (plan 3) ----------------------------------------------------------------
+
+MCP_SDK_FILES = ("tools.py", "__main__.py")
+MCP_ALLOWED_THIRD_PARTY = ("pydantic",)
+
+
+def is_mcp_sdk(module: str) -> bool:
+    return module == "mcp" or module.startswith("mcp.")
+
+
+def mcp_server_problems(root: Path) -> list[str]:
+    """An allow-list: the server imports only `gumshoe.cases` (its public face), itself, the
+    stdlib and pydantic; the `mcp` SDK appears only in the two adapter files; nothing else."""
+    folder = root / "gumshoe" / "mcp_server"
+    problems: list[str] = []
+    for path in sources(folder):
+        for module in sorted(imported_modules(path, root)):
+            top = module.split(".")[0]
+            if top == "gumshoe":
+                ok = module == "gumshoe.cases" or module.startswith("gumshoe.mcp_server")
+            elif is_mcp_sdk(module):
+                ok = path.name in MCP_SDK_FILES
+            else:
+                ok = top in sys.stdlib_module_names or top in MCP_ALLOWED_THIRD_PARTY
+            if not ok:
+                problems.append(f"{path.relative_to(root)} imports {module}")
+    return problems
+
+
+def make_mcp_tree(tmp_path: Path, files: dict[str, str]) -> Path:
+    for rel, text in files.items():
+        target = tmp_path / "gumshoe" / "mcp_server" / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text)
+    return tmp_path
+
+
+def test_mcp_server_checker_flags_deep_cases_imports_the_decider_and_a_stray_sdk(tmp_path):
+    root = make_mcp_tree(
+        tmp_path,
+        {
+            "host.py": "from gumshoe.cases.model.case import Case\n"
+            "from gumshoe.decider import DecisionResult\n"
+            "from mcp.server.mcpserver import MCPServer\n"
+            "import httpx\n"
+            "from gumshoe.cases import GameSession\n",
+            "tools.py": "from mcp.server.mcpserver import MCPServer\n"
+            "from gumshoe.mcp_server.host import GameHost\n",
+        },
+    )
+    assert mcp_server_problems(root) == [
+        "gumshoe/mcp_server/host.py imports gumshoe.cases.model.case",
+        "gumshoe/mcp_server/host.py imports gumshoe.decider",
+        "gumshoe/mcp_server/host.py imports httpx",
+        "gumshoe/mcp_server/host.py imports mcp.server.mcpserver",
+    ]
+
+
+def test_mcp_server_imports_follow_the_rules():
+    assert mcp_server_problems(SRC) == []
+
+
+def test_the_case_engine_never_imports_the_mcp_server_or_the_sdk():
+    stray = [
+        f"{path.relative_to(SRC)} imports {module}"
+        for path in sources(CASES)
+        for module in sorted(imported_modules(path, SRC))
+        if is_mcp_sdk(module) or module.startswith("gumshoe.mcp_server")
+    ]
+    assert stray == []

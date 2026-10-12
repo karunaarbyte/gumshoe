@@ -6,6 +6,7 @@ EXPECTED = {
     "ContradictionView", "SourceResult", "NotebookFact", "NotebookSection", "NotebookView",
     "ParsedAccusation", "Candidate", "AxisOptions", "ResolvedPart", "AxisProblem",
     "AccusationPlan", "AccusationResult", "RevealView", "ReplyViolation", "ReplyCheck",
+    "HandleCollision",
 }  # fmt: skip
 
 

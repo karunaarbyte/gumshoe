@@ -60,6 +60,7 @@ __all__ = [
     "GameNotOver",
     "GameOver",
     "GameSession",
+    "HandleCollision",
     "StateMismatch",
     "load_session",
 ]
@@ -67,6 +68,10 @@ __all__ = [
 
 class GameOver(Exception):
     """The game has ended: no more actions."""
+
+
+class HandleCollision(ValueError):
+    """Two entities got the same handle under this salt; the caller draws another salt."""
 
 
 class StateMismatch(ValueError):
@@ -87,7 +92,7 @@ def _make_handles(case: Case, salt: str) -> dict[str, str]:
     ]
     handles = {entity: make_id("h", salt, entity) for entity in ids}
     if len(set(handles.values())) != len(handles):
-        raise ValueError("handle collision: use another salt")
+        raise HandleCollision("handle collision: use another salt")
     return handles
 
 
