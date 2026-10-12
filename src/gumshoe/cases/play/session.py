@@ -26,6 +26,7 @@ from gumshoe.cases.play.engine import (
 from gumshoe.cases.play.labels import match_label as match_label_ids
 from gumshoe.cases.play.parse import AccusationPrompt, accusation_questions
 from gumshoe.cases.play.parse import interpret as interpret_answers
+from gumshoe.cases.play.persona import persona_brief
 from gumshoe.cases.play.reply_check import reply_check
 from gumshoe.cases.play.state import MAX_ATTEMPTS, PlayState, Status, Triple, new_state
 from gumshoe.cases.play.views import (
@@ -41,6 +42,7 @@ from gumshoe.cases.play.views import (
     NotebookSection,
     NotebookView,
     ParsedAccusation,
+    PersonaBrief,
     PlayerCaseView,
     RecordKindView,
     ReplyCheck,
@@ -62,6 +64,7 @@ __all__ = [
     "GameSession",
     "HandleCollision",
     "StateMismatch",
+    "UnknownHandle",
     "load_session",
 ]
 
@@ -72,6 +75,10 @@ class GameOver(Exception):
 
 class HandleCollision(ValueError):
     """Two entities got the same handle under this salt; the caller draws another salt."""
+
+
+class UnknownHandle(LookupError):
+    """A handle that does not name what the call needs (for example a non-suspect)."""
 
 
 class StateMismatch(ValueError):
@@ -531,6 +538,12 @@ class GameSession:
                 ok=False, violations=(ReplyViolation(category="unknown_suspect", count=1),)
             )
         return reply_check(self._ix, self._state, suspect, player_text, reply)
+
+    def persona_brief(self, suspect_handle: str) -> PersonaBrief:
+        suspect = self._ids.get(suspect_handle, "")
+        if suspect not in self._ix.suspects:
+            raise UnknownHandle("no such suspect")
+        return persona_brief(self._ix, self._state, suspect, self._suspect_name(suspect))
 
     def reveal(self) -> RevealView:
         truth = engine_reveal(self._ix, self._state)  # raises GameNotOver while playing

@@ -143,6 +143,17 @@ class RevealView(View):
     secret: str
 
 
+class PersonaBrief(View):
+    """What the agent needs to voice one suspect. `says` holds the statements the player has
+    already drawn out of this suspect (held facts found by questioning them), nothing else."""
+
+    name: str  # display name, "<name> the <noun>"
+    traits: tuple[str, ...]
+    style: str
+    says: tuple[str, ...]  # neutral order (by text)
+    smalltalk_allow: tuple[str, ...]  # the pack's neutral words
+
+
 class ReplyViolation(View):
     category: str  # who | how | why | unknown_suspect: a category and a count, never the word
     count: int

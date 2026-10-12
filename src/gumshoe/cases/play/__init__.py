@@ -9,6 +9,7 @@ from gumshoe.cases.play.session import (
     GameSession,
     HandleCollision,
     StateMismatch,
+    UnknownHandle,
     load_session,
 )
 from gumshoe.cases.play.views import (
@@ -24,6 +25,7 @@ from gumshoe.cases.play.views import (
     NotebookSection,
     NotebookView,
     ParsedAccusation,
+    PersonaBrief,
     PlayerCaseView,
     RecordKindView,
     ReplyCheck,
@@ -39,7 +41,7 @@ __all__ = [
     "AccusationPlan", "AccusationPrompt", "AccusationResult", "AxisOptions", "AxisProblem",
     "Candidate", "ContradictionView", "FactView", "GameNotOver", "GameOver", "GameSession",
     "HandleCollision", "LocationView", "NotebookFact", "NotebookSection", "NotebookView",
-    "ParsedAccusation", "PlayerCaseView", "RecordKindView", "ReplyCheck", "ReplyViolation",
-    "ResolvedPart", "RevealView", "SourceResult", "StateMismatch", "SuspectView", "View",
-    "load_session", "views",
+    "ParsedAccusation", "PersonaBrief", "PlayerCaseView", "RecordKindView", "ReplyCheck",
+    "ReplyViolation", "ResolvedPart", "RevealView", "SourceResult", "StateMismatch",
+    "SuspectView", "UnknownHandle", "View", "load_session", "views",
 ]  # fmt: skip

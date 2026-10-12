@@ -23,9 +23,12 @@ from gumshoe.cases import (
     NotebookView,
     Pack,
     ParsedAccusation,
+    PersonaBrief,
     PlayerCaseView,
+    ReplyCheck,
     RevealView,
     SourceResult,
+    UnknownHandle,
     UnsupportedPreset,
     View,
     dump_case,
@@ -37,6 +40,7 @@ from gumshoe.mcp_server.errors import GameError
 
 MAX_SEED = 2**63 - 1
 SALT_TRIES = 16
+MAX_TEXT = 4000
 AXES = ("who", "how", "why")
 
 
@@ -174,3 +178,18 @@ class GameHost:
             session = self._game(game).session
             parsed = ParsedAccusation(who=who, how=how, why=why)
             return _ended(lambda: session.accuse(parsed, confirmed=confirmed))
+
+    def persona_brief(self, game: str, suspect: str) -> PersonaBrief:
+        with self._lock:
+            session = self._game(game).session
+            try:
+                return session.persona_brief(suspect)
+            except UnknownHandle as exc:
+                raise GameError("unknown_handle", "no such suspect") from exc
+
+    def check_reply(self, game: str, suspect: str, player_text: str, reply: str) -> ReplyCheck:
+        for name, text in (("player_text", player_text), ("reply", reply)):
+            if len(text) > MAX_TEXT:
+                raise GameError("bad_argument", f"{name} is longer than {MAX_TEXT} characters")
+        with self._lock:
+            return self._game(game).session.check_reply(suspect, player_text, reply)
