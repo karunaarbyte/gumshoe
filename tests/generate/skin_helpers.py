@@ -4,8 +4,9 @@ from functools import cache
 
 from gumshoe.cases.generate import skin_slots as slots
 from gumshoe.cases.generate.gen_context import GenContext
-from gumshoe.cases.generate.pipeline import no_lint, run_pipeline
+from gumshoe.cases.generate.pipeline import run_pipeline
 from gumshoe.cases.generate.skin import template_skin
+from gumshoe.cases.generate.skin_lint import lint as skin_lint
 from gumshoe.cases.model.case import Case
 from gumshoe.cases.model.entities import Fact
 from gumshoe.cases.model.enums import Axis, EffectKind, FactKind, SourceKind
@@ -21,7 +22,7 @@ def the_castle() -> Pack:
 
 def skinned(pack: Pack, seed: int, preset: str) -> Case:
     """The case for a seed with the template skin and the text lint, whatever `generate` does."""
-    case, _ = run_pipeline(GenContext.of(pack, seed, preset), skin=template_skin, lint=no_lint)
+    case, _ = run_pipeline(GenContext.of(pack, seed, preset), skin=template_skin, lint=skin_lint)
     return case
 
 
