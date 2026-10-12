@@ -168,6 +168,15 @@ def test_generate_prints_the_case_when_no_file_is_given(capsys):
     assert load_case(capsys.readouterr().out.encode()).spec.preset == "standard"
 
 
+def test_generate_text_prints_a_readable_case(capsys):
+    assert main(["generate", "3", "--preset", "short", "--text"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("Lord ") and "Truth: " in out and "Suspects:" in out
+    assert "Places:" in out and "Question " in out and "[false]" in out
+    assert "{" not in out and "}" not in out
+    assert "Read the " in out and "chapel_register" not in out
+
+
 def test_generate_refuses_an_unknown_pack_and_an_unwritable_file(tmp_path, capsys):
     assert main(["generate", "1", "--pack", "nowhere"]) == 2
     assert "no bundled pack" in capsys.readouterr().err

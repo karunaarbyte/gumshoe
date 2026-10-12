@@ -16,6 +16,7 @@ from gumshoe.cases.model.serialize import dump_case, load_case
 from gumshoe.cases.model.spec import PRESET_ORDER, UnsupportedPreset
 from gumshoe.cases.play import load_session
 from gumshoe.cases.tools.builtin import BuiltinPackError, load_builtin_pack
+from gumshoe.cases.tools.case_text import render_case
 from gumshoe.cases.tools.dev import simulate_lines
 from gumshoe.cases.tools.gen_dev import smoke
 from gumshoe.cases.tools.pack_cli import run_pack_check
@@ -52,6 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--preset", choices=PRESET_ORDER, default="standard")
     gen.add_argument("--pack", default="castle", help="name of a bundled pack")
     gen.add_argument("-o", "--output", type=Path, help="write the case here instead of stdout")
+    gen.add_argument("--text", action="store_true", help="print the case as readable text")
     gen.set_defaults(handler=_generate)
     smoke_cmd = sub.add_parser("smoke", help="developer: attempts and failures over a run of seeds")
     smoke_cmd.add_argument("--preset", choices=PRESET_ORDER, default="standard")
@@ -162,10 +164,14 @@ def _simulate(args: argparse.Namespace) -> int:
 
 def _generate(args: argparse.Namespace) -> int:
     try:
-        case = generate(args.seed, args.preset, load_builtin_pack(args.pack))
+        pack = load_builtin_pack(args.pack)
+        case = generate(args.seed, args.preset, pack)
     except (BuiltinPackError, UnsupportedPreset, CaseGenerationError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    if args.text:
+        print("\n".join(render_case(case, pack)))
+        return 0
     data = dump_case(case)
     if args.output is None:
         print(data.decode("utf-8"))
