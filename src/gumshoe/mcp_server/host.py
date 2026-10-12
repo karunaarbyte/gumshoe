@@ -11,6 +11,9 @@ from collections.abc import Callable
 from typing import Protocol
 
 from gumshoe.cases import (
+    AccusationPlan,
+    AccusationResult,
+    AxisOptions,
     BuiltinPackError,
     CaseGenerationError,
     GameNotOver,
@@ -19,6 +22,7 @@ from gumshoe.cases import (
     HandleCollision,
     NotebookView,
     Pack,
+    ParsedAccusation,
     PlayerCaseView,
     RevealView,
     SourceResult,
@@ -33,6 +37,7 @@ from gumshoe.mcp_server.errors import GameError
 
 MAX_SEED = 2**63 - 1
 SALT_TRIES = 16
+AXES = ("who", "how", "why")
 
 
 class IdSource(Protocol):
@@ -148,3 +153,24 @@ class GameHost:
         with self._lock:
             session = self._game(game).session
             return _ended(session.reveal)
+
+    def nameable(self, game: str, axis: str) -> AxisOptions:
+        if axis not in AXES:
+            raise GameError("bad_argument", f"axis must be one of {', '.join(AXES)}")
+        with self._lock:
+            return self._game(game).session.nameable(axis)
+
+    def describe_accusation(
+        self, game: str, who: str | None = None, how: str | None = None, why: str | None = None
+    ) -> AccusationPlan:
+        with self._lock:
+            session = self._game(game).session
+            return session.describe_accusation(ParsedAccusation(who=who, how=how, why=why))
+
+    def accuse(
+        self, game: str, who: str, how: str, why: str, confirmed: bool = False
+    ) -> AccusationResult:
+        with self._lock:
+            session = self._game(game).session
+            parsed = ParsedAccusation(who=who, how=how, why=why)
+            return _ended(lambda: session.accuse(parsed, confirmed=confirmed))
