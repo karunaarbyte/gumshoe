@@ -14,7 +14,7 @@ from gumshoe.cases.packs.issues import PackIssue
 LENGTH_TOLERANCE = Fraction(1, 5)  # 20%
 
 
-def _candidates(pack: Pack) -> dict[str, frozenset[str]]:
+def candidate_tokens(pack: Pack) -> dict[str, frozenset[str]]:
     """id -> distinctive tokens; an id is `method:<key>` or `motive:<key>`."""
     groups = (
         {f"method:{m.key}": token_set(m.label, *m.aliases) for m in pack.method_defs},
@@ -69,7 +69,7 @@ def _texts(pack: Pack) -> Iterator[tuple[str, str, str | None]]:
 
 
 def _leaks(pack: Pack) -> list[PackIssue]:
-    candidates = _candidates(pack)
+    candidates = candidate_tokens(pack)
     out: list[PackIssue] = []
     for path, text, owner in _texts(pack):
         words = set(tokens(text))

@@ -64,7 +64,7 @@ SAMPLES: tuple[dict[str, str], ...] = (
 )
 
 
-_POSSESSIVE = {"he": "his", "she": "her", "they": "their", "it": "its"}
+POSSESSIVE = {"he": "his", "she": "her", "they": "their", "it": "its"}
 
 
 def phrase(entry: Entry) -> str:
@@ -87,7 +87,7 @@ def pack_sample(pack: Pack) -> dict[str, str]:
         lord = pack.victims[0]
         subject = lord.pronoun or "they"
         sample.update(
-            {"victim": phrase(lord), "victim.subj": subject, "victim.poss": _POSSESSIVE[subject]}
+            {"victim": phrase(lord), "victim.subj": subject, "victim.poss": POSSESSIVE[subject]}
         )
     if pack.slot_defs:
         slot = pack.slot_defs[0]
@@ -95,7 +95,7 @@ def pack_sample(pack: Pack) -> dict[str, str]:
     who = next((e for r in pack.roles for e in r.names[:1]), None)
     if who is not None:
         subject = who.pronoun or "they"
-        sample.update({"who": phrase(who), "who.subj": subject, "who.poss": _POSSESSIVE[subject]})
+        sample.update({"who": phrase(who), "who.subj": subject, "who.poss": POSSESSIVE[subject]})
     return sample
 
 
