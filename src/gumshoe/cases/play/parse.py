@@ -82,8 +82,8 @@ def accusation_questions(
     return AccusationPrompt(state=f"The player said: {player_text}", questions=questions, keys=keys)
 
 
-def _pick(keymap: dict[str, str | None], answer: ChoiceAnswer) -> str | None:
-    ranked = sorted(answer.probabilities.items(), key=lambda kv: (-kv[1], kv[0]))
+def _pick(keymap: dict[str, str | None], probabilities: Mapping[str, float]) -> str | None:
+    ranked = sorted(probabilities.items(), key=lambda kv: (-kv[1], kv[0]))
     if not ranked:
         return None
     top_key, top_p = ranked[0]
@@ -93,15 +93,25 @@ def _pick(keymap: dict[str, str | None], answer: ChoiceAnswer) -> str | None:
     return keymap.get(top_key)
 
 
-def interpret(prompt: AccusationPrompt, result: DecisionResult) -> dict[Axis, str | None]:
+def interpret_probabilities(
+    prompt: AccusationPrompt, probabilities: Mapping[str, Mapping[str, float]]
+) -> dict[Axis, str | None]:
     """A part is a candidate only on a confident, clear win; everything else is None."""
     out: dict[Axis, str | None] = {}
     for axis in Axis:
-        answer = result.answers.get(axis.value)
         keymap = prompt.keys.get(axis.value)
-        out[axis] = (
-            _pick(keymap, answer)
-            if keymap is not None and isinstance(answer, ChoiceAnswer)
-            else None
-        )
+        probs = probabilities.get(axis.value)
+        out[axis] = _pick(keymap, probs) if keymap is not None and probs is not None else None
     return out
+
+
+def interpret(prompt: AccusationPrompt, result: DecisionResult) -> dict[Axis, str | None]:
+    """The same rule over a decider's answers (non-choice answers count as no answer)."""
+    return interpret_probabilities(
+        prompt,
+        {
+            name: answer.probabilities
+            for name, answer in result.answers.items()
+            if isinstance(answer, ChoiceAnswer)
+        },
+    )

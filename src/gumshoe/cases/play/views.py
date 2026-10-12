@@ -54,6 +54,20 @@ class ContradictionView(View):
     text: str
 
 
+class QuestionView(View):
+    """One multiple-choice question for a decision model: option letter -> when to pick it."""
+
+    instructions: str
+    criteria: dict[str, str]
+
+
+class AccusationQuestions(View):
+    """The questions that turn a player's words into an accusation (keys stay in the session)."""
+
+    state: str
+    questions: dict[str, QuestionView]  # axis (who, how, why) -> question
+
+
 class SourceResult(View):
     """kind: search | interrogate | records. status: ok | nothing_new | locked | unknown."""
 

@@ -4,16 +4,19 @@ the session, its error types, the accusation prompt and the views."""
 from gumshoe.cases.play import views
 from gumshoe.cases.play.parse import AccusationPrompt
 from gumshoe.cases.play.session import (
+    BadAnswers,
     GameNotOver,
     GameOver,
     GameSession,
     HandleCollision,
+    NoAccusationPrompt,
     StateMismatch,
     UnknownHandle,
     load_session,
 )
 from gumshoe.cases.play.views import (
     AccusationPlan,
+    AccusationQuestions,
     AccusationResult,
     AxisOptions,
     AxisProblem,
@@ -27,6 +30,7 @@ from gumshoe.cases.play.views import (
     ParsedAccusation,
     PersonaBrief,
     PlayerCaseView,
+    QuestionView,
     RecordKindView,
     ReplyCheck,
     ReplyViolation,
@@ -38,10 +42,11 @@ from gumshoe.cases.play.views import (
 )
 
 __all__ = [
-    "AccusationPlan", "AccusationPrompt", "AccusationResult", "AxisOptions", "AxisProblem",
-    "Candidate", "ContradictionView", "FactView", "GameNotOver", "GameOver", "GameSession",
-    "HandleCollision", "LocationView", "NotebookFact", "NotebookSection", "NotebookView",
-    "ParsedAccusation", "PersonaBrief", "PlayerCaseView", "RecordKindView", "ReplyCheck",
+    "AccusationPlan", "AccusationPrompt", "AccusationQuestions", "AccusationResult",
+    "AxisOptions", "AxisProblem", "BadAnswers", "Candidate", "ContradictionView", "FactView",
+    "GameNotOver", "GameOver", "GameSession", "HandleCollision", "LocationView",
+    "NoAccusationPrompt", "NotebookFact", "NotebookSection", "NotebookView", "ParsedAccusation",
+    "PersonaBrief", "PlayerCaseView", "QuestionView", "RecordKindView", "ReplyCheck",
     "ReplyViolation", "ResolvedPart", "RevealView", "SourceResult", "StateMismatch",
     "SuspectView", "UnknownHandle", "View", "load_session", "views",
 ]  # fmt: skip

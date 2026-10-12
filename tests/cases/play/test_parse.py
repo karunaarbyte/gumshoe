@@ -2,7 +2,7 @@ import pytest
 
 from gumshoe.cases.model.enums import Axis
 from gumshoe.cases.model.index import CaseIndex
-from gumshoe.cases.play.parse import accusation_questions, interpret
+from gumshoe.cases.play.parse import accusation_questions, interpret, interpret_probabilities
 from gumshoe.decider import ChoiceAnswer, DecisionResult
 from tests.cases.fixtures import build_case
 from tests.cases.helpers import replace_in
@@ -100,3 +100,21 @@ def test_more_options_than_letters_is_a_programming_error():
     ix = CaseIndex.of(build_case().model_copy(update={"methods": many}))
     with pytest.raises(ValueError, match="option letters"):
         accusation_questions(ix, handle_of, 0, "x")
+
+
+def test_probabilities_resolve_exactly_like_a_decision_result():
+    p = prompt()
+    r = result(p, {"who": ("h_s_boris", 0.9, 0.05), "how": ("h_m_poison", 0.8, 0.1)})
+    probabilities = {
+        name: dict(a.probabilities) for name, a in r.answers.items() if isinstance(a, ChoiceAnswer)
+    }
+    assert interpret_probabilities(p, probabilities) == interpret(p, r)
+    assert interpret_probabilities(p, probabilities)[Axis.WHO] == "h_s_boris"
+
+
+def test_empty_probabilities_pick_nothing():
+    assert interpret_probabilities(prompt(), {}) == {
+        Axis.WHO: None,
+        Axis.HOW: None,
+        Axis.WHY: None,
+    }

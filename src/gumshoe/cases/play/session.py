@@ -1,6 +1,7 @@
 """GameSession: the only door to a game. It keeps the skeleton Case and the PlayState
 server-side and hands out views, never ids, truth or effect kinds."""
 
+from collections.abc import Mapping
 from typing import Literal
 
 from gumshoe.cases.core.ids import make_id
@@ -26,11 +27,13 @@ from gumshoe.cases.play.engine import (
 from gumshoe.cases.play.labels import match_label as match_label_ids
 from gumshoe.cases.play.parse import AccusationPrompt, accusation_questions
 from gumshoe.cases.play.parse import interpret as interpret_answers
+from gumshoe.cases.play.parse import interpret_probabilities as interpret_picks
 from gumshoe.cases.play.persona import persona_brief
 from gumshoe.cases.play.reply_check import reply_check
 from gumshoe.cases.play.state import MAX_ATTEMPTS, PlayState, Status, Triple, new_state
 from gumshoe.cases.play.views import (
     AccusationPlan,
+    AccusationQuestions,
     AccusationResult,
     AxisOptions,
     AxisProblem,
@@ -44,6 +47,7 @@ from gumshoe.cases.play.views import (
     ParsedAccusation,
     PersonaBrief,
     PlayerCaseView,
+    QuestionView,
     RecordKindView,
     ReplyCheck,
     ReplyViolation,
@@ -59,10 +63,12 @@ FALLBACK_CONTRADICTION = 'That statement does not hold up against what you have 
 
 __all__ = [
     "FALLBACK_CONTRADICTION",
+    "BadAnswers",
     "GameNotOver",
     "GameOver",
     "GameSession",
     "HandleCollision",
+    "NoAccusationPrompt",
     "StateMismatch",
     "UnknownHandle",
     "load_session",
@@ -83,6 +89,14 @@ class UnknownHandle(LookupError):
 
 class StateMismatch(ValueError):
     """The play state belongs to a different case."""
+
+
+class NoAccusationPrompt(LookupError):
+    """`interpret_probabilities` was called with no accusation_questions call to answer."""
+
+
+class BadAnswers(ValueError):
+    """Answers that do not fit the stored accusation questions."""
 
 
 def _humanise(key: str) -> str:
@@ -118,6 +132,7 @@ class GameSession:
         self._state = state
         self._handles = _make_handles(case, salt)
         self._ids = {handle: entity for entity, handle in self._handles.items()}
+        self._prompt: AccusationPrompt | None = None
 
     # -- state ------------------------------------------------------------------------------
 
@@ -424,6 +439,45 @@ class GameSession:
             axis: self._visible(axis, h) for axis, h in interpret_answers(prompt, result).items()
         }
         return ParsedAccusation(who=picks[Axis.WHO], how=picks[Axis.HOW], why=picks[Axis.WHY])
+
+    def accusation_questions(self, player_text: str) -> AccusationQuestions:
+        """The questions for a decision model, as plain views. The letter-to-handle keys stay
+        here: the prompt is stored (replacing any earlier one) for `interpret_probabilities`."""
+        prompt = self.accusation_prompt(player_text)
+        self._prompt = prompt
+        return AccusationQuestions(
+            state=prompt.state,
+            questions={
+                axis: QuestionView(instructions=q.instructions, criteria=dict(q.criteria))
+                for axis, q in prompt.questions.items()
+            },
+        )
+
+    def interpret_probabilities(
+        self, probabilities: Mapping[str, Mapping[str, float]]
+    ) -> ParsedAccusation:
+        """Apply the engine's confidence rule to option probabilities (axis -> letter -> p) for
+        the stored questions; the stored prompt is then used up."""
+        prompt = self._prompt
+        if prompt is None:
+            raise NoAccusationPrompt("no accusation questions are waiting for answers")
+        for axis, picks in probabilities.items():
+            keymap = prompt.keys.get(axis)
+            if keymap is None:
+                raise BadAnswers(f"no question was asked for {axis!r}")
+            for letter, p in picks.items():
+                if letter not in keymap:
+                    raise BadAnswers(f"{letter!r} is not an option for {axis!r}")
+                if not 0.0 <= p <= 1.0:  # also false for NaN
+                    raise BadAnswers("a probability must be between 0 and 1")
+        self._prompt = None
+        picks_by_axis = {
+            axis: self._visible(axis, h)
+            for axis, h in interpret_picks(prompt, probabilities).items()
+        }
+        return ParsedAccusation(
+            who=picks_by_axis[Axis.WHO], how=picks_by_axis[Axis.HOW], why=picks_by_axis[Axis.WHY]
+        )
 
     def _candidate_id(self, axis: Axis, handle: str | None) -> str | None:
         candidate = self._ids.get(handle or "")
