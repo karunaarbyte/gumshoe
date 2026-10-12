@@ -37,7 +37,9 @@ from gumshoe.cases.generate.outputs import (
     TimelineOut,
     TruthOut,
 )
+from gumshoe.cases.generate.skin import template_skin
 from gumshoe.cases.generate.skin_catalogue import SkinIssue
+from gumshoe.cases.generate.skin_lint import lint as skin_lint
 from gumshoe.cases.generate.streams import Stream
 from gumshoe.cases.generate.structure import need, run_stage
 from gumshoe.cases.generate.trace import Attempt, CaseGenerationError, GenerationTrace
@@ -117,7 +119,7 @@ def earliest(stages: Iterable[FixStage]) -> str:
 
 
 def _stamp(ctx: GenContext, case: Case, retry: Retry, attempts: int) -> Case:
-    """The bookkeeping fields, which no rule reads. `skin_rev` is 0: there is no skin yet."""
+    """The bookkeeping fields, which no rule reads."""
     pack = ctx.pack
     code = ("c", ctx.seed, ctx.preset, pack.id, pack.skeleton_hash(), ctx.spec_hash)
     return case.model_copy(
@@ -126,11 +128,11 @@ def _stamp(ctx: GenContext, case: Case, retry: Retry, attempts: int) -> Case:
             "seed": ctx.seed,
             "generator_version": generator_version(),
             "skeleton_algo_version": SKELETON_ALGO_VERSION,
-            "pack_versions": (("skeleton_rev", pack.skeleton_rev),),
+            "pack_versions": (("skeleton_rev", pack.skeleton_rev), ("skin_rev", pack.skin_rev)),
             "attempt": attempts,
             "stage_attempts": retry.counters(),
             "theme": pack.id,
-            "skin_rev": 0,
+            "skin_rev": pack.skin_rev,
             "skin_hash": skin_hash(case),
         }
     )
@@ -278,8 +280,8 @@ def run_pipeline(
     budget: int = BUDGET,
     runner: Runner = run_stage,
     validator: Validator | None = None,
-    skin: Skin = identity_skin,
-    lint: Lint = no_lint,
+    skin: Skin = template_skin,
+    lint: Lint = skin_lint,
 ) -> tuple[Case, GenerationTrace]:
     """Generate the case, retrying as the design says. `counters` starts the stages at given
     stream counters (a replay of a stored case); the other arguments let tests inject faults.

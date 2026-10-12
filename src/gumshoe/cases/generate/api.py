@@ -46,7 +46,8 @@ def regenerate(case: Case, pack: Pack, presets: Mapping[str, PresetDef] = PRESET
     the validator once, however many attempts the original took. Refuses a case made by other
     code or another pack (`VersionMismatch`); if that one pass does not validate (the validator
     changed since the case was made) it raises `CaseGenerationError` instead of drawing a
-    different case. The result equals the original except `attempt`."""
+    different case. The result equals the original except `attempt`; a pack whose wording
+    changed (another `skin_rev`, or the same one with other texts) is refused."""
     if case.seed is None or case.pack_ref is None:
         raise VersionMismatch("the case records no seed or pack: it was not generated")
     if case.skeleton_algo_version != SKELETON_ALGO_VERSION:
@@ -65,8 +66,15 @@ def regenerate(case: Case, pack: Pack, presets: Mapping[str, PresetDef] = PRESET
         raise VersionMismatch(
             f"the case stores {len(counters)} stage counters, not {len(PIPELINE)}"
         )
+    if case.skin_rev != pack.skin_rev:
+        raise VersionMismatch(
+            f"the case has wording revision {case.skin_rev}, the pack has {pack.skin_rev}"
+        )
     ctx = GenContext.of(pack, case.seed, case.spec.preset, presets)
     if ctx.spec != case.spec:
         raise VersionMismatch("the case was made for another spec: the preset tables differ")
     stored = dict(zip(PIPELINE, counters, strict=True))
-    return run_pipeline(ctx, counters=stored, budget=1)[0]
+    rebuilt = run_pipeline(ctx, counters=stored, budget=1)[0]
+    if rebuilt.skin_hash != case.skin_hash:  # the wording changed without a new `skin_rev`
+        raise VersionMismatch("the pack's wording changed without a new skin_rev")
+    return rebuilt

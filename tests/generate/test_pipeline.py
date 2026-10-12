@@ -7,7 +7,7 @@ from gumshoe.cases.generate.assemble import generator_version
 from gumshoe.cases.generate.errors import GenerationError
 from gumshoe.cases.generate.gen_context import PIPELINE, SKELETON_ALGO_VERSION, GenContext
 from gumshoe.cases.generate.outputs import GatingOut
-from gumshoe.cases.generate.pipeline import run_pipeline
+from gumshoe.cases.generate.pipeline import no_lint, run_pipeline
 from gumshoe.cases.generate.skin_catalogue import make
 from gumshoe.cases.generate.structure import run_stage
 from gumshoe.cases.generate.trace import CaseGenerationError
@@ -19,6 +19,7 @@ from gumshoe.cases.validate.report import Profile, Report, Severity
 from gumshoe.cases.validate.runner import validate
 from tests.generate import retry_model
 from tests.generate.helpers import PRESET_NAMES, castle
+from tests.generate.skin_helpers import made
 
 FACTS_CODE, ROSTER_CODE, GATING_CODE, PLACEMENT_CODE = (
     "NO_POSITIVE_EVIDENCE",
@@ -82,8 +83,11 @@ def test_the_case_carries_its_bookkeeping():
     assert case.generator_version == generator_version()
     assert [part.split("=")[0] for part in generator_version().split(",")] == list(PIPELINE)
     assert case.skeleton_algo_version == SKELETON_ALGO_VERSION
-    assert case.pack_versions == (("skeleton_rev", pack.skeleton_rev),)
-    assert case.theme == pack.id and case.skin_rev == 0 and case.skin_hash
+    assert case.pack_versions == (
+        ("skeleton_rev", pack.skeleton_rev),
+        ("skin_rev", pack.skin_rev),
+    )
+    assert case.theme == pack.id and case.skin_rev == pack.skin_rev and case.skin_hash
     assert case.pack_ref is not None and case.pack_ref.skeleton_hash == pack.skeleton_hash()
     others = {generate(s, p, pack).id for s in range(3) for p in PRESET_NAMES}
     assert case.id not in others and len(others) == 9
@@ -108,7 +112,7 @@ def test_a_facts_failure_reruns_facts_and_everything_after_it_only():
         return case
 
     case, trace = run_pipeline(
-        ctx, runner=recording(log), validator=scripted([[FACTS_CODE]]), skin=skin
+        ctx, runner=recording(log), validator=scripted([[FACTS_CODE]]), skin=skin, lint=no_lint
     )
     first = [(s, 0) for s in PIPELINE[:6]]
     assert log == first + [("facts", 1), ("placement", 1), ("gating", 1)]
@@ -212,7 +216,7 @@ def test_the_skin_stage_draws_from_the_stream_of_its_counter():
         drawn.append(stream.below(2**32))
         return case
 
-    run_pipeline(ctx_of(), validator=scripted([[FACTS_CODE]]), skin=skin)
+    run_pipeline(ctx_of(), validator=scripted([[FACTS_CODE]]), skin=skin, lint=no_lint)
     ctx = ctx_of()
     assert drawn == [ctx.stream("skin", n).below(2**32) for n in (0, 1)]
 
@@ -252,7 +256,7 @@ def test_a_broken_reference_from_the_assembly_is_a_bug_not_a_retry():
         return case.model_copy(update={"start": Start(facts=("nothing",))})
 
     with pytest.raises(CaseGenerationError, match="no stage can fix DANGLING_REF") as stopped:
-        run_pipeline(ctx_of(), skin=skin)
+        run_pipeline(ctx_of(), skin=skin, lint=no_lint)
     assert len(stopped.value.trace.attempts) == 1
 
 
@@ -560,3 +564,31 @@ def test_a_skin_that_raises_on_a_sound_skeleton_is_a_skin_stage_error():
 
     with pytest.raises(CaseGenerationError, match="the skin stage failed: no text for hints"):
         run_pipeline(ctx_of(), skin=skin, budget=3)
+
+
+def test_generate_returns_the_case_with_its_text():
+    case = generate(3, "standard", castle())
+    assert case == made(3, "standard")
+    assert case.intro and all(f.text for f in case.facts)
+
+
+def test_a_pack_whose_wording_changed_cannot_regenerate_an_old_case():
+    from tests.generate.helpers import castle_with
+
+    case = generate(3, "standard", castle())
+
+    def reword(data):
+        for family in data["families"]:
+            if family["kind"] == "intro":
+                family["variants"] = [v[:-1] + ", it was said." for v in family["variants"]]
+
+    with pytest.raises(VersionMismatch, match="without a new skin_rev"):
+        regenerate(case, castle_with(reword))
+
+    def reword_and_bump(data):
+        reword(data)
+        data["skin_rev"] += 1
+
+    with pytest.raises(VersionMismatch, match="wording revision"):
+        regenerate(case, castle_with(reword_and_bump))
+    assert regenerate(case, castle()).intro == case.intro

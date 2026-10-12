@@ -21,7 +21,7 @@ STAGE_VERSIONS: dict[str, int] = {
     "placement": 1,
     "gating": 1,
     "assemble": 1,
-    "skin": 1,  # 1: the identity skin; 2d-3b brings the template skin
+    "skin": 2,  # 1: the identity skin; 2: the template skin
 }
 SKELETON_ALGO_VERSION = 2
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from gumshoe.cases.generate.api import generate
 from gumshoe.cases.generate.assemble import build_case
 from gumshoe.cases.generate.gen_context import GenContext
-from gumshoe.cases.model.serialize import skeleton_digest
+from gumshoe.cases.model.serialize import skeleton_digest, skin_hash
 from tests.generate.helpers import GOLDEN_SEEDS, PRESET_NAMES, castle, gating_of, stages
 
 GOLDEN = Path(__file__).parent / "golden" / "castle_stages.json"
@@ -30,6 +30,7 @@ def stage_digests() -> dict[str, dict[str, str]]:
                 "gating": gates.digest(),
                 "case": skeleton_digest(build_case(ctx, *outputs)),
                 "final": skeleton_digest(generate(seed, preset, pack)),
+                "skin": skin_hash(generate(seed, preset, pack)),
             }
     return found
 
