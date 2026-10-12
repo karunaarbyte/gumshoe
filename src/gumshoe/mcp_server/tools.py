@@ -14,9 +14,11 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from gumshoe.cases import (
     AccusationPlan,
+    AccusationQuestions,
     AccusationResult,
     AxisOptions,
     NotebookView,
+    ParsedAccusation,
     PersonaBrief,
     PlayerCaseView,
     ReplyCheck,
@@ -99,6 +101,22 @@ def build_server(host: GameHost) -> MCPServer:
         """Check an accusation without making it: what resolves, what is missing or not yet
         allowed, warnings, and the confirmation line."""
         return _guarded(lambda: host.describe_accusation(game, who, how, why))
+
+    @tool
+    def accusation_questions(game: str, text: str) -> AccusationQuestions:
+        """The multiple-choice questions that turn the player's words into an accusation, one per
+        axis (who, how, why; an axis with nothing to choose is left out). Answer each with a
+        decision model, then pass the option probabilities to interpret_accusation."""
+        return _guarded(lambda: host.accusation_questions(game, text))
+
+    @tool
+    def interpret_accusation(
+        game: str, probabilities: dict[str, dict[str, float]]
+    ) -> ParsedAccusation:
+        """Apply the engine's confidence rule to option probabilities (axis -> option letter ->
+        probability) for the questions last returned by accusation_questions. Returns a handle or
+        null per axis, ready for describe_accusation. Uses the questions up."""
+        return _guarded(lambda: host.interpret_accusation(game, probabilities))
 
     @tool
     def accuse(

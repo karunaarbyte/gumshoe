@@ -12,7 +12,7 @@ from tests.mcp_server.helpers import SeqIds, castle_case
 TOOLS = {
     "new_game", "case_brief", "search", "interrogate", "check_records", "notebook", "nameable",
     "describe_accusation", "accuse", "give_up", "reveal", "persona_brief", "check_reply",
-    "save_game", "load_game", "close_game",
+    "save_game", "load_game", "close_game", "accusation_questions", "interpret_accusation",
 }  # fmt: skip
 ERROR = re.compile(r"^Error executing tool \w+: (?P<code>[a-z_]+): (?P<message>.+)$", re.DOTALL)
 
@@ -181,3 +181,19 @@ async def test_every_preset_starts_through_the_protocol(tmp_path, preset):
     async with client:
         new = await call(client, "new_game", seed=3, preset=preset)
     assert new["brief"]["status"] == "playing" and new["brief"]["suspects"]
+
+
+async def test_the_accusation_parser_works_over_the_wire(tmp_path):
+    _, client = new_client(tmp_path)
+    async with client:
+        game = (await call(client, "new_game", seed=1))["game"]
+        q = await call(client, "accusation_questions", game=game, text="the cook did it")
+        assert set(q["questions"]) == {"who"}
+        letter = next(iter(q["questions"]["who"]["criteria"]))
+        parsed = await call(
+            client, "interpret_accusation", game=game, probabilities={"who": {letter: 0.4}}
+        )
+        assert parsed == {"who": None, "how": None, "why": None}
+        text = await error_of(client, "interpret_accusation", game=game, probabilities={})
+        match = ERROR.match(text)
+        assert match and match["code"] == "bad_argument", text

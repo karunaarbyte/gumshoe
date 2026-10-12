@@ -53,6 +53,7 @@ def play(seed, preset, folder):
     log: list[str] = []
     attempts, status = 3, "playing"
     known: set[str] = set()
+    last_q = None
 
     def pick(axis):
         options = host.nameable(game, axis).options
@@ -75,11 +76,13 @@ def play(seed, preset, folder):
         return "accuse", result
 
     def act(step):
+        nonlocal last_q
         if step == SCRIPT_STEP and seed % 3 != 2 and status == "playing":
             return scripted()
         action = rng.choice(
             ["search"] * 3 + ["interrogate"] * 3 + ["records"] * 3 + ["notebook", "brief"]
             + ["nameable", "describe", "accuse", "accuse", "persona", "reply", "reveal", "save"]
+            + ["acc_q", "interpret"]
             + (["give_up"] if step >= STEPS - 5 and rng.random() < 0.3 else [])
         )  # fmt: skip
         if action == "search":
@@ -104,6 +107,21 @@ def play(seed, preset, folder):
         if action == "reply":
             reply = rng.choice(["I was home.", f"It was {truth_names[1]}.", "Ask the cook."])
             return action, host.check_reply(game, rng.choice(people), "Tell me.", reply)
+        if action == "acc_q":
+            last_q = host.accusation_questions(
+                game, rng.choice(["Boris did it", "the rope", "nonsense", ""])
+            )
+            return action, last_q
+        if action == "interpret":
+            if last_q is None:
+                last_q = host.accusation_questions(game, "anything")
+                return "acc_q", last_q
+            axis = rng.choice(sorted(last_q.questions))
+            letters = sorted(last_q.questions[axis].criteria)
+            picks = {rng.choice(letters): rng.choice([0.9, 0.5, 0.1])}
+            result = host.interpret_accusation(game, {axis: picks})
+            last_q = None
+            return action, result
         if action == "save":
             return action, host.save_game(game)
         if action == "give_up":

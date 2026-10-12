@@ -17,14 +17,17 @@ from pydantic import ValidationError
 
 from gumshoe.cases import (
     AccusationPlan,
+    AccusationQuestions,
     AccusationResult,
     AxisOptions,
+    BadAnswers,
     BuiltinPackError,
     CaseGenerationError,
     GameNotOver,
     GameOver,
     GameSession,
     HandleCollision,
+    NoAccusationPrompt,
     NotebookView,
     Pack,
     ParsedAccusation,
@@ -100,6 +103,11 @@ def _ended[T](call: Callable[[], T]) -> T:
         raise GameError("game_over", "the game has ended") from exc
     except GameNotOver as exc:
         raise GameError("not_over", "the game is still being played") from exc
+
+
+def _check_length(name: str, text: str) -> None:
+    if len(text) > MAX_TEXT:
+        raise GameError("bad_argument", f"{name} is longer than {MAX_TEXT} characters")
 
 
 class GameHost:
@@ -240,10 +248,26 @@ class GameHost:
             except UnknownHandle as exc:
                 raise GameError("unknown_handle", "no such suspect") from exc
 
+    def accusation_questions(self, game: str, text: str) -> AccusationQuestions:
+        _check_length("text", text)
+        with self._lock:
+            return self._game(game).session.accusation_questions(text)
+
+    def interpret_accusation(
+        self, game: str, probabilities: dict[str, dict[str, float]]
+    ) -> ParsedAccusation:
+        with self._lock:
+            session = self._game(game).session
+            try:
+                return session.interpret_probabilities(probabilities)
+            except NoAccusationPrompt as exc:
+                raise GameError("bad_argument", "call accusation_questions first") from exc
+            except BadAnswers as exc:
+                raise GameError("bad_argument", str(exc)) from exc
+
     def check_reply(self, game: str, suspect: str, player_text: str, reply: str) -> ReplyCheck:
         for name, text in (("player_text", player_text), ("reply", reply)):
-            if len(text) > MAX_TEXT:
-                raise GameError("bad_argument", f"{name} is longer than {MAX_TEXT} characters")
+            _check_length(name, text)
         with self._lock:
             check = self._game(game).session.check_reply(suspect, player_text, reply)
             if any(v.category == "unknown_suspect" for v in check.violations):
