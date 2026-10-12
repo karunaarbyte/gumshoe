@@ -179,6 +179,14 @@ _ROWS = (
         "percent",
     ),
     _row(
+        "TRACE_SHAPE_SKEW",
+        8,
+        "an absent text has {absent} {what} where its paired trace template has {template}",
+        "what",
+        "absent",
+        "template",
+    ),
+    _row(
         "PAIR_COUNT_SKEW",
         8,
         "physical_proof has {proof} variants and physical_clear has {clear}",

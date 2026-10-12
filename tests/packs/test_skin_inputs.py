@@ -111,7 +111,10 @@ def test_absent_texts_far_from_the_trace_templates_in_length_are_a_pack_wide_ske
     pack = base()
     for key in ("dagger", "poison", "rope"):
         pack = with_trace(pack, key, absent=("Short one.", "Short two."))
-    assert found(pack) == [("TEXT_LENGTH_SKEW", "method_defs")]
+    issues = found(pack)
+    assert ("TEXT_LENGTH_SKEW", "method_defs") in issues
+    # texts that short are also another shape: that is reported per trace
+    assert {c for c, _ in issues} == {"TEXT_LENGTH_SKEW", "TRACE_SHAPE_SKEW"}
 
 
 def test_the_physical_pair_must_match_in_count_mean_and_range():

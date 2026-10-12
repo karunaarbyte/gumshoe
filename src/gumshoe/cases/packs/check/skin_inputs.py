@@ -1,13 +1,16 @@
 """Stage 8: skin inputs. Does the pack hold the wording for every fact the generator builds, and
 is that wording shaped so that its count, length or form tells nothing about which text is true."""
 
+import re
 from collections.abc import Sequence
 from fractions import Fraction
+from itertools import permutations
 
 from gumshoe.cases.core.labels import token_set
 from gumshoe.cases.core.text import tokens
 from gumshoe.cases.model.pack import FamilyDef, Pack
 from gumshoe.cases.packs.catalogue import make
+from gumshoe.cases.packs.check.hygiene import candidate_tokens
 from gumshoe.cases.packs.check.lint import SAMPLES, render
 from gumshoe.cases.packs.issues import PackIssue
 
@@ -19,6 +22,7 @@ MIN_VICTIMS = 6
 MIN_SMALLTALK = 20
 CANDIDATE_TOLERANCE = Fraction(1, 5)  # between candidates of one group: 20%
 PAIR_TOLERANCE = Fraction(1, 10)  # between texts a player can compare: 10%
+POSITION_TOLERANCE = Fraction(1, 10)  # how far through a text the place stands: 0.10
 
 
 def _mean(texts: Sequence[str]) -> Fraction:
@@ -113,6 +117,69 @@ def _lengths(pack: Pack) -> list[PackIssue]:
     return out
 
 
+Shape = tuple[int, int, int, Fraction, bool]  # words, commas, characters, place, names method
+CHARS_TOLERANCE = 1  # characters, with the place left out
+
+
+def _shape(text: str, own: frozenset[str]) -> Shape:
+    """What a player sees of a text apart from the words: how many, how many commas, how long,
+    how far through it the place stands, and whether it names the method. The place itself is
+    not counted (its words belong to the location)."""
+    bare = re.sub(r"\s+([,.])", r"\1", " ".join(text.replace("{place.in}", " ").split()))
+    position = Fraction(max(text.find("{place.in}"), 0), len(text))
+    words = len(re.findall(r"[A-Za-z']+", bare))
+    return (words, text.count(","), len(bare), position, bool(set(tokens(text)) & own))
+
+
+def _differences(absent: Shape, template: Shape) -> dict[str, tuple[object, object]]:
+    """How an absent text's shape departs from its template's, by what differs."""
+    found: dict[str, tuple[object, object]] = {}
+    if absent[0] != template[0]:
+        found["words"] = (absent[0], template[0])
+    if absent[1] != template[1]:
+        found["commas"] = (absent[1], template[1])
+    if abs(absent[2] - template[2]) > CHARS_TOLERANCE:
+        found["characters"] = (absent[2], template[2])
+    if abs(absent[3] - template[3]) > POSITION_TOLERANCE:
+        found["place position"] = (f"{float(absent[3]):.2f}", f"{float(template[3]):.2f}")
+    if absent[4] != template[4]:
+        found["mentions of the method"] = (int(absent[4]), int(template[4]))
+    return found
+
+
+def _trace_shapes(pack: Pack) -> list[PackIssue]:
+    """In one case the decisive texts are one true trace and several absent ones, so a player can
+    pick the true one by whichever shape the true texts share (fewest words, fewest commas, the
+    shortest, the place first, the method named). Each trace's absent texts must therefore mirror
+    its templates in shape: the same word and comma count and method naming, a length within a
+    character and the place within 0.10 of the way through. Texts are paired the best way."""
+    owned = candidate_tokens(pack)
+    out: list[PackIssue] = []
+    for method in pack.method_defs:
+        own = owned.get(f"method:{method.key}", frozenset())
+        for trace in method.traces:
+            templates = [_shape(t, own) for t in trace.templates]
+            absent = [_shape(t, own) for t in trace.absent]
+            if not templates or len(absent) < len(templates):
+                continue  # TOO_FEW_TEXTS reports it
+            best = min(
+                permutations(absent, len(templates)),
+                key=lambda order: sum(
+                    len(_differences(a, t)) for a, t in zip(order, templates, strict=True)
+                ),
+            )
+            path = f"method_defs.{method.key}.traces[{trace.kind}].absent"
+            seen: set[str] = set()
+            for a, t in zip(best, templates, strict=True):
+                for what, (shown, wanted) in _differences(a, t).items():
+                    if what not in seen:
+                        seen.add(what)
+                        out.append(
+                            make("TRACE_SHAPE_SKEW", path, what=what, absent=shown, template=wanted)
+                        )
+    return out
+
+
 def _pair(pack: Pack) -> list[PackIssue]:
     by_kind: dict[str, FamilyDef] = {}
     for family in pack.families:
@@ -198,6 +265,7 @@ def check(pack: Pack) -> list[PackIssue]:
                 make("ENTRY_INCOMPLETE", f"roles.{role.key}.style", what="a role needs a style")
             )
     out += _lengths(pack)
+    out += _trace_shapes(pack)
     out += _pair(pack)
     out += _smalltalk(pack)
     return out

@@ -1,7 +1,7 @@
 [meta]
 id = "castle"
 skeleton_rev = 1
-skin_rev = 2
+skin_rev = 3
 slots = 4
 presets = ["long", "short", "standard"]
 smalltalk_allow = [
@@ -357,8 +357,8 @@ templates = [
   "A tall stand lay toppled {place.in}, cold wax spattered round its dented foot.",
 ]
 absent = [
-  "A tall stand {place.in} stood upright on its round foot, its brass gleaming.",
-  "A heavy stand {place.in} sat firm by the wall, its drip pan level.",
+  "A tall stand stood upright {place.in}, bright wax lay smooth around its foot.",
+  "A heavy stand stood upright {place.in}, its drip pan level and cleaned.",
 ]
 
 [method_defs.poison_wine]
@@ -378,8 +378,8 @@ templates = [
   "A jug {place.in} held a purple film and gave off a sour smell.",
 ]
 absent = [
-  "A cup {place.in} stood upright on the board, its inside pale and its rim dry.",
-  "A jug {place.in} held clear water and smelled faintly of apples.",
+  "A cup remained upright {place.in}, with a polished dry rim and base.",
+  "A jug {place.in} held clear water and gave off a scent of figs.",
 ]
 
 [method_defs.dagger]
@@ -399,8 +399,8 @@ templates = [
   "A slim steel point had snapped off and lay glinting {place.in}.",
 ]
 absent = [
-  "A leather sheath {place.in} hung full on its peg, snug round a slim blade.",
-  "A slim steel blade {place.in} lay glinting on a shelf, its point sharp.",
+  "A leather scabbard, slim and polished, hung at rest {place.in}.",
+  "A steel point sat sharp and whole within its sheath {place.in}.",
 ]
 
 [method_defs.rope]
@@ -420,8 +420,8 @@ templates = [
   "A shiny worn groove ran round a post {place.in}, and frayed strands lay beneath.",
 ]
 absent = [
-  "A rough post {place.in} stood firm and dry, its grain pale and tight.",
-  "A post {place.in} rose straight from the floor, its surface dull and even.",
+  "Pale smooth grain showed on a weathered post {place.in}, firm and tight.",
+  "A plain clean groove ran around a post {place.in}, and pale boards lay beneath.",
 ]
 
 [method_defs.crossbow]
@@ -441,8 +441,8 @@ templates = [
   "A neat splintered hole had been punched clean through a door {place.in}.",
 ]
 absent = [
-  "A stout door {place.in} hung flat on its hinges, its planks dark with fresh oil.",
-  "A door {place.in} stood shut and solid, its oak face dark and even.",
+  "An oak door stood whole and smooth within its frame {place.in}.",
+  "A heavy panel was polished and left gleaming across the door {place.in}.",
 ]
 
 [method_defs.fall_from_height]
@@ -462,8 +462,8 @@ templates = [
   "A rail hung broken over a drop {place.in}, its upright snapped clean off.",
 ]
 absent = [
-  "A high ledge {place.in} looked grey and even, with grit in a neat line below.",
-  "A rail {place.in} ran firm over a drop, its uprights straight and deep set.",
+  "A high ledge looked grey and even {place.in}, with gravel in tidy rows beneath.",
+  "A rail stood firm over a drop {place.in}, its uprights straight and sound.",
 ]
 
 [scene_types.murder_in_chapel]

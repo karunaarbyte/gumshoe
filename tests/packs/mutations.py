@@ -138,7 +138,7 @@ mutation(
         "in a long arc.",
         "in a long arc. It was the kind of mark that takes a long and careful look to notice.",
     ),
-    {"TRACE_LENGTH_SKEW", "TEXT_LENGTH_SKEW"},
+    {"TRACE_LENGTH_SKEW", "TEXT_LENGTH_SKEW", "TRACE_SHAPE_SKEW"},
 )
 
 # "stabbing" stems to the dagger's distinctive token "stab"
@@ -277,7 +277,16 @@ _LONG = (
 )
 mutation(
     "TEXT_LENGTH_SKEW",
-    replace("The floor {place.in} was scrubbed pale, with every board smooth.", _LONG),
+    replace("Clean boards {place.in} were swept bare across the floor in a line.", _LONG),
+    {"TEXT_LENGTH_SKEW", "TRACE_SHAPE_SKEW"},  # a longer text is also a different shape
+)
+# the same words, the place moved from the middle of the sentence to its end
+mutation(
+    "TRACE_SHAPE_SKEW",
+    replace(
+        "Tidy threads wound upon a hook {place.in} came from something ordinary.",
+        "Tidy threads wound upon a hook came from something ordinary {place.in}.",
+    ),
 )
 mutation(
     "PAIR_COUNT_SKEW",

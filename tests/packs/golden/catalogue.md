@@ -49,3 +49,4 @@
 | TEXT_COUNT_SKEW | 8 | error | this candidate has {count} {what}; the largest count is {target} |
 | TEXT_LENGTH_SKEW | 8 | error | mean length of the {what} is {mean}; {against} is {overall} (allowed gap {percent}%) |
 | TOO_FEW_TEXTS | 8 | error | this list has {count} texts; needs at least {needed} |
+| TRACE_SHAPE_SKEW | 8 | error | an absent text has {absent} {what} where its paired trace template has {template} |

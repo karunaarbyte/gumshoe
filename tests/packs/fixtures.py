@@ -397,21 +397,21 @@ _SKIN_EDITS: tuple[tuple[str, str], ...] = (
     (
         '  "Dark stains {place.in} were smeared across the floor in a long arc.",\n]',
         '  "Dark stains {place.in} were smeared across the floor in a long arc.",\n]\nabsent = [\n'
-        '  "The clothing {place.in} hung whole, and the floor was swept clean.",\n'
-        '  "The floor {place.in} was scrubbed pale, with every board smooth.",\n]',
+        '  "A neat seam in the clothing {place.in} shows where the thread held.",\n'
+        '  "Clean boards {place.in} were swept bare across the floor in a line.",\n]',
     ),
     (
         '  "Pale crust has dried along the rim of a cup {place.in} this week.",\n]',
         '  "Pale crust has dried along the rim of a cup {place.in} this week.",\n]\nabsent = [\n'
-        '  "A cup {place.in} stood clean and dry on a shelf, left alone for days.",\n'
-        '  "The rim of a cup {place.in} was smooth and bright, wiped this week.",\n]',
+        '  "Clear water has dried along the rim of a cup {place.in} this week.",\n'
+        '  "A clear drop rests in a cup {place.in}, left standing since morning.",\n]',
     ),
     (
         '  "A frayed length of hemp was found coiled up {place.in} near the door.",\n]',
         '  "A frayed length of hemp was found coiled up {place.in} near the door.",\n]\n'
         "absent = [\n"
-        '  "A hook {place.in} hung clean, and a length of hemp lay straight near it.",\n'
-        '  "The threads {place.in} were firm and tidy, wound up on a clean reel.",\n]',
+        '  "A neat length of hemp was uncovered wound up {place.in} near the door.",\n'
+        '  "Tidy threads wound upon a hook {place.in} came from something ordinary.",\n]',
     ),
     (
         'aliases = ["knife", "blade"]\n',
