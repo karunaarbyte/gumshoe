@@ -7,15 +7,21 @@ means `new_game` (about 0.1 s of generation) pauses every other game; that is fi
 
 import secrets
 import threading
+from collections.abc import Callable
 from typing import Protocol
 
 from gumshoe.cases import (
     BuiltinPackError,
     CaseGenerationError,
+    GameNotOver,
+    GameOver,
     GameSession,
     HandleCollision,
+    NotebookView,
     Pack,
     PlayerCaseView,
+    RevealView,
+    SourceResult,
     UnsupportedPreset,
     View,
     dump_case,
@@ -50,6 +56,16 @@ class _Game:
         self.session = session
         self.case_bytes = case_bytes
         self.pack = pack
+
+
+def _ended[T](call: Callable[[], T]) -> T:
+    """Run an engine call; a finished game becomes `game_over`, a running one `not_over`."""
+    try:
+        return call()
+    except GameOver as exc:
+        raise GameError("game_over", "the game has ended") from exc
+    except GameNotOver as exc:
+        raise GameError("not_over", "the game is still being played") from exc
 
 
 class GameHost:
@@ -102,3 +118,33 @@ class GameHost:
     def case_brief(self, game: str) -> PlayerCaseView:
         with self._lock:
             return self._game(game).session.brief()
+
+    def search(self, game: str, location: str) -> SourceResult:
+        with self._lock:
+            session = self._game(game).session
+            return _ended(lambda: session.search(location))
+
+    def interrogate(self, game: str, suspect: str) -> SourceResult:
+        with self._lock:
+            session = self._game(game).session
+            return _ended(lambda: session.interrogate(suspect))
+
+    def check_records(self, game: str, subject: str, kind: str | None = None) -> SourceResult:
+        with self._lock:
+            session = self._game(game).session
+            return _ended(lambda: session.check_records(subject, kind))
+
+    def notebook(self, game: str) -> NotebookView:
+        with self._lock:
+            return self._game(game).session.notebook()
+
+    def give_up(self, game: str) -> RevealView:
+        with self._lock:
+            session = self._game(game).session
+            _ended(session.give_up)
+            return _ended(session.reveal)
+
+    def reveal(self, game: str) -> RevealView:
+        with self._lock:
+            session = self._game(game).session
+            return _ended(session.reveal)
