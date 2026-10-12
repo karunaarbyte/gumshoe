@@ -15,7 +15,7 @@ overview's section 2.3:
 4. Every stage from the restart stage on gets a new counter and the later ones a fresh `k`.
 """
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import partial
 
@@ -37,13 +37,14 @@ from gumshoe.cases.generate.outputs import (
     TimelineOut,
     TruthOut,
 )
+from gumshoe.cases.generate.skin_catalogue import SkinIssue
 from gumshoe.cases.generate.streams import Stream
 from gumshoe.cases.generate.structure import need, run_stage
 from gumshoe.cases.generate.trace import Attempt, CaseGenerationError, GenerationTrace
 from gumshoe.cases.model.case import Case
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.serialize import skin_hash
-from gumshoe.cases.validate.report import Profile, Report, Severity
+from gumshoe.cases.validate.report import Issue, Profile, Report, Severity
 from gumshoe.cases.validate.runner import validate
 
 BUDGET = 20  # attempts (validator calls and stage failures) before the run gives up
@@ -53,11 +54,30 @@ UNFIXABLE = (FixStage.PACK, FixStage.NONE, FixStage.ASSEMBLE)
 Runner = Callable[[GenContext, str, Mapping[str, Output], int], Output]
 Validator = Callable[[Case, Pack | None, Profile], Report]
 Skin = Callable[[GenContext, Stream, Case], Case]
+Lint = Callable[[Case, Pack], Sequence[SkinIssue]]
 
 
 def identity_skin(ctx: GenContext, stream: Stream, case: Case) -> Case:
-    """The skin stage until 2d-3b: no wording, so the case stays skeleton-only."""
+    """A skin stage that adds no wording, so the case stays skeleton-only (tests)."""
     return case
+
+
+def no_lint(case: Case, pack: Pack) -> Sequence[SkinIssue]:
+    """A text lint that finds nothing (tests that inject a skin of their own)."""
+    return ()
+
+
+@dataclass(frozen=True)
+class _Verdict:
+    """Why an attempt failed: its codes, the stage that fixes it (empty when none can), the codes
+    no stage can fix, the validator's report (None for a text lint or a stage error) and a
+    detail line."""
+
+    codes: tuple[str, ...]
+    fix: str
+    unfixable: list[str]
+    report: Report | None
+    detail: str = ""
 
 
 class Exhausted(Exception):
@@ -135,9 +155,10 @@ class _Run:
         runner: Runner,
         validator: Validator,
         skin: Skin,
+        lint: Lint,
     ) -> None:
         self.ctx, self.budget = ctx, budget
-        self.runner, self.validator, self.skin = runner, validator, skin
+        self.runner, self.validator, self.skin, self.lint = runner, validator, skin, lint
         self.retry = Retry()
         self.retry.n.update(check_counters(counters))
         self.out: dict[str, Output] = {}
@@ -175,29 +196,60 @@ class _Run:
             raise GenerationError("the pipeline ended without a skinned case")
         return case
 
+    def _verdict(self, case: Case) -> "_Verdict | None":
+        """None when the case is good: the strict validator first, then the text lint (one
+        attempt judges both)."""
+        report = self.validator(case, self.ctx.pack, Profile.STRICT)
+        errors = [i for i in report.issues if i.severity is Severity.ERROR]
+        if errors:
+            return self._from_report(report, errors)
+        try:
+            issues = list(self.lint(case, self.ctx.pack))
+        except GenerationError as error:  # a text the lint cannot check is the skin's to redraw
+            detail = str(error) or type(error).__name__
+            return _Verdict(("STAGE_ERROR",), "skin", [], None, detail)
+        if issues:
+            codes = tuple(sorted({i.code for i in issues}))
+            return _Verdict(
+                codes, "skin", [], None, "; ".join(f"{i.path}: {i.message}" for i in issues[:3])
+            )
+        return None
+
+    @staticmethod
+    def _from_report(report: Report, errors: list[Issue]) -> "_Verdict":
+        codes = tuple(sorted({i.code for i in errors}))
+        unfixable = sorted({i.code for i in errors if i.fix_stage in UNFIXABLE})
+        fix = "" if unfixable else earliest(i.fix_stage for i in errors)
+        return _Verdict(codes, fix, unfixable, report)
+
+    def _after_stage_error(self, failed: _StageFailed) -> "_Verdict":
+        """A stage raised. If it was the skin, the skeleton may be at fault (a skin cannot render
+        a case that has no place for its text) and the validator names the real cause: ask it."""
+        detail = str(failed.error) or type(failed.error).__name__
+        if failed.stage == "skin" and self.assembled is not None:
+            report = self.validator(self.assembled, self.ctx.pack, Profile.STRICT)
+            errors = [i for i in report.issues if i.severity is Severity.ERROR]
+            if errors:
+                return self._from_report(report, errors)
+        return _Verdict(("STAGE_ERROR",), failed.stage, [], None, detail)
+
     def run(self) -> tuple[Case, GenerationTrace]:
         start = 0
         while True:
             used = self.retry.counters()
-            report: Report | None = None
-            codes: tuple[str, ...]
-            detail, unfixable = "", None
             try:
                 case = self.build(start)
             except _StageFailed as failed:
-                codes, fix = ("STAGE_ERROR",), failed.stage
-                detail = str(failed.error) or type(failed.error).__name__
+                verdict: _Verdict | None = self._after_stage_error(failed)
             else:
-                report = self.validator(case, self.ctx.pack, Profile.STRICT)
-                errors = [i for i in report.issues if i.severity is Severity.ERROR]
-                if not errors:
+                verdict = self._verdict(case)
+                if verdict is None:
                     self.attempts.append(
                         Attempt(len(self.attempts) + 1, PIPELINE[start], used, (), None)
                     )
                     return _stamp(self.ctx, case, self.retry, len(self.attempts)), self.trace()
-                codes = tuple(sorted({i.code for i in errors}))
-                unfixable = sorted({i.code for i in errors if i.fix_stage in UNFIXABLE})
-                fix = "" if unfixable else earliest(i.fix_stage for i in errors)
+            assert verdict is not None
+            fix, unfixable = verdict.fix, verdict.unfixable
             reason = f"no stage can fix {', '.join(unfixable)}" if unfixable else None
             if reason is None and len(self.attempts) + 1 >= self.budget:
                 noun = "attempt" if self.budget == 1 else "attempts"
@@ -209,10 +261,13 @@ class _Run:
                 except Exhausted:
                     reason = "every stage used up its retries"
             number = len(self.attempts) + 1
-            self.attempts.append(Attempt(number, PIPELINE[start], used, codes, restart, detail))
+            self.attempts.append(
+                Attempt(number, PIPELINE[start], used, verdict.codes, restart, verdict.detail)
+            )
             if restart is None:
-                last = f" (the last failure: the {fix} stage failed: {detail})" if detail else ""
-                raise CaseGenerationError(f"{reason}{last}", self.trace(), report)
+                said = f"the {fix} stage failed: " if verdict.codes == ("STAGE_ERROR",) else ""
+                last = f" (the last failure: {said}{verdict.detail})" if verdict.detail else ""
+                raise CaseGenerationError(f"{reason}{last}", self.trace(), verdict.report)
             start = PIPELINE.index(restart)
 
 
@@ -224,6 +279,7 @@ def run_pipeline(
     runner: Runner = run_stage,
     validator: Validator | None = None,
     skin: Skin = identity_skin,
+    lint: Lint = no_lint,
 ) -> tuple[Case, GenerationTrace]:
     """Generate the case, retrying as the design says. `counters` starts the stages at given
     stream counters (a replay of a stored case); the other arguments let tests inject faults.
@@ -231,4 +287,4 @@ def run_pipeline(
     if budget < 1:
         raise ValueError(f"the budget must be at least one attempt, not {budget}")
     check = validator or partial(validate, presets=ctx.presets)
-    return _Run(ctx, counters, budget, runner, check, skin).run()
+    return _Run(ctx, counters, budget, runner, check, skin, lint).run()

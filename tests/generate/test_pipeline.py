@@ -8,6 +8,7 @@ from gumshoe.cases.generate.errors import GenerationError
 from gumshoe.cases.generate.gen_context import PIPELINE, SKELETON_ALGO_VERSION, GenContext
 from gumshoe.cases.generate.outputs import GatingOut
 from gumshoe.cases.generate.pipeline import run_pipeline
+from gumshoe.cases.generate.skin_catalogue import make
 from gumshoe.cases.generate.structure import run_stage
 from gumshoe.cases.generate.trace import CaseGenerationError
 from gumshoe.cases.model.case import Case
@@ -486,3 +487,76 @@ def test_a_budget_of_no_attempt_is_refused():
 def test_a_stage_error_without_a_message_still_shows_in_the_trace():
     case, trace = run_pipeline(ctx_of(), runner=failing_once_at("placement", message=""))
     assert trace.attempts[0].detail == "GenerationError" and case.attempt == 2
+
+
+# The text lint is part of the same attempt as the validator
+
+
+def failing_lint(times: int):
+    """A text lint that reports one problem on its first `times` calls and then finds nothing."""
+    calls: list[int] = []
+
+    def lint(case, pack):
+        calls.append(1)
+        return (
+            (make("BAD_RENDER", "intro", problem="a stray brace"),) if len(calls) <= times else ()
+        )
+
+    lint.calls = calls  # type: ignore[attr-defined]
+    return lint
+
+
+def test_a_lint_failure_redraws_the_skin_and_nothing_before_it():
+    log: list[tuple[str, int]] = []
+    lint = failing_lint(2)
+    case, trace = run_pipeline(ctx_of(), runner=recording(log), lint=lint)
+    assert log == [(stage, 0) for stage in PIPELINE[:6]]  # the structure ran once
+    assert [(a.codes, a.restart) for a in trace.attempts] == [
+        (("BAD_RENDER",), "skin"),
+        (("BAD_RENDER",), "skin"),
+        ((), None),
+    ]
+    assert trace.attempts[0].detail.startswith("intro: ") and len(lint.calls) == 3
+    assert case.stage_attempts == (0, 0, 0, 0, 0, 0, 0, 2) and case.attempt == 3
+
+
+def test_a_clean_case_costs_one_attempt_for_the_validator_and_the_lint_together():
+    lint = failing_lint(0)
+    case, trace = run_pipeline(ctx_of(), lint=lint)
+    assert case.attempt == 1 and len(trace.attempts) == 1 and len(lint.calls) == 1
+
+
+def test_the_lint_is_not_asked_about_a_case_the_validator_rejects():
+    lint = failing_lint(0)
+    run_pipeline(ctx_of(), validator=scripted([[FACTS_CODE]]), lint=lint)
+    assert len(lint.calls) == 1  # only the second attempt got as far as the lint
+
+
+def test_a_lint_that_never_passes_ends_with_the_budget_and_the_problem():
+    with pytest.raises(CaseGenerationError, match="budget of 20 attempts ran out") as stopped:
+        run_pipeline(ctx_of(), lint=failing_lint(99))
+    error = stopped.value
+    assert "intro: the rendered text has a stray brace" in str(error) and error.report is None
+    assert len(error.trace.attempts) == 20
+
+
+def test_five_lint_failures_in_a_row_make_the_controller_step_back_to_assemble():
+    _, trace = run_pipeline(ctx_of(), lint=failing_lint(6))
+    assert [a.restart for a in trace.attempts] == ["skin"] * 5 + ["assemble", None]
+
+
+def test_a_lint_that_cannot_check_a_text_fails_the_skin_stage_not_the_run():
+    def lint(case, pack):
+        raise GenerationError("the lint found no place")
+
+    with pytest.raises(CaseGenerationError, match="the skin stage failed: the lint found no") as e:
+        run_pipeline(ctx_of(), lint=lint, budget=3)
+    assert [a.codes for a in e.value.trace.attempts] == [("STAGE_ERROR",)] * 3
+
+
+def test_a_skin_that_raises_on_a_sound_skeleton_is_a_skin_stage_error():
+    def skin(ctx, stream, case):
+        raise GenerationError("no text for hints/fear")
+
+    with pytest.raises(CaseGenerationError, match="the skin stage failed: no text for hints"):
+        run_pipeline(ctx_of(), skin=skin, budget=3)
