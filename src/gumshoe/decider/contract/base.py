@@ -11,7 +11,12 @@ class Decider(Protocol):
     name: str
 
     async def decide(
-        self, state: str, questions: Mapping[str, Question], *, node: str = "adhoc"
+        self,
+        state: str,
+        questions: Mapping[str, Question],
+        *,
+        node: str = "adhoc",
+        decision_id: str | None = None,
     ) -> DecisionResult: ...
 
     async def aclose(self) -> None: ...

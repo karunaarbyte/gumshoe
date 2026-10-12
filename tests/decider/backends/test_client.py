@@ -155,3 +155,16 @@ async def test_illegal_header_value_points_at_the_api_key_not_the_network():
         with pytest.raises(DeciderConfigError, match="API key") as info:
             await client.decide(DEMO_STATE, DEMO_QUESTIONS)
     assert "s3cret" not in str(info.value)
+
+
+async def test_decide_accepts_a_decision_id_and_does_not_send_it(load_fixture):
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=load_fixture("nimble_all_types.response.json"))
+
+    client = make_client(handler)
+    await client.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent", decision_id="abc123")
+    assert "abc123" not in json.dumps(seen["body"])
+    await client.aclose()

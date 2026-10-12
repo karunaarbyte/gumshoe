@@ -33,9 +33,15 @@ class SystemOneClient:
         self._http = httpx.AsyncClient(headers=headers, timeout=timeout, transport=transport)
 
     async def decide(
-        self, state: str, questions: Mapping[str, Question], *, node: str = "adhoc"
+        self,
+        state: str,
+        questions: Mapping[str, Question],
+        *,
+        node: str = "adhoc",
+        decision_id: str | None = None,
     ) -> DecisionResult:
-        # `node` labels the pipeline stage for wrappers (stats); the wire request has no use for it.
+        # `node` labels the pipeline stage and `decision_id` joins a record to a caller's event,
+        # both for wrappers (stats); the wire request has no use for either.
         request = DecisionRequest(model=self._profile.model, state=state, questions=dict(questions))
         url = self._profile.endpoint
         try:

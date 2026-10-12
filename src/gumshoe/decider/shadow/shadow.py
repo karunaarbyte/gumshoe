@@ -47,9 +47,14 @@ class ShadowDecider:
         self._background: set[asyncio.Task[None]] = set()
 
     async def decide(
-        self, state: str, questions: Mapping[str, Question], *, node: str = "adhoc"
+        self,
+        state: str,
+        questions: Mapping[str, Question],
+        *,
+        node: str = "adhoc",
+        decision_id: str | None = None,
     ) -> DecisionResult:
-        decision_id = uuid.uuid4().hex
+        decision_id = decision_id if decision_id is not None else uuid.uuid4().hex
         primary_task = asyncio.create_task(
             self._call(self._primary, "primary", state, questions, node)
         )

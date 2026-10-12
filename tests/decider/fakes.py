@@ -24,11 +24,18 @@ class FakeDecider:
         self.closed = False
         self.cancelled = asyncio.Event()  # set when a call is cancelled mid-flight
         self.nodes: list[str] = []  # node labels of every call, for assertions
+        self.decision_ids: list[str | None] = []
 
     async def decide(
-        self, state: str, questions: Mapping[str, Question], *, node: str = "adhoc"
+        self,
+        state: str,
+        questions: Mapping[str, Question],
+        *,
+        node: str = "adhoc",
+        decision_id: str | None = None,
     ) -> DecisionResult:
         self.nodes.append(node)
+        self.decision_ids.append(decision_id)
         try:
             await asyncio.sleep(self._delay)
             if self._gate is not None:

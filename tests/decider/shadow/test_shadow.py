@@ -282,3 +282,32 @@ async def test_primary_failure_plus_a_shadow_bug_surfaces_the_primary_failure(ca
     assert [(r.backend, r.used, r.fallback) for r in batch] == [("jev", False, False)]
     await asyncio.sleep(0)  # the shadow was already done, so its done-callback has not run yet
     assert any("shadow call crashed" in r.getMessage() for r in caplog.records)
+
+
+async def test_a_given_decision_id_is_on_every_record_of_that_decision(result, other_result):
+    decider, recorder = make(FakeDecider("jev", other_result), FakeDecider("nimble", result))
+    await decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent", decision_id="abc123")
+    await decider.drain()
+    [batch] = recorder.batches
+    assert {r.decision_id for r in batch} == {"abc123"}
+
+
+async def test_without_a_decision_id_one_is_minted_and_shared(result, other_result):
+    decider, recorder = make(FakeDecider("jev", other_result), FakeDecider("nimble", result))
+    await decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent")
+    await decider.drain()
+    [batch] = recorder.batches
+    ids = {r.decision_id for r in batch}
+    assert len(ids) == 1 and ids != {"abc123"} and len(next(iter(ids))) == 32
+
+
+async def test_a_given_decision_id_is_kept_when_the_primary_fails_and_the_shadow_answers(
+    result,
+):
+    decider, recorder = make(
+        FakeDecider("jev", error=DeciderConnectionError("jev", "down")),
+        FakeDecider("nimble", result),
+    )
+    assert await decider.decide(DEMO_STATE, DEMO_QUESTIONS, decision_id="fallback1") is result
+    await decider.drain()
+    assert {r.decision_id for batch in recorder.batches for r in batch} == {"fallback1"}

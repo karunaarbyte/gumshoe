@@ -46,7 +46,7 @@ class FlakyDecider:
         self._result, self._failing = result, failing
         self.seen = []
 
-    async def decide(self, state, questions, *, node="adhoc"):
+    async def decide(self, state, questions, *, node="adhoc", decision_id=None):
         self.seen.append(state)
         if state in self._failing:
             raise DeciderConnectionError("jev", f"flaky on {state!r}")
@@ -60,9 +60,9 @@ async def test_battery_settles_after_every_decision(result):
     events = []
 
     class Recording(FakeDecider):
-        async def decide(self, state, questions, *, node="adhoc"):
+        async def decide(self, state, questions, *, node="adhoc", decision_id=None):
             events.append("decide")
-            return await super().decide(state, questions, node=node)
+            return await super().decide(state, questions, node=node, decision_id=decision_id)
 
     async def settle():
         events.append("settle")
