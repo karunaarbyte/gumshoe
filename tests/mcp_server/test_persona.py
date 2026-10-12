@@ -71,10 +71,11 @@ def test_the_flagged_word_is_allowed_once_the_player_says_it_first():
     assert check.ok
 
 
-def test_an_unknown_suspect_handle_is_a_failed_check_not_an_error():
+def test_check_reply_for_an_unknown_suspect_is_unknown_handle_like_persona_brief():
     host, game, _ = started()
-    check = host.check_reply(game, "h_nothing", "hi", "hello")
-    assert not check.ok and check.violations[0].category == "unknown_suspect"
+    with pytest.raises(GameError) as err:
+        host.check_reply(game, "h_nothing", "hi", "hello")
+    assert err.value.code == "unknown_handle"
 
 
 @pytest.mark.parametrize("which", ["player_text", "reply"])

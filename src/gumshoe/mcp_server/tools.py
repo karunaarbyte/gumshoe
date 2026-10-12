@@ -24,7 +24,7 @@ from gumshoe.cases import (
     SourceResult,
 )
 from gumshoe.mcp_server.errors import GameError
-from gumshoe.mcp_server.host import GameHost, NewGame
+from gumshoe.mcp_server.host import CloseRef, GameHost, NewGame
 from gumshoe.mcp_server.saves import SaveRef
 
 INSTRUCTIONS = (
@@ -53,6 +53,11 @@ def build_server(host: GameHost) -> MCPServer:
         """Start a game on the case for this seed (preset: short, standard or long).
         Returns the game id and the opening brief (places, suspects, record kinds)."""
         return _guarded(lambda: host.new_game(seed, preset, pack))
+
+    @tool
+    def close_game(game: str) -> CloseRef:
+        """Forget a game and free its slot. Saved files are kept."""
+        return _guarded(lambda: host.close_game(game))
 
     @tool
     def case_brief(game: str) -> PlayerCaseView:

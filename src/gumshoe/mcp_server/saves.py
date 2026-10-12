@@ -7,6 +7,7 @@ makes the name, and `read_save` accepts only a name of the exact shape it makes.
 import contextlib
 import os
 import re
+import secrets
 from pathlib import Path
 from typing import Literal
 
@@ -46,17 +47,32 @@ def check_name(name: str) -> None:
         raise GameError("bad_argument", "a save name is 16 lowercase hex characters")
 
 
+class SaveExists(Exception):
+    """The name is taken (another process made it first); the caller draws another name."""
+
+
 def write_save(folder: Path, name: str, save: SaveFile) -> None:
-    """Create the folder if needed, write beside the target, then replace it in one step."""
-    temp = folder / f".{name}.tmp"
+    """Create the folder if needed, write and sync beside the target, then link it into place.
+
+    A hard link fails if the target exists, so two processes can never overwrite each other's
+    save. The temp name is unique, so a crashed run leaves nothing a later run trips over.
+    """
+    temp = folder / f".{name}.{secrets.token_hex(4)}.tmp"
     try:
         folder.mkdir(parents=True, exist_ok=True)
-        temp.write_text(save.model_dump_json(), encoding="utf-8")
-        os.replace(temp, path_for(folder, name))
+        with temp.open("w", encoding="utf-8") as handle:
+            handle.write(save.model_dump_json())
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temp, path_for(folder, name))
+        except FileExistsError as exc:
+            raise SaveExists(name) from exc
     except OSError as exc:
+        raise GameError("bad_save", "the save could not be written") from exc
+    finally:
         with contextlib.suppress(OSError):
             temp.unlink(missing_ok=True)
-        raise GameError("bad_save", "the save could not be written") from exc
 
 
 def read_save(folder: Path, name: str) -> SaveFile:

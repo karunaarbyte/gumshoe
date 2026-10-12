@@ -8,6 +8,7 @@ CODES = (
     "not_over",
     "state_mismatch",
     "bad_save",
+    "too_many_games",
 )
 
 

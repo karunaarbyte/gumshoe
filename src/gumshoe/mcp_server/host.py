@@ -48,6 +48,7 @@ from gumshoe.cases import (
 from gumshoe.mcp_server.errors import GameError
 from gumshoe.mcp_server.saves import (
     SAVE_FORMAT,
+    SaveExists,
     SaveFile,
     SaveRef,
     check_name,
@@ -60,6 +61,7 @@ from gumshoe.mcp_server.saves import (
 MAX_SEED = 2**63 - 1
 SALT_TRIES = 16
 MAX_TEXT = 4000
+MAX_GAMES = 1000
 AXES = ("who", "how", "why")
 
 
@@ -77,6 +79,10 @@ class RandomIds:
 class NewGame(View):
     game: str
     brief: PlayerCaseView
+
+
+class CloseRef(View):
+    closed: str
 
 
 class _Game:
@@ -133,6 +139,8 @@ class GameHost:
         raise RuntimeError("no unused save name")
 
     def _fresh_game_id(self) -> str:
+        if len(self._games) >= MAX_GAMES:
+            raise GameError("too_many_games", f"{MAX_GAMES} games are open; close_game one first")
         for _ in range(SALT_TRIES):
             game_id = self._ids.next()
             if game_id not in self._games:
@@ -161,6 +169,13 @@ class GameHost:
             game_id = self._fresh_game_id()
             self._games[game_id] = _Game(session, case_bytes, pack)
             return NewGame(game=game_id, brief=session.brief())
+
+    def close_game(self, game: str) -> CloseRef:
+        """Forget a game (its saves stay). The id and its handles stop working."""
+        with self._lock:
+            self._game(game)
+            del self._games[game]
+            return CloseRef(closed=game)
 
     def case_brief(self, game: str) -> PlayerCaseView:
         with self._lock:
@@ -230,21 +245,29 @@ class GameHost:
             if len(text) > MAX_TEXT:
                 raise GameError("bad_argument", f"{name} is longer than {MAX_TEXT} characters")
         with self._lock:
-            return self._game(game).session.check_reply(suspect, player_text, reply)
+            check = self._game(game).session.check_reply(suspect, player_text, reply)
+            if any(v.category == "unknown_suspect" for v in check.violations):
+                raise GameError("unknown_handle", "no such suspect")
+            return check
 
     def save_game(self, game: str) -> SaveRef:
         with self._lock:
             found = self._game(game)
             folder = self._folder()
-            name = self._fresh_name(folder)
             save = SaveFile(
                 save_format=SAVE_FORMAT,
                 pack=found.pack,
                 case=found.case_bytes.decode("utf-8"),
                 state=found.session.state_json(),
             )
-            write_save(folder, name, save)
-            return SaveRef(name=name)
+            for _ in range(SALT_TRIES):
+                name = self._fresh_name(folder)
+                try:
+                    write_save(folder, name, save)
+                except SaveExists:
+                    continue  # another process took the name between the check and the write
+                return SaveRef(name=name)
+            raise RuntimeError("no unused save name")
 
     def load_game(self, name: str) -> NewGame:
         with self._lock:

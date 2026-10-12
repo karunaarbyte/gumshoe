@@ -89,9 +89,12 @@ def test_stdout_carries_only_protocol_while_a_game_is_played(tmp_path):
         timer.cancel()
         proc.kill()
         proc.wait()
+        assert proc.stderr is not None
+        errors = proc.stderr.read()
         for pipe in (proc.stdout, proc.stderr):
             if pipe is not None:
                 pipe.close()
+    assert b"Traceback" not in errors, errors.decode()
     parsed = [mcp_types.jsonrpc_message_adapter.validate_json(line) for line in lines]
     assert parsed, "the server wrote nothing to stdout"
     results = {m.id: m.result for m in parsed if isinstance(m, mcp_types.JSONRPCResponse)}

@@ -12,7 +12,7 @@ from tests.mcp_server.helpers import SeqIds, castle_case
 TOOLS = {
     "new_game", "case_brief", "search", "interrogate", "check_records", "notebook", "nameable",
     "describe_accusation", "accuse", "give_up", "reveal", "persona_brief", "check_reply",
-    "save_game", "load_game",
+    "save_game", "load_game", "close_game",
 }  # fmt: skip
 ERROR = re.compile(r"^Error executing tool \w+: (?P<code>[a-z_]+): (?P<message>.+)$", re.DOTALL)
 
