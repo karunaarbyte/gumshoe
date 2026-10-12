@@ -35,9 +35,10 @@ def _family(pack: Pack, *kinds: str) -> list[str]:
     return [v for f in pack.families if f.kind in kinds for v in f.variants]
 
 
-def renderings(case: Case, pack: Pack, fact: Fact) -> set[str]:
-    """Every text the fact may have: its list of variants rendered with the fact's values. This
-    is a second description of the contract table in the skin spec (2c.1b section 3)."""
+def rendered(case: Case, pack: Pack, fact: Fact) -> list[str]:
+    """Every text the fact may have, in the order of its list of variants, rendered with the
+    fact's values. This is a second description of the contract table in the skin spec (2c.1b
+    section 3)."""
     people = {s.id: s for s in case.suspects}
     places = {x.id: x for x in case.locations}
     methods = {m.id: m.type for m in case.methods}
@@ -59,9 +60,9 @@ def renderings(case: Case, pack: Pack, fact: Fact) -> set[str]:
         (found,) = [e for e in fact.effects if e.axis is axis]
         return found.candidate, found.kind
 
-    def all_of(variants: list[str], values: dict[str, str]) -> set[str]:
+    def all_of(variants: list[str], values: dict[str, str]) -> list[str]:
         assert variants
-        return {render(v, values) for v in variants}
+        return [render(v, values) for v in variants]
 
     kind = fact.kind
     if kind is FactKind.SECRET:
@@ -113,3 +114,7 @@ def welch_z(a: list[float], b: list[float]) -> float:
 
     spread = variance(a) / len(a) + variance(b) / len(b)
     return (fmean(a) - fmean(b)) / sqrt(spread) if spread else 0.0
+
+
+def renderings(case: Case, pack: Pack, fact: Fact) -> set[str]:
+    return set(rendered(case, pack, fact))
