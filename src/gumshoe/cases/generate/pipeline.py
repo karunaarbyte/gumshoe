@@ -2,7 +2,8 @@
 
 Stage order is `roster < truth < timeline < facts < placement < gating < assemble < skin`. Each
 stage has a stream counter `n[stage]` (stage streams are keyed by it, never by the attempt) and a
-retry count `k[stage]`. An attempt is one strict-validator call. The design makes a case valid by
+retry count `k[stage]`. An attempt is one strict-validator call plus the text lint (or a stage
+failure). The design makes a case valid by
 construction, so on the castle the controller is a net that is never used; its rules are the
 overview's section 2.3:
 

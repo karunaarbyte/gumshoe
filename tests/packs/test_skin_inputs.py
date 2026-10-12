@@ -117,6 +117,17 @@ def test_absent_texts_far_from_the_trace_templates_in_length_are_a_pack_wide_ske
     assert {c for c, _ in issues} == {"TEXT_LENGTH_SKEW", "TRACE_SHAPE_SKEW"}
 
 
+def test_an_extra_absent_text_of_another_shape_is_a_trace_shape_skew():
+    pack = base()
+    trace = pack.method_defs[0].traces[0]
+    odd = "{place.in} a long and winding, oddly worded, much longer remark, with another comma."
+    pack = with_trace(pack, pack.method_defs[0].key, absent=(*trace.absent, odd))
+    assert (
+        "TRACE_SHAPE_SKEW",
+        f"method_defs.{pack.method_defs[0].key}.traces[{trace.kind}].absent",
+    ) in found(pack)
+
+
 def test_the_physical_pair_must_match_in_count_mean_and_range():
     proof = [f for f in base().families if f.id == "physical_proof"][0]
     longer = with_family(base(), "physical_proof", variants=(*proof.variants, "One more."))

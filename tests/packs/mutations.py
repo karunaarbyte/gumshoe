@@ -130,6 +130,7 @@ mutation(
 mutation(
     "TRACE_COUNT_SKEW",
     replace('  "A frayed length of hemp was found coiled up {place.in} near the door.",\n', ""),
+    {"TRACE_COUNT_SKEW", "TRACE_SHAPE_SKEW"},  # the spare absent text has no template to mirror
 )
 # the longer template also pulls the mean of the templates away from the mean of the absent texts
 mutation(

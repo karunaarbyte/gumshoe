@@ -152,7 +152,8 @@ def _trace_shapes(pack: Pack) -> list[PackIssue]:
     pick the true one by whichever shape the true texts share (fewest words, fewest commas, the
     shortest, the place first, the method named). Each trace's absent texts must therefore mirror
     its templates in shape: the same word and comma count and method naming, a length within a
-    character and the place within 0.10 of the way through. Texts are paired the best way."""
+    character and the place within 0.10 of the way through. Texts are paired the best way,
+    and any extra absent text is held to its nearest template."""
     owned = candidate_tokens(pack)
     out: list[PackIssue] = []
     for method in pack.method_defs:
@@ -163,14 +164,20 @@ def _trace_shapes(pack: Pack) -> list[PackIssue]:
             if not templates or len(absent) < len(templates):
                 continue  # TOO_FEW_TEXTS reports it
             best = min(
-                permutations(absent, len(templates)),
+                permutations(range(len(absent)), len(templates)),
                 key=lambda order: sum(
-                    len(_differences(a, t)) for a, t in zip(order, templates, strict=True)
+                    len(_differences(absent[i], t)) for i, t in zip(order, templates, strict=True)
                 ),
             )
+            # the skin deals every absent text, so one beyond the pairs mirrors its nearest template
+            pairs = [(absent[i], t) for i, t in zip(best, templates, strict=True)]
+            for i in set(range(len(absent))) - set(best):
+                pairs.append(
+                    (absent[i], min(templates, key=lambda t: len(_differences(absent[i], t))))
+                )
             path = f"method_defs.{method.key}.traces[{trace.kind}].absent"
             seen: set[str] = set()
-            for a, t in zip(best, templates, strict=True):
+            for a, t in pairs:
                 for what, (shown, wanted) in _differences(a, t).items():
                     if what not in seen:
                         seen.add(what)
