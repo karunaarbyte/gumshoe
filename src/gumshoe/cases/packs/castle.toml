@@ -357,8 +357,8 @@ templates = [
   "A tall stand lay toppled {place.in}, cold wax spattered round its dented foot.",
 ]
 absent = [
-  "A tall stand stood upright {place.in}, bright wax lay smooth around its foot.",
-  "A heavy stand stood upright {place.in}, its drip pan level and cleaned.",
+  "A tall stand stood upright {place.in}, with bright wax smooth around its foot.",
+  "A heavy stand stood upright {place.in}, its drip pan level and intact.",
 ]
 
 [method_defs.poison_wine]
@@ -378,7 +378,7 @@ templates = [
   "A jug {place.in} held a purple film and gave off a sour smell.",
 ]
 absent = [
-  "A cup remained upright {place.in}, with a polished dry rim and base.",
+  "A cup remained upright {place.in}, with a smooth dry rim and bottom.",
   "A jug {place.in} held clear water and gave off a scent of figs.",
 ]
 
@@ -420,8 +420,8 @@ templates = [
   "A shiny worn groove ran round a post {place.in}, and frayed strands lay beneath.",
 ]
 absent = [
-  "Pale smooth grain showed on a weathered post {place.in}, firm and tight.",
-  "A plain clean groove ran around a post {place.in}, and pale boards lay beneath.",
+  "Pale smooth grain showed on an unmarked post {place.in}, firm and tight.",
+  "A bare dry timber stood beside a post {place.in}, and sturdy planks lay beneath.",
 ]
 
 [method_defs.crossbow]
@@ -442,7 +442,7 @@ templates = [
 ]
 absent = [
   "An oak door stood whole and smooth within its frame {place.in}.",
-  "A heavy panel was polished and left gleaming across the door {place.in}.",
+  "A broad oaken panel had stayed entirely sound within a door {place.in}.",
 ]
 
 [method_defs.fall_from_height]
@@ -462,7 +462,7 @@ templates = [
   "A rail hung broken over a drop {place.in}, its upright snapped clean off.",
 ]
 absent = [
-  "A high ledge looked grey and even {place.in}, with gravel in tidy rows beneath.",
+  "A high ledge looked grey and even {place.in}, with gravel in flat beds beneath.",
   "A rail stood firm over a drop {place.in}, its uprights straight and sound.",
 ]
 
