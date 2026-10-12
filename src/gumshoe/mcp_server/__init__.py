@@ -2,7 +2,9 @@
 
 `GameHost` holds the games and does all the work; `tools` registers it with the `mcp` SDK. This
 package imports only `gumshoe.cases` (its public face), the stdlib, pydantic and, in `tools` and
-`__main__`, the `mcp` SDK. It never touches the skeleton, the validator or the decider.
+`__main__`, the `mcp` SDK. It reaches the case engine
+only through `gumshoe.cases` (the public face), keeps a case only as its canonical bytes between
+calls, and never imports the decider.
 """
 
 from gumshoe.mcp_server.errors import GameError

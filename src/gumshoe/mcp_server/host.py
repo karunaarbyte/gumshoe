@@ -1,4 +1,6 @@
-"""GameHost: the games, behind one lock. Every public method returns a play view.
+"""GameHost: the games, behind one lock.
+
+Every public method returns a play view or a `View` the host made (`NewGame`, `SaveRef`).
 
 Nothing here imports the `mcp` SDK, so tests and the agent loop use it directly. The SDK runs sync
 tools on a worker thread, so every public method holds `self._lock` for its whole body. One lock
@@ -130,6 +132,13 @@ class GameHost:
                 return name
         raise RuntimeError("no unused save name")
 
+    def _fresh_game_id(self) -> str:
+        for _ in range(SALT_TRIES):
+            game_id = self._ids.next()
+            if game_id not in self._games:
+                return game_id
+        raise RuntimeError("no unused game id")
+
     def _game(self, game: str) -> _Game:
         found = self._games.get(game)
         if found is None:
@@ -149,7 +158,7 @@ class GameHost:
                 raise GameError("bad_argument", "no case could be made from this seed") from exc
             case_bytes = dump_case(case)
             session = self._open(case_bytes)
-            game_id = self._ids.next()
+            game_id = self._fresh_game_id()
             self._games[game_id] = _Game(session, case_bytes, pack)
             return NewGame(game=game_id, brief=session.brief())
 
@@ -257,6 +266,6 @@ class GameHost:
                 if exc.code == "bad_argument":
                     raise GameError("bad_save", "that save names a pack this server lacks") from exc
                 raise
-            game_id = self._ids.next()
+            game_id = self._fresh_game_id()
             self._games[game_id] = _Game(session, case_bytes, save.pack)
             return NewGame(game=game_id, brief=session.brief())

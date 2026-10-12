@@ -18,10 +18,6 @@ def suspect_handle(session, name):
     return next(s.handle for s in session.brief().suspects if s.name == name)
 
 
-def names(case):
-    return {s.id: s.display_name for s in case.suspects}
-
-
 def lie_of(case, suspect_id):
     return next(
         f
@@ -108,10 +104,24 @@ def test_the_brief_before_the_lie_is_held_ignores_the_lies_claim_and_text():
         changed_facts.append(fact)
     changed = case.model_copy(update={"facts": tuple(changed_facts)})
     a, b = session_for(case), session_for(changed)
-    for suspect in case.suspects:
-        handle_a = suspect_handle(a, suspect.display_name)
-        handle_b = suspect_handle(b, suspect.display_name)
+    handles = {
+        s.id: (suspect_handle(a, s.display_name), suspect_handle(b, s.display_name))
+        for s in case.suspects
+    }
+    for handle_a, handle_b in handles.values():
         assert a.persona_brief(handle_a) == b.persona_brief(handle_b)
+    questioned, spared = case.suspects[:-1], case.suspects[-1]
+    for suspect in questioned:
+        a.interrogate(handles[suspect.id][0])
+        b.interrogate(handles[suspect.id][1])
+    for suspect in questioned:
+        brief_a = a.persona_brief(handles[suspect.id][0])
+        brief_b = b.persona_brief(handles[suspect.id][1])
+        original = lie_of(case, suspect.id).text
+        restored = tuple(sorted(original if t == "A different claim." else t for t in brief_b.says))
+        assert tuple(sorted(brief_a.says)) == restored
+        assert brief_a.model_copy(update={"says": ()}) == brief_b.model_copy(update={"says": ()})
+    assert a.persona_brief(handles[spared.id][0]) == b.persona_brief(handles[spared.id][1])
 
 
 @pytest.mark.parametrize("handle", ["", "h_nothing"])

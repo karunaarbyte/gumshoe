@@ -133,11 +133,16 @@ def play(seed, preset, folder):
         notebook = texts_of(host.notebook(game))
         assert known <= notebook  # discovered facts only grow
         known = notebook
-        if action in PLAYER_VIEWS:
-            assert not [i for i in ids if i in blob], "a raw id reached a player view"
-            assert not [f for f in FIELDS_THAT_MEAN_TRUTH if f in blob]
+        if action not in UNCHECKED:
+            assert not [i for i in ids if i in blob], f"a raw id reached the {action} result"
+            assert not [f for f in FIELDS_THAT_MEAN_TRUTH if f in blob], (
+                f"a truth field reached the {action} result"
+            )
             unheld = [s.secret_text for s in case.suspects if s.secret_text not in notebook]
-            assert not [t for t in unheld if t and t in blob], "an unfound secret leaked"
+            assert not [t for t in unheld if t and t in blob], (
+                f"an unfound secret leaked into the {action} result"
+            )
+        if action in PLAYER_VIEWS:
             assert not all(name in blob for name in truth_names), (
                 "the true triple appeared as a unit"
             )

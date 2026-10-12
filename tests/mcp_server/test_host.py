@@ -81,6 +81,22 @@ def test_a_handle_collision_draws_the_next_salt(monkeypatch):
     assert new.game == "0000000000000003" and new.brief.status == "playing"
 
 
+def test_a_repeated_game_id_is_skipped_and_the_first_game_survives():
+    class Repeating:
+        def __init__(self):
+            self.values = iter(["a" * 16, "b" * 16, "a" * 16, "c" * 16, "d" * 16, "e" * 16])
+
+        def next(self):
+            return next(self.values)
+
+    host = GameHost(ids=Repeating())
+    first = host.new_game(1)
+    second = host.new_game(2)
+    assert first.game != second.game
+    assert host.case_brief(first.game).status == "playing"
+    assert host.case_brief(second.game).status == "playing"
+
+
 def test_the_default_id_source_gives_16_lowercase_hex_characters():
     value = RandomIds().next()
     assert len(value) == 16 and value == value.lower() and int(value, 16) >= 0

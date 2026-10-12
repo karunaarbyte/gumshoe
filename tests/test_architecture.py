@@ -475,6 +475,10 @@ def is_mcp_sdk(module: str) -> bool:
     return module == "mcp" or module.startswith("mcp.")
 
 
+def is_mcp_server(module: str) -> bool:
+    return module == "gumshoe.mcp_server" or module.startswith("gumshoe.mcp_server.")
+
+
 def mcp_server_problems(root: Path) -> list[str]:
     """An allow-list: the server imports only `gumshoe.cases` (its public face), itself, the
     stdlib and pydantic; the `mcp` SDK appears only in the two adapter files; nothing else."""
@@ -484,7 +488,7 @@ def mcp_server_problems(root: Path) -> list[str]:
         for module in sorted(imported_modules(path, root)):
             top = module.split(".")[0]
             if top == "gumshoe":
-                ok = module == "gumshoe.cases" or module.startswith("gumshoe.mcp_server")
+                ok = module == "gumshoe.cases" or is_mcp_server(module)
             elif is_mcp_sdk(module):
                 ok = path.name in MCP_SDK_FILES
             else:
@@ -523,6 +527,11 @@ def test_mcp_server_checker_flags_deep_cases_imports_the_decider_and_a_stray_sdk
     ]
 
 
+def test_mcp_server_checker_flags_a_lookalike_package_name(tmp_path):
+    root = make_mcp_tree(tmp_path, {"host.py": "import gumshoe.mcp_serverx\n"})
+    assert mcp_server_problems(root) == ["gumshoe/mcp_server/host.py imports gumshoe.mcp_serverx"]
+
+
 def test_mcp_server_imports_follow_the_rules():
     assert mcp_server_problems(SRC) == []
 
@@ -532,6 +541,6 @@ def test_the_case_engine_never_imports_the_mcp_server_or_the_sdk():
         f"{path.relative_to(SRC)} imports {module}"
         for path in sources(CASES)
         for module in sorted(imported_modules(path, SRC))
-        if is_mcp_sdk(module) or module.startswith("gumshoe.mcp_server")
+        if is_mcp_sdk(module) or is_mcp_server(module)
     ]
     assert stray == []

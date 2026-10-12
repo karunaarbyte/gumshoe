@@ -28,4 +28,6 @@ logs/
 
 # Design docs and plans (kept local; commit manually when ready)
 # docs/
+
+# MCP server saves (they hold the full solution)
 saves/
