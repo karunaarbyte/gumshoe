@@ -7,5 +7,6 @@ package imports only `gumshoe.cases` (its public face), the stdlib, pydantic and
 
 from gumshoe.mcp_server.errors import GameError
 from gumshoe.mcp_server.host import GameHost, IdSource, NewGame
+from gumshoe.mcp_server.saves import SaveRef
 
-__all__ = ["GameError", "GameHost", "IdSource", "NewGame"]
+__all__ = ["GameError", "GameHost", "IdSource", "NewGame", "SaveRef"]

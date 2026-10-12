@@ -8,7 +8,10 @@ means `new_game` (about 0.1 s of generation) pauses every other game; that is fi
 import secrets
 import threading
 from collections.abc import Callable
+from pathlib import Path
 from typing import Protocol
+
+from pydantic import ValidationError
 
 from gumshoe.cases import (
     AccusationPlan,
@@ -28,15 +31,29 @@ from gumshoe.cases import (
     ReplyCheck,
     RevealView,
     SourceResult,
+    StateMismatch,
     UnknownHandle,
     UnsupportedPreset,
     View,
     dump_case,
     generate_case,
     load_builtin_pack,
+    load_case,
     load_session,
+    skin_hash,
+    validate_case,
 )
 from gumshoe.mcp_server.errors import GameError
+from gumshoe.mcp_server.saves import (
+    SAVE_FORMAT,
+    SaveFile,
+    SaveRef,
+    check_name,
+    default_saves_dir,
+    path_for,
+    read_save,
+    write_save,
+)
 
 MAX_SEED = 2**63 - 1
 SALT_TRIES = 16
@@ -78,8 +95,9 @@ def _ended[T](call: Callable[[], T]) -> T:
 
 
 class GameHost:
-    def __init__(self, ids: IdSource | None = None) -> None:
+    def __init__(self, ids: IdSource | None = None, saves_dir: Path | None = None) -> None:
         self._ids: IdSource = ids or RandomIds()
+        self._saves_dir = saves_dir
         self._lock = threading.RLock()
         self._games: dict[str, _Game] = {}
         self._packs: dict[str, Pack] = {}
@@ -92,14 +110,25 @@ class GameHost:
                 raise GameError("bad_argument", f"no pack named {name!r}") from exc
         return self._packs[name]
 
-    def _open(self, case_bytes: bytes) -> GameSession:
+    def _open(self, case_bytes: bytes, state_json: str | None = None) -> GameSession:
         """A session under a fresh salt (a rare handle collision draws the next salt)."""
         for _ in range(SALT_TRIES):
             try:
-                return load_session(case_bytes, self._ids.next())
+                return load_session(case_bytes, self._ids.next(), state_json)
             except HandleCollision:
                 continue
         raise RuntimeError("no salt gave collision-free handles")
+
+    def _folder(self) -> Path:
+        return self._saves_dir if self._saves_dir is not None else default_saves_dir()
+
+    def _fresh_name(self, folder: Path) -> str:
+        for _ in range(SALT_TRIES):
+            name = self._ids.next()
+            check_name(name)
+            if not path_for(folder, name).exists():
+                return name
+        raise RuntimeError("no unused save name")
 
     def _game(self, game: str) -> _Game:
         found = self._games.get(game)
@@ -193,3 +222,41 @@ class GameHost:
                 raise GameError("bad_argument", f"{name} is longer than {MAX_TEXT} characters")
         with self._lock:
             return self._game(game).session.check_reply(suspect, player_text, reply)
+
+    def save_game(self, game: str) -> SaveRef:
+        with self._lock:
+            found = self._game(game)
+            folder = self._folder()
+            name = self._fresh_name(folder)
+            save = SaveFile(
+                save_format=SAVE_FORMAT,
+                pack=found.pack,
+                case=found.case_bytes.decode("utf-8"),
+                state=found.session.state_json(),
+            )
+            write_save(folder, name, save)
+            return SaveRef(name=name)
+
+    def load_game(self, name: str) -> NewGame:
+        with self._lock:
+            save = read_save(self._folder(), name)
+            case_bytes = save.case.encode("utf-8")
+            try:
+                case = load_case(case_bytes)
+                pack = self._pack(save.pack)
+                if skin_hash(case) != case.skin_hash or not validate_case(case, pack).ok:
+                    raise GameError("bad_save", "that save does not hold a sound case")
+                session = self._open(case_bytes, save.state)
+            except ValidationError as exc:
+                raise GameError("bad_save", "that save cannot be read") from exc
+            except StateMismatch as exc:
+                raise GameError(
+                    "state_mismatch", "that save's progress is for another case"
+                ) from exc
+            except GameError as exc:
+                if exc.code == "bad_argument":
+                    raise GameError("bad_save", "that save names a pack this server lacks") from exc
+                raise
+            game_id = self._ids.next()
+            self._games[game_id] = _Game(session, case_bytes, save.pack)
+            return NewGame(game=game_id, brief=session.brief())
