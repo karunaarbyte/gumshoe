@@ -123,6 +123,7 @@ async def test_three_bad_drafts_and_then_one_more_end_in_the_canned_line():
         )
     assert draft.source == "canned" and draft.degraded is False
     assert draft.text == canned_line(persona) and method not in draft.text
+    assert draft.check_ok and draft.violations == ("how",)  # categories only, never the text
     assert len(llm.calls) == 4  # one draft plus three redrafts
 
 

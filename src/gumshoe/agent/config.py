@@ -13,7 +13,9 @@ class AgentConfig:
     model_dramatic: str = "gemma4:12b"
     max_text: int = 4000  # check_reply refuses longer texts; drafts are truncated to this
     notebook_cap: int = 30  # recent facts sent to the decider (plus every contradicted fact)
-    exchanges_kept: int = 2  # past exchanges sent to the decider
+    exchanges_kept: int = (
+        2  # past exchanges sent to the decider; also the length of a suspect's persona history
+    )
 
     def __post_init__(self) -> None:
         if not 0 < self.confidence_gate <= 1:

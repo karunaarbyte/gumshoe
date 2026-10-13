@@ -25,5 +25,8 @@ def missing_text(plan: AccusationPlan) -> str:
     for problem in plan.problems:
         names = ", ".join(c.name for c in problem.options)
         hint = f" (you can name: {names})" if names else ""
-        parts.append(f"the {problem.axis}{hint}")
-    return "I could not tell what you meant for " + "; ".join(parts) + "."
+        if problem.reason == "not_permitted":
+            parts.append(f"I cannot name the {problem.axis} yet{hint}.")
+        else:
+            parts.append(f"I could not tell what you meant for the {problem.axis}{hint}.")
+    return " ".join(parts)

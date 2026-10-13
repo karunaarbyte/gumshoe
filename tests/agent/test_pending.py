@@ -27,7 +27,7 @@ def test_without_a_pending_action_everything_is_processed():
     assert resolve_pending(None, intent("search"), CONFIG) is Step.PROCESS
 
 
-@pytest.mark.parametrize("name", ["other", "meta", "search", "notebook", "give_up"])
+@pytest.mark.parametrize("name", ["other", "meta", "search", "notebook"])
 def test_a_confident_yes_runs_the_pending_action(name):
     assert resolve_pending(pending(), intent(name, confirm=0.85), CONFIG) is Step.RUN
 
@@ -40,6 +40,15 @@ def test_the_yes_threshold_is_inclusive():
 def test_yes_together_with_a_confident_new_accusation_is_ambiguous_and_never_runs():
     step = resolve_pending(pending(), intent("accuse", confirm=0.95), CONFIG)
     assert step is Step.DROP_PROCESS  # the new accusation is processed instead of the old one
+
+
+def test_yes_together_with_a_confident_give_up_never_runs_a_pending_accusation():
+    step = resolve_pending(pending(), intent("give_up", confirm=0.95), CONFIG)
+    assert step is Step.DROP_PROCESS
+    # but a yes while giving up is confirmed is simply the yes
+    assert resolve_pending(pending(kind="give_up"), intent("give_up", confirm=0.95), CONFIG) is (
+        Step.RUN
+    )
 
 
 def test_yes_with_an_unsure_accuse_still_runs():

@@ -38,8 +38,11 @@ def resolve_pending(pending: Pending | None, intent: Intent, config: AgentConfig
         return Step.PROCESS
     p_yes = 0.5 if intent.confirms_pending is None else intent.confirms_pending
     actionable = is_actionable(intent, config)
-    new_accusation = actionable and intent.name == "accuse"
-    if p_yes >= config.confirm_gate - EPSILON and not new_accusation:
+    # a "yes" next to a different irreversible request must not run the pending one
+    new_action = actionable and (
+        intent.name == "accuse" or (intent.name == "give_up" and pending.kind != "give_up")
+    )
+    if p_yes >= config.confirm_gate - EPSILON and not new_action:
         return Step.RUN
     if p_yes <= 1 - config.confirm_gate + EPSILON:
         return Step.CANCEL_PROCESS if actionable else Step.CANCEL

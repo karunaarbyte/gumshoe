@@ -11,9 +11,11 @@ from gumshoe.agent.events import (
     ToolCall,
     ToolResult,
 )
+from gumshoe.agent.game import ToolFailure
 from gumshoe.agent.llm import LlmError
 from gumshoe.agent.pending import Pending
 from gumshoe.agent.turn import APOLOGY, HELP, UNREACHABLE
+from gumshoe.cases import AccusationResult, SourceResult
 from gumshoe.decider import DeciderAllFailedError, DeciderConnectionError
 from tests.agent.fakes import Script, ScriptedLlm
 from tests.agent.harness import playing, turn
@@ -227,6 +229,7 @@ async def test_a_failed_understand_is_the_apology_and_changes_nothing(error):
         brief = await h.deps.client.case_brief(h.ctx.game)
     assert kinds(events) == ["clarify", "done"]
     assert (only(events, Clarify).reason, only(events, Clarify).text) == ("error", APOLOGY)
+    assert only(events, Clarify).decision_id == h.decider.calls[0][2]
     assert h.ctx.pending is not None and h.ctx.exchanges == []
     assert brief.status == "playing"
 
@@ -460,3 +463,162 @@ async def test_a_suspect_hears_only_their_own_conversation():
         await turn(h, "and you?")
     assert [m.content for m in llm.calls[0][2]] == ["where were you"]
     assert [m.content for m in llm.calls[1][2]] == ["and you?"]
+
+
+# --- failure rows ------------------------------------------------------------------------------
+
+
+def failing(code, message="nope"):
+    async def boom(*args, **kwargs):
+        raise ToolFailure(code, message)
+
+    return boom
+
+
+async def test_a_refused_search_is_a_failed_tool_result_and_memory_does_not_claim_success(
+    monkeypatch,
+):
+    script = Script().understand(intent="search", target="place_1")
+    async with playing(script) as h:
+        monkeypatch.setattr(h.deps.client, "search", failing("unknown_handle", "no such place"))
+        events = await turn(h, "search the first place")
+    assert kinds(events) == ["intent", "tool_call", "tool_result", "done"]
+    result = only(events, ToolResult)
+    assert (result.ok, result.code) == (False, "unknown_handle")
+    assert h.ctx.exchanges == [("search the first place", "could not search there")]
+
+
+async def test_a_server_bug_in_a_tool_is_the_apology(monkeypatch):
+    script = Script().understand(intent="search", target="place_1")
+    async with playing(script) as h:
+        monkeypatch.setattr(h.deps.client, "search", failing("internal", "the game server failed"))
+        events = await turn(h, "search the first place")
+    assert kinds(events) == ["intent", "tool_call", "clarify", "done"]
+    assert only(events, Clarify).reason == "error"
+
+
+async def test_a_bad_parse_argument_is_the_apology_with_the_parse_decision(monkeypatch):
+    script = Script().understand(intent="accuse").parse(who=None)
+    async with playing(script) as h:
+        monkeypatch.setattr(h.deps.client, "interpret_accusation", failing("bad_argument"))
+        events = await turn(h, "accuse someone")
+    assert kinds(events) == ["intent", "clarify", "done"]
+    clarify = only(events, Clarify)
+    assert (clarify.reason, clarify.text) == ("error", APOLOGY)
+    assert clarify.decision_id == h.decider.calls[1][2] and h.ctx.pending is None
+
+
+async def test_a_not_permitted_accusation_clears_the_pending_one_and_spends_nothing(monkeypatch):
+    async with playing(Script()) as h:
+        explore_all(h.host, h.ctx.game)
+        who, how, why = names_of_truth(h)
+        h.script.understand(intent="accuse").parse(who=who, how=how, why=why)
+        h.script.understand(intent="other", confirm=0.95)
+        await turn(h, "accuse")
+
+        async def refused(*args, **kwargs):
+            return AccusationResult(
+                status="not_permitted",
+                correct=None,
+                attempts_left=3,
+                game="playing",
+                message="You cannot accuse yet.",
+            )
+
+        monkeypatch.setattr(h.deps.client, "accuse", refused)
+        events = await turn(h, "yes")
+        brief = await h.deps.client.case_brief(h.ctx.game)
+    assert kinds(events) == ["intent", "tool_call", "tool_result", "clarify", "done"]
+    clarify = only(events, Clarify)
+    assert (clarify.reason, clarify.text) == ("accusation", "You cannot accuse yet.")
+    assert h.ctx.pending is None and brief.attempts_left == 3
+
+
+async def test_a_give_up_refused_with_game_over_is_a_failed_result_and_no_game_over(monkeypatch):
+    script = Script().understand(intent="give_up").understand(intent="other", confirm=0.95)
+    async with playing(script) as h:
+        await turn(h, "I give up")
+        monkeypatch.setattr(h.deps.client, "give_up", failing("game_over", "it is over"))
+        events = await turn(h, "yes")
+    assert kinds(events) == ["intent", "tool_call", "tool_result", "done"]
+    assert only(events, ToolResult).ok is False and h.ctx.pending is None
+    assert h.ctx.exchanges[-1][1] == "could not give up"
+
+
+async def test_a_later_stage_failing_keeps_the_tool_result_and_remembers_the_exchange(monkeypatch):
+    script = Script().understand(intent="interrogate", target="suspect_1")
+    llm = ScriptedLlm(["I was in the hall."])
+    async with playing(script, llm) as h:
+        monkeypatch.setattr(h.deps.client, "check_reply", failing("internal"))
+        events = await turn(h, "where were you")
+    assert kinds(events) == ["intent", "tool_call", "tool_result", "clarify", "done"]
+    assert only(events, ToolResult).ok and only(events, Clarify).text == APOLOGY
+    [(said, summary)] = h.ctx.exchanges
+    assert said == "where were you" and summary.startswith("questioned ") and "new facts" in summary
+
+
+async def test_naming_a_suspect_the_gate_has_not_opened_says_so():
+    async with playing(Script(), preset="long") as h:
+        locked = h.brief.suspects[0]
+        assert locked.locked
+        h.script.understand(intent="accuse").parse(who=locked.name)
+        events = await turn(h, f"it was {locked.name}")
+    clarify = only(events, Clarify)
+    assert clarify.reason == "accusation" and "cannot name the who yet" in clarify.text
+    assert h.ctx.pending is None
+
+
+async def test_an_unknown_interrogation_is_unreachable_and_calls_no_llm(monkeypatch):
+    script = Script().understand(intent="interrogate", target="suspect_1")
+    llm = ScriptedLlm([])
+    async with playing(script, llm) as h:
+
+        async def unknown(*args, **kwargs):
+            return SourceResult(kind="interrogate", label="them", status="unknown")
+
+        monkeypatch.setattr(h.deps.client, "interrogate", unknown)
+        events = await turn(h, "grill them")
+    assert only(events, Reply).source == "unreachable" and llm.calls == []
+    assert "post_check" not in kinds(events)
+
+
+async def test_a_new_request_in_the_grey_band_drops_a_pending_accusation():
+    async with playing(Script()) as h:
+        explore_all(h.host, h.ctx.game)
+        who, how, why = names_of_truth(h)
+        h.script.understand(intent="accuse").parse(who=who, how=how, why=why)
+        h.script.understand(intent="search", target="place_1", confirm=0.5)
+        await turn(h, "accuse")
+        assert h.ctx.pending is not None
+        events = await turn(h, "hmm, search the first place")
+        brief = await h.deps.client.case_brief(h.ctx.game)
+    assert "tool_call" in kinds(events) and h.ctx.pending is None and brief.attempts_left == 3
+
+
+async def test_a_confirmed_give_up_next_to_a_pending_accusation_is_not_a_yes():
+    async with playing(Script()) as h:
+        explore_all(h.host, h.ctx.game)
+        who, how, why = names_of_truth(h)
+        h.script.understand(intent="accuse").parse(who=who, how=how, why=why)
+        h.script.understand(intent="give_up", confirm=0.95)
+        await turn(h, "accuse")
+        events = await turn(h, "yes, I give up")
+        brief = await h.deps.client.case_brief(h.ctx.game)
+    assert brief.status == "playing" and brief.attempts_left == 3
+    assert kinds(events) == ["intent", "confirm", "done"]  # asks about giving up instead
+    assert h.ctx.pending is not None and h.ctx.pending.kind == "give_up"
+
+
+async def test_a_cancel_with_a_new_request_is_one_exchange():
+    script = (
+        Script()
+        .understand(intent="give_up")
+        .understand(intent="search", target="place_1", confirm=0.05)
+    )
+    async with playing(script) as h:
+        await turn(h, "I give up")
+        await turn(h, "no, search the first place")
+    assert len(h.ctx.exchanges) == 2
+    said, summary = h.ctx.exchanges[-1]
+    assert said == "no, search the first place"
+    assert summary.startswith("cancelled, then searched ")

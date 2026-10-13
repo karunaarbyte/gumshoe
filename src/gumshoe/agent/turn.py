@@ -48,23 +48,27 @@ def _remember(ctx: TurnContext, text: str, summary: str) -> None:
 
 async def _tool[T: BaseModel](
     name: str, args: dict[str, Any], call: Callable[[], Awaitable[T]]
-) -> tuple[list[TurnEvent], T | None]:
-    """Run a tool the player can see: its call and result become events. A refusal (game over,
-    bad handle) is a failed result; a vanished game or a server bug propagates."""
+) -> tuple[list[TurnEvent], T | None, ToolFailure | None]:
+    """Run a tool the player can see: its call and result become events. A refusal (bad handle,
+    or game_over) is a failed result. A vanished game or a server bug is returned as `fatal`: the
+    caller yields the events (the call stays visible), then raises it. `game_over` is a failed
+    result, not fatal: step 0 of `_turn` answers a finished game, so under the per-game lock it
+    cannot appear mid-turn."""
     events: list[TurnEvent] = [ToolCall(tool=name, args=args)]
     try:
         result = await call()
     except ToolFailure as exc:
         if exc.code in ("unknown_game", INTERNAL):
-            raise
+            return events, None, exc
         events.append(ToolResult(tool=name, ok=False, code=exc.code, message=exc.message))
-        return events, None
+        return events, None, None
     events.append(ToolResult(tool=name, ok=True, data=result.model_dump(mode="json")))
-    return events, result
+    return events, result, None
 
 
 async def take_turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEvent]:
-    """Yield the events of one turn, always ending with `Done`. Nothing raises out of here."""
+    """Yield the events of one turn, always ending with `Done`. No Exception raises out of here
+    (CancelledError and other BaseExceptions propagate by design)."""
     try:
         async for event in _turn(deps, ctx, text):
             yield event
@@ -102,7 +106,7 @@ async def _turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEv
         )
         intent = read_intent(result, built.targets, decision_id)
     except (DeciderError, KeyError, TypeError):
-        yield Clarify(reason="error", text=APOLOGY)
+        yield Clarify(reason="error", text=APOLOGY, decision_id=decision_id)
         return
     yield IntentEvent(
         decision_id=decision_id,
@@ -121,9 +125,18 @@ async def _turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEv
     if step in (Step.CANCEL, Step.CANCEL_PROCESS):
         ctx.pending = None
         yield Cancelled()
-        _remember(ctx, text, "cancelled")
         if step is Step.CANCEL:
+            _remember(ctx, text, "cancelled")
             return
+        before = len(ctx.exchanges)
+        async for event in _process(deps, ctx, text, brief, intent):
+            yield event
+        if len(ctx.exchanges) > before:  # one message, one exchange: fold the cancel into it
+            said, summary = ctx.exchanges[-1]
+            ctx.exchanges[-1] = (said, f"cancelled, then {summary}")
+        else:
+            _remember(ctx, text, "cancelled")
+        return
     elif step in (Step.DROP_PROCESS, Step.CLEAR_PROCESS):
         ctx.pending = None
     elif step is Step.REASK:
@@ -164,41 +177,60 @@ async def _process(
             yield Clarify(reason="mismatch", text="That does not work with what you named.")
             return
     if name == "search" and handle is not None:
-        found, searched = await _tool(
+        found, searched, fatal = await _tool(
             "search", {"game": game, "location": handle}, lambda: deps.client.search(game, handle)
         )
         for event in found:
             yield event
-        count = len(searched.new_facts) if searched else 0
-        _remember(
-            ctx, text, f"searched {searched.label if searched else 'a place'}: {count} new facts"
-        )
+        if fatal is not None:
+            raise fatal
+        if searched is None:
+            _remember(ctx, text, "could not search there")
+        else:
+            _remember(ctx, text, f"searched {searched.label}: {len(searched.new_facts)} new facts")
     elif name == "records" and handle is not None:
-        found, records = await _tool(
+        found, records, fatal = await _tool(
             "check_records",
             {"game": game, "subject": handle},
             lambda: deps.client.check_records(game, handle),
         )
         for event in found:
             yield event
-        count = len(records.new_facts) if records else 0
-        _remember(ctx, text, f"read records: {count} new facts")
+        if fatal is not None:
+            raise fatal
+        if records is None:
+            _remember(ctx, text, "could not read those records")
+        else:
+            _remember(ctx, text, f"read records: {len(records.new_facts)} new facts")
     elif name == "notebook":
-        found_nb, _ = await _tool("notebook", {"game": game}, lambda: deps.client.notebook(game))
+        found_nb, _, fatal = await _tool(
+            "notebook", {"game": game}, lambda: deps.client.notebook(game)
+        )
         for event in found_nb:
             yield event
+        if fatal is not None:
+            raise fatal
         _remember(ctx, text, "looked over the notebook")
     elif name == "interrogate" and handle is not None:
-        found, asked = await _tool(
+        found, asked, fatal = await _tool(
             "interrogate",
             {"game": game, "suspect": handle},
             lambda: deps.client.interrogate(game, handle),
         )
         for event in found:
             yield event
+        if fatal is not None:
+            raise fatal
         if asked is not None and asked.status in ("ok", "nothing_new"):
-            async for event in _converse(deps, ctx, text, handle, intent.weight):
-                yield event
+            try:
+                async for event in _converse(deps, ctx, text, handle, intent.weight):
+                    yield event
+            except Exception:
+                # the tool already changed state and its result is sent: memory keeps the exchange
+                _remember(ctx, text, f"questioned {asked.label}: {len(asked.new_facts)} new facts")
+                raise
+        elif asked is None:
+            _remember(ctx, text, "could not question them")
         else:
             yield Reply(speaker=None, text=UNREACHABLE, source="unreachable")
             _remember(ctx, text, "could not question them yet")
@@ -313,22 +345,30 @@ async def _run_pending(
 ) -> AsyncIterator[TurnEvent]:
     game = ctx.game
     if pending.kind == "give_up":
-        found, reveal = await _tool("give_up", {"game": game}, lambda: deps.client.give_up(game))
+        found, reveal, fatal = await _tool(
+            "give_up", {"game": game}, lambda: deps.client.give_up(game)
+        )
         for event in found:
             yield event
+        if fatal is not None:
+            raise fatal
         if reveal is not None:
             yield GameOver(outcome="gave_up", reveal=reveal)
-        _remember(ctx, text, "gave up")
+            _remember(ctx, text, "gave up")
+        else:
+            _remember(ctx, text, "could not give up")
         return
     assert pending.handles is not None
     who, how, why = pending.handles
-    found_acc, result = await _tool(
+    found_acc, result, fatal = await _tool(
         "accuse",
         {"game": game, "who": who, "how": how, "why": why, "confirmed": True},
         lambda: deps.client.accuse(game, who, how, why, True),
     )
     for event in found_acc:
         yield event
+    if fatal is not None:
+        raise fatal
     if result is None:
         return
     if result.status != "resolved":

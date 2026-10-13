@@ -20,7 +20,8 @@ class Deps:
 
 @dataclass
 class TurnContext:
-    """Mutable: `take_turn` updates it and the service (plan 4c) commits it."""
+    """Mutable: `take_turn` updates it in place, lists included, so the service (plan 4c) must
+    pass the LIVE object, not a copy."""
 
     game: str
     pending: Pending | None = None

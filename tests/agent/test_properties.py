@@ -12,7 +12,8 @@ from tests.mcp_server.test_properties import FIELDS_THAT_MEAN_TRUTH, raw_ids
 
 
 def echoes_an_accusation(event):
-    """The events that may repeat the player's own accusation (or list what may be named)."""
+    """The events that may repeat the player's own accusation (or list what may be named), and
+    the reveal."""
     return (
         isinstance(event, Confirm)
         or (isinstance(event, Clarify) and event.reason == "accusation")
@@ -20,7 +21,24 @@ def echoes_an_accusation(event):
     )
 
 
-INTENTS = ["search", "interrogate", "records", "talk", "notebook", "meta", "other", "accuse"]
+def is_the_reveal(event):
+    """A game over, or the give_up result that carries the same reveal."""
+    return isinstance(event, GameOver) or (
+        isinstance(event, ToolResult) and event.tool == "give_up"
+    )
+
+
+INTENTS = [
+    "search",
+    "interrogate",
+    "records",
+    "talk",
+    "notebook",
+    "meta",
+    "other",
+    "accuse",
+    "give_up",
+]
 
 
 @pytest.mark.parametrize("preset", ["short", "standard", "long"])
@@ -55,13 +73,13 @@ async def test_random_turns_leak_nothing(seed, preset):
             script.parse(who=None, how=None, why=None)
             events = await turn(h, f"turn {step}")
             over = any(isinstance(e, GameOver) for e in events)
-            blob = "".join(e.model_dump_json() for e in events if not isinstance(e, GameOver))
+            blob = "".join(e.model_dump_json() for e in events if not is_the_reveal(e))
             assert not [i for i in ids if i in blob], f"a raw id reached the events at step {step}"
             assert not [f for f in FIELDS_THAT_MEAN_TRUTH if f in blob]
             plain = "".join(
                 e.model_dump_json()
                 for e in events
-                if not isinstance(e, GameOver) and not echoes_an_accusation(e)
+                if not is_the_reveal(e) and not echoes_an_accusation(e)
             )
             assert not all(n in plain for n in truth_names), "the true triple reached the events"
             notebook = await h.deps.client.notebook(h.ctx.game)

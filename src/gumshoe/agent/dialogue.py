@@ -79,13 +79,13 @@ async def draft_reply(
 ) -> Draft:
     base = persona_system(persona, evidence)
     messages = _messages(history, player_text)
-    canned = Draft(canned_line(persona), "canned", False, True, ())
+    rejected: set[str] = set()  # categories only, never a rejected text
     system = base
     for _ in range(deps.config.max_redrafts + 1):
         try:
             raw = await deps.llm.complete(model, system, messages)
         except LlmError:
-            return Draft(canned.text, "canned", True, True, ())
+            return Draft(canned_line(persona), "canned", True, True, ())
         text = raw.strip()[: deps.config.max_text]
         if not text:
             system = base + "\nYour last answer was empty. Answer the detective in a sentence."
@@ -93,13 +93,14 @@ async def draft_reply(
         check = await deps.client.check_reply(game, suspect, player_text, text)
         if check.ok:
             return Draft(text, "draft", False, True, ())
+        rejected.update(v.category for v in check.violations)
         categories = ", ".join(sorted({v.category for v in check.violations}))
         system = (
             base
             + f"\nYour last draft was rejected because it named a {categories} the detective has "
             "not met. Rewrite it without naming anything outside your statements."
         )
-    return canned
+    return Draft(canned_line(persona), "canned", False, True, tuple(sorted(rejected)))
 
 
 def post_check_questions() -> dict[str, Question]:
