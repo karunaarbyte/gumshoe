@@ -83,3 +83,42 @@ def test_cold_after_must_be_positive_and_finite(monkeypatch, bad):
     monkeypatch.setenv("COLD_AFTER_S", bad)
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_agent_settings_defaults():
+    s = Settings(_env_file=None)
+    assert s.ollama_base_url == "http://localhost:11434/v1"
+    assert s.persona_model_default == "ministral-3:14b"
+    assert s.persona_model_dramatic == "gemma4:12b"
+    assert (s.dramatic_from, s.confidence_gate, s.confirm_gate) == (2.5, 0.6, 0.8)
+    assert (s.max_redrafts, s.llm_timeout_s) == (3, 60.0)
+
+
+def test_agent_settings_come_from_the_environment(monkeypatch):
+    monkeypatch.setenv("PERSONA_MODEL_DEFAULT", "small")
+    monkeypatch.setenv("CONFIRM_GATE", "0.9")
+    monkeypatch.setenv("MAX_REDRAFTS", "0")
+    s = Settings(_env_file=None)
+    assert (s.persona_model_default, s.confirm_gate, s.max_redrafts) == ("small", 0.9, 0)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("CONFIRM_GATE", "0.5"),  # yes and no bands would touch
+        ("CONFIRM_GATE", "1.1"),
+        ("CONFIDENCE_GATE", "0"),
+        ("CONFIDENCE_GATE", "1.5"),
+        ("MAX_REDRAFTS", "-1"),
+        ("MAX_REDRAFTS", "11"),
+        ("DRAMATIC_FROM", "5"),
+        ("DRAMATIC_FROM", "-1"),
+        ("DRAMATIC_FROM", "nan"),
+        ("LLM_TIMEOUT_S", "0"),
+        ("LLM_TIMEOUT_S", "inf"),
+    ],
+)
+def test_agent_settings_reject_values_out_of_range(monkeypatch, name, value):
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
