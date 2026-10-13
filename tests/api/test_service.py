@@ -146,8 +146,10 @@ async def test_a_turn_that_crashes_still_ends_the_stream():
         new = await s.service.new_game(1)
         events = await collect(s.service, new.game, "hello")
         await asyncio.wait_for(s.service.idle(), timeout=5.0)
-    assert events == []  # the stream ended instead of hanging
-    assert s.service  # still usable
+        assert events == []  # the stream ended instead of hanging
+        script.understand(intent="notebook")  # the service still works: a second turn runs
+        again = await collect(s.service, new.game, "show my notebook")
+    assert kinds(again)[-1] == "done" and "tool_result" in kinds(again)
 
 
 async def test_save_and_load_register_the_loaded_game(tmp_path):
@@ -196,3 +198,73 @@ async def test_ten_games_run_turns_at_once():
         games = [(await s.service.new_game(i)).game for i in range(1, 11)]
         results = await asyncio.gather(*(collect(s.service, g, "show my notebook") for g in games))
     assert all(kinds(r)[-1] == "done" and "tool_result" in kinds(r) for r in results)
+
+
+async def test_queued_turns_whose_readers_are_gone_do_not_run():
+    script = Script().understand(intent="notebook")
+    gated = GatedDecider(script)
+    async with serving(script, decider=gated) as s:
+        new = await s.service.new_game(1)
+        running = asyncio.create_task(collect(s.service, new.game, "one"))
+        await gated.entered.wait()  # one turn runs and holds the lock
+        for text in ("two", "three", "four"):
+            stream = s.service.start_turn(new.game, text)
+            reader = asyncio.create_task(anext(stream))
+            await asyncio.sleep(0)  # let the reader start waiting
+            reader.cancel()
+            await asyncio.gather(reader, return_exceptions=True)
+            await stream.aclose()  # the client is gone
+        gated.release.set()
+        await s.service.idle()
+        one = await running
+    assert kinds(one)[-1] == "done"
+    assert gated.started == 1  # the abandoned turns never reached the decider
+
+
+def fail_close_once(monkeypatch, client, code: str) -> None:
+    """Make the client's next close_game fail with `code`; later calls reach the host."""
+    real_close = client.close_game
+    failures = [code]
+
+    async def close_game(game):
+        if failures:
+            raise ToolFailure(failures.pop(), "boom")
+        return await real_close(game)
+
+    monkeypatch.setattr(client, "close_game", close_game)
+
+
+async def test_a_failed_close_keeps_the_game_so_delete_can_be_retried(monkeypatch):
+    async with serving(Script()) as s:
+        new = await s.service.new_game(1)
+        fail_close_once(monkeypatch, s.service._deps.client, "internal")
+        with pytest.raises(ToolFailure) as caught:
+            await s.service.delete_game(new.game)
+        assert caught.value.code == "internal"
+        s.host.case_brief(new.game)  # the host still holds the game
+        await s.service.delete_game(new.game)  # the retry works
+        with pytest.raises(GameError):
+            s.host.case_brief(new.game)
+
+
+async def test_close_reporting_an_unknown_game_drops_the_slot(monkeypatch):
+    async with serving(Script()) as s:
+        new = await s.service.new_game(1)
+        fail_close_once(monkeypatch, s.service._deps.client, "unknown_game")
+        await s.service.delete_game(new.game)  # the host already forgot it: fine
+        with pytest.raises(ToolFailure) as again:
+            s.service.start_turn(new.game, "hello")
+        assert again.value.code == "unknown_game"  # the slot is gone
+
+
+async def test_aclose_right_after_start_turn_still_ends_the_stream():
+    async with serving(Script()) as s:
+        new = await s.service.new_game(1)
+        stream = s.service.start_turn(new.game, "hello")
+        reader = asyncio.create_task(_collect_stream(stream))
+        await s.service.aclose()  # the task is cancelled before its first step
+        assert await asyncio.wait_for(reader, timeout=3.0) == []
+
+
+async def _collect_stream(stream):
+    return [event async for event in stream]

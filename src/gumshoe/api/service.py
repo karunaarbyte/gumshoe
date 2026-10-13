@@ -43,9 +43,21 @@ class _Slot:
     gone: bool = False
 
 
-async def _drain(queue: "asyncio.Queue[TurnEvent | None]") -> AsyncGenerator[TurnEvent]:
-    while (event := await queue.get()) is not None:
-        yield event
+@dataclass
+class _Reader:
+    """Shared by a turn and its reader: set once the client has stopped reading."""
+
+    gone: bool = False
+
+
+async def _drain(
+    queue: "asyncio.Queue[TurnEvent | None]", reader: _Reader
+) -> AsyncGenerator[TurnEvent]:
+    try:
+        while (event := await queue.get()) is not None:
+            yield event
+    finally:
+        reader.gone = True  # a turn still queued for the lock now has nobody to serve
 
 
 class AgentService:
@@ -80,21 +92,26 @@ class AgentService:
     def start_turn(self, game: str, text: str) -> AsyncGenerator[TurnEvent]:
         slot = self._slot(game)
         queue: asyncio.Queue[TurnEvent | None] = asyncio.Queue()
-        task = asyncio.create_task(self._run(slot, text, queue))
+        reader = _Reader()
+        task = asyncio.create_task(self._run(slot, text, queue, reader))
         self._tasks.add(task)  # a strong reference: the loop only keeps a weak one
         task.add_done_callback(self._finished)
-        return _drain(queue)
+        # The reader's end-of-stream. A done callback runs however the task ended, even when
+        # it was cancelled before its first step (a finally block would never be entered).
+        task.add_done_callback(lambda _task: queue.put_nowait(None))
+        return _drain(queue, reader)
 
-    async def _run(self, slot: _Slot, text: str, queue: "asyncio.Queue[TurnEvent | None]") -> None:
-        try:
-            async with slot.lock:
-                if slot.gone:  # deleted while this turn waited
-                    queue.put_nowait(Done())
-                    return
-                async for event in take_turn(self._deps, slot.ctx, text):
-                    queue.put_nowait(event)
-        finally:
-            queue.put_nowait(None)  # the reader's end-of-stream, even when the turn crashed
+    async def _run(
+        self, slot: _Slot, text: str, queue: "asyncio.Queue[TurnEvent | None]", reader: _Reader
+    ) -> None:
+        async with slot.lock:
+            if slot.gone:  # deleted while this turn waited
+                queue.put_nowait(Done())
+                return
+            if reader.gone:  # the client left while this turn waited: do not run it
+                return
+            async for event in take_turn(self._deps, slot.ctx, text):
+                queue.put_nowait(event)
 
     def _finished(self, task: "asyncio.Task[None]") -> None:
         self._tasks.discard(task)
@@ -115,9 +132,11 @@ class AgentService:
                 raise ToolFailure("unknown_game", _UNKNOWN)
             try:
                 await self._deps.client.close_game(game)
-            finally:
-                slot.gone = True
-                self._slots.pop(game, None)
+            except ToolFailure as exc:
+                if exc.code != "unknown_game":
+                    raise  # the host may still hold the game: keep the slot, DELETE can retry
+            slot.gone = True
+            self._slots.pop(game, None)
 
     async def idle(self) -> None:
         """Wait until every running or queued turn has finished."""
