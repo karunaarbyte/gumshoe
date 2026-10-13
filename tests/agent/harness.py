@@ -8,7 +8,9 @@ from mcp.client import Client
 
 from gumshoe.agent.config import AgentConfig
 from gumshoe.agent.deps import Deps, TurnContext
+from gumshoe.agent.events import TurnEvent
 from gumshoe.agent.game import GameClient
+from gumshoe.agent.turn import take_turn
 from gumshoe.cases import PlayerCaseView
 from gumshoe.mcp_server import GameHost
 from gumshoe.mcp_server.tools import build_server
@@ -51,3 +53,7 @@ async def playing(
         the_llm = llm or ScriptedLlm([])
         deps = Deps(client=client, decider=decider, llm=the_llm, config=config or AgentConfig())
         yield Harness(host, deps, TurnContext(game=new.game), new.brief, script, decider, the_llm)
+
+
+async def turn(h: Harness, text: str) -> list[TurnEvent]:
+    return [event async for event in take_turn(h.deps, h.ctx, text)]
