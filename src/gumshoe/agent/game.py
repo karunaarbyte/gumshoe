@@ -55,6 +55,12 @@ class NewGameView(BaseModel):
     brief: PlayerCaseView
 
 
+class SaveView(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str
+
+
 class GameClient:
     def __init__(self, client: Client) -> None:
         self._client = client
@@ -80,6 +86,12 @@ class GameClient:
 
     async def close_game(self, game: str) -> None:
         await self._call("close_game", {"game": game})
+
+    async def save_game(self, game: str) -> SaveView:
+        return SaveView.model_validate(await self._call("save_game", {"game": game}))
+
+    async def load_game(self, name: str) -> NewGameView:
+        return NewGameView.model_validate(await self._call("load_game", {"name": name}))
 
     async def case_brief(self, game: str) -> PlayerCaseView:
         return PlayerCaseView.model_validate(await self._call("case_brief", {"game": game}))

@@ -93,3 +93,23 @@ async def test_only_a_known_code_is_trusted(text, code):
     with pytest.raises(ToolFailure) as err:
         await client.notebook("g")
     assert err.value.code == code
+
+
+async def test_save_then_load_round_trips_through_the_client(tmp_path):
+    host = GameHost(ids=SeqIds(), saves_dir=tmp_path)
+    async with Client(build_server(host)) as raw:
+        client = GameClient(raw)
+        new = await client.new_game(1)
+        saved = await client.save_game(new.game)
+        assert len(saved.name) == 16
+        loaded = await client.load_game(saved.name)
+        assert loaded.game != new.game
+        assert loaded.brief.intro == new.brief.intro
+
+
+async def test_loading_a_missing_save_is_a_tool_failure(tmp_path):
+    host = GameHost(ids=SeqIds(), saves_dir=tmp_path)
+    async with Client(build_server(host)) as raw:
+        with pytest.raises(ToolFailure) as caught:
+            await GameClient(raw).load_game("0123456789abcdef")
+        assert caught.value.code == "bad_save"

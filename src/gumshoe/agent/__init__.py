@@ -9,12 +9,13 @@ client it is given.
 from gumshoe.agent.config import AgentConfig
 from gumshoe.agent.deps import Deps, TurnContext
 from gumshoe.agent.events import EVENT_ADAPTER, TurnEvent
-from gumshoe.agent.game import GameClient, NewGameView, ToolFailure
+from gumshoe.agent.game import GameClient, NewGameView, SaveView, ToolFailure
 from gumshoe.agent.llm import Llm, LlmError, LlmMessage, OllamaLlm
 from gumshoe.agent.pending import Pending
 from gumshoe.agent.turn import take_turn
 
 __all__ = [
     "EVENT_ADAPTER", "AgentConfig", "Deps", "GameClient", "Llm", "LlmError", "LlmMessage",
-    "NewGameView", "OllamaLlm", "Pending", "ToolFailure", "TurnContext", "TurnEvent", "take_turn",
+    "NewGameView", "OllamaLlm", "Pending", "SaveView", "ToolFailure", "TurnContext", "TurnEvent",
+    "take_turn",
 ]  # fmt: skip
