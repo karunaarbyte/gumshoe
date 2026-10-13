@@ -544,3 +544,84 @@ def test_the_case_engine_never_imports_the_mcp_server_or_the_sdk():
         if is_mcp_sdk(module) or is_mcp_server(module)
     ]
     assert stray == []
+
+
+AGENT_THIRD_PARTY = {"pydantic"}
+
+
+def agent_problems(root: Path) -> list[str]:
+    """An allow-list: the agent imports from gumshoe only itself and the top level of
+    `gumshoe.cases` and `gumshoe.decider`; the `mcp` SDK only in game.py, httpx only in llm.py;
+    never the MCP server."""
+    folder = root / "gumshoe" / "agent"
+    problems: list[str] = []
+    for path in sources(folder):
+        for module in sorted(imported_modules(path, root)):
+            top = module.split(".")[0]
+            if top == "gumshoe":
+                ok = (
+                    module in {"gumshoe.cases", "gumshoe.decider"}
+                    or module == "gumshoe.agent"
+                    or module.startswith("gumshoe.agent.")
+                )
+            elif top == "mcp":
+                ok = path.name == "game.py"
+            elif top == "httpx":
+                ok = path.name == "llm.py"
+            else:
+                ok = top in sys.stdlib_module_names or top in AGENT_THIRD_PARTY
+            if not ok:
+                problems.append(f"{path.relative_to(root)} imports {module}")
+    return problems
+
+
+def make_agent_tree(tmp_path: Path, files: dict[str, str]) -> Path:
+    for rel, text in files.items():
+        target = tmp_path / "gumshoe" / "agent" / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text)
+    return tmp_path
+
+
+def test_agent_checker_flags_deep_imports_the_server_and_stray_sdk_or_http(tmp_path):
+    turn_source = (
+        "import mcp.client\nimport httpx\nfrom gumshoe.mcp_server import GameHost\n"
+        "from gumshoe.cases.play.session import GameSession\n"
+        "from gumshoe.decider.contract import x\n"
+    )
+    root = make_agent_tree(
+        tmp_path,
+        {
+            "turn.py": turn_source,
+            "game.py": "import mcp.client\nfrom gumshoe.cases import PlayerCaseView\n",
+            "llm.py": "import httpx\n",
+        },
+    )
+    assert agent_problems(root) == [
+        "gumshoe/agent/turn.py imports gumshoe.cases.play.session",
+        "gumshoe/agent/turn.py imports gumshoe.decider.contract",
+        "gumshoe/agent/turn.py imports gumshoe.mcp_server",
+        "gumshoe/agent/turn.py imports httpx",
+        "gumshoe/agent/turn.py imports mcp.client",
+    ]
+
+
+def test_agent_checker_flags_a_lookalike_package_name(tmp_path):
+    root = make_agent_tree(tmp_path, {"turn.py": "import gumshoe.agentx\n"})
+    assert agent_problems(root) == ["gumshoe/agent/turn.py imports gumshoe.agentx"]
+
+
+def test_agent_imports_follow_the_rules():
+    assert agent_problems(SRC) == []
+
+
+def test_nothing_but_the_api_imports_the_agent():
+    stray = [
+        f"{path.relative_to(SRC)} imports {module}"
+        for path in SRC.rglob("*.py")
+        if "agent" not in path.relative_to(SRC).parts[:2]
+        for module in sorted(imported_modules(path, SRC))
+        if module == "gumshoe.agent" or module.startswith("gumshoe.agent.")
+        if "api" not in path.relative_to(SRC).parts[:2]
+    ]
+    assert stray == []
