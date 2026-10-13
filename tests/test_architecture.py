@@ -625,3 +625,20 @@ def test_nothing_but_the_api_imports_the_agent():
         if "api" not in path.relative_to(SRC).parts[:2]
     ]
     assert stray == []
+
+
+MCP_SERVER = SRC / "gumshoe" / "mcp_server"
+WIRING = SRC / "gumshoe" / "api" / "wiring.py"
+AGENT_GAME = SRC / "gumshoe" / "agent" / "game.py"
+
+
+def test_only_the_api_wiring_touches_the_mcp_server_and_sdk_outside_their_homes():
+    """Outside mcp_server/, only api/wiring.py imports the server; the SDK also in agent/game.py."""
+    stray = [
+        f"{path.relative_to(SRC)} imports {module}"
+        for path in sources(SRC / "gumshoe")
+        if MCP_SERVER not in path.parents and path != WIRING
+        for module in sorted(imported_modules(path, SRC))
+        if is_mcp_server(module) or (is_mcp_sdk(module) and path != AGENT_GAME)
+    ]
+    assert stray == []
