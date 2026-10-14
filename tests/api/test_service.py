@@ -3,10 +3,11 @@ import asyncio
 import pytest
 
 from gumshoe.agent import ToolFailure
-from gumshoe.api.service import AgentService
+from gumshoe.api.errors import ApiError
+from gumshoe.api.service import SHUTTING_DOWN, AgentService
 from gumshoe.mcp_server import GameError
 from tests.agent.fakes import Script
-from tests.api.helpers import GatedDecider, serving
+from tests.api.helpers import GatedDecider, HeldSave, idle, serving
 
 
 def kinds(events):
@@ -67,21 +68,34 @@ async def test_two_games_keep_separate_memory():
     assert "Earlier the player said" not in s.decider.calls[1][1]
 
 
-async def test_a_second_turn_waits_for_the_first():
+async def test_a_second_turn_while_one_runs_is_refused_and_never_billed():
     script = Script().understand(intent="notebook").understand(intent="notebook")
     gated = GatedDecider(script)
     async with serving(script, decider=gated) as s:
         new = await s.service.new_game(1)
         first = asyncio.create_task(collect(s.service, new.game, "one"))
         await gated.entered.wait()
-        second = asyncio.create_task(collect(s.service, new.game, "two"))
-        await asyncio.sleep(0.05)
-        assert gated.started == 1  # the second turn has not reached the decider
-        assert not second.done()
+        with pytest.raises(ApiError) as caught:
+            s.service.start_turn(new.game, "two")
+        assert (caught.value.status, caught.value.code) == (409, "turn_in_progress")
         gated.release.set()
-        one, two = await asyncio.gather(first, second)
-    assert kinds(one)[-1] == kinds(two)[-1] == "done"
-    assert [c[1].splitlines()[0] for c in gated.calls] == ["Player says: one", "Player says: two"]
+        one = await first
+        again = await collect(s.service, new.game, "three")  # free again once it ended
+    assert kinds(one)[-1] == kinds(again)[-1] == "done"
+    assert [c[1].splitlines()[0] for c in gated.calls] == [
+        "Player says: one",
+        "Player says: three",
+    ]
+
+
+async def test_the_game_is_free_again_when_a_turn_crashed():
+    script = Script()  # empty: the turn dies with ScriptExhausted
+    async with serving(script) as s:
+        new = await s.service.new_game(1)
+        assert await collect(s.service, new.game, "hello") == []
+        script.understand(intent="notebook")
+        again = await collect(s.service, new.game, "notes")  # not refused with 409
+    assert kinds(again)[-1] == "done"
 
 
 async def test_a_disconnect_does_not_stop_the_turn():
@@ -96,7 +110,7 @@ async def test_a_disconnect_does_not_stop_the_turn():
         await asyncio.gather(reader, return_exceptions=True)
         await stream.aclose()
         gated.release.set()
-        await s.service.idle()
+        await idle(s.service)
         await collect(s.service, new.game, "show my notebook")
     assert "Earlier the player said: search the first place" in gated.calls[1][1]
 
@@ -112,32 +126,38 @@ async def test_delete_closes_the_game_and_forgets_it():
             s.host.case_brief(new.game)  # the host raises its own error, not the client's
 
 
-async def test_delete_waits_for_a_running_turn_and_ends_a_queued_one(monkeypatch):
+async def test_delete_waits_for_a_running_turn():
     script = Script().understand(intent="notebook")
     gated = GatedDecider(script)
     async with serving(script, decider=gated) as s:
         new = await s.service.new_game(1)
         running = asyncio.create_task(collect(s.service, new.game, "one"))
-        await gated.entered.wait()  # the running turn has read the brief already
-        client = s.service._deps.client
-        real_brief = client.case_brief
-        briefs: list[str] = []
-
-        async def counted_brief(game):
-            briefs.append(game)
-            return await real_brief(game)
-
-        monkeypatch.setattr(client, "case_brief", counted_brief)
-        queued = asyncio.create_task(collect(s.service, new.game, "two"))
+        await gated.entered.wait()
         deleting = asyncio.create_task(s.service.delete_game(new.game))
         await asyncio.sleep(0.05)
-        assert not deleting.done() and not queued.done()
+        assert not deleting.done()
         gated.release.set()
-        one, two, _ = await asyncio.gather(running, queued, deleting)
+        one, _ = await asyncio.gather(running, deleting)
     assert kinds(one)[-1] == "done" and len(one) > 1
-    assert kinds(two) == ["done"]  # saw the game gone, ran nothing
     assert gated.started == 1
-    assert briefs == []  # the queued turn never reached the game server
+
+
+async def test_a_turn_waiting_behind_a_save_sees_the_game_deleted_and_does_nothing(
+    monkeypatch, tmp_path
+):
+    async with serving(Script(), saves_dir=tmp_path) as s:
+        new = await s.service.new_game(1)
+        held = HeldSave(monkeypatch, s.service)
+        saving = asyncio.create_task(s.service.save_game(new.game))
+        await held.entered.wait()  # the save holds the lock
+        deleting = asyncio.create_task(s.service.delete_game(new.game))
+        await asyncio.sleep(0)  # the delete queues for the lock first
+        waiting = asyncio.create_task(collect(s.service, new.game, "two"))
+        await asyncio.sleep(0.05)
+        held.release.set()
+        _, _, two = await asyncio.gather(saving, deleting, waiting)
+    assert kinds(two) == ["done"]  # saw the game gone, ran nothing
+    assert s.decider.calls == []
 
 
 async def test_a_turn_that_crashes_still_ends_the_stream():
@@ -145,7 +165,7 @@ async def test_a_turn_that_crashes_still_ends_the_stream():
     async with serving(script) as s:
         new = await s.service.new_game(1)
         events = await collect(s.service, new.game, "hello")
-        await asyncio.wait_for(s.service.idle(), timeout=5.0)
+        await asyncio.wait_for(idle(s.service), timeout=5.0)
         assert events == []  # the stream ended instead of hanging
         script.understand(intent="notebook")  # the service still works: a second turn runs
         again = await collect(s.service, new.game, "show my notebook")
@@ -187,7 +207,9 @@ async def test_aclose_cancels_a_running_turn_without_hanging():
         task = asyncio.create_task(collect(s.service, new.game, "one"))
         await gated.entered.wait()
         await asyncio.wait_for(s.service.aclose(), timeout=3.0)
-        assert await asyncio.wait_for(task, timeout=1.0) == []  # ended: the turn was cancelled
+        events = await asyncio.wait_for(task, timeout=1.0)  # ended: the turn was cancelled
+    assert kinds(events) == ["clarify", "done"]  # said so, unlike a dropped connection
+    assert events[0].reason == "error" and events[0].text == SHUTTING_DOWN
 
 
 async def test_ten_games_run_turns_at_once():
@@ -200,25 +222,22 @@ async def test_ten_games_run_turns_at_once():
     assert all(kinds(r)[-1] == "done" and "tool_result" in kinds(r) for r in results)
 
 
-async def test_queued_turns_whose_readers_are_gone_do_not_run():
-    script = Script().understand(intent="notebook")
-    gated = GatedDecider(script)
-    async with serving(script, decider=gated) as s:
+async def test_a_turn_whose_reader_left_while_it_waited_does_not_run(monkeypatch, tmp_path):
+    async with serving(Script(), saves_dir=tmp_path) as s:
         new = await s.service.new_game(1)
-        running = asyncio.create_task(collect(s.service, new.game, "one"))
-        await gated.entered.wait()  # one turn runs and holds the lock
-        for text in ("two", "three", "four"):
-            stream = s.service.start_turn(new.game, text)
-            reader = asyncio.create_task(anext(stream))
-            await asyncio.sleep(0)  # let the reader start waiting
-            reader.cancel()
-            await asyncio.gather(reader, return_exceptions=True)
-            await stream.aclose()  # the client is gone
-        gated.release.set()
-        await s.service.idle()
-        one = await running
-    assert kinds(one)[-1] == "done"
-    assert gated.started == 1  # the abandoned turns never reached the decider
+        held = HeldSave(monkeypatch, s.service)
+        saving = asyncio.create_task(s.service.save_game(new.game))
+        await held.entered.wait()  # the save holds the lock
+        stream = s.service.start_turn(new.game, "two")
+        reader = asyncio.create_task(anext(stream))
+        await asyncio.sleep(0)  # let the reader start waiting
+        reader.cancel()
+        await asyncio.gather(reader, return_exceptions=True)
+        await stream.aclose()  # the client is gone
+        held.release.set()
+        await saving
+        await idle(s.service)
+    assert s.decider.calls == []  # the abandoned turn never reached the decider
 
 
 def fail_close_once(monkeypatch, client, code: str) -> None:

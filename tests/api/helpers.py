@@ -80,7 +80,7 @@ def parse_sse(text: str) -> list[tuple[str, dict[str, Any]]]:
     """The (event name, data) pairs of an SSE body; fails on a malformed block."""
     pairs: list[tuple[str, dict[str, Any]]] = []
     for block in text.split("\n\n"):
-        if not block.strip():
+        if not block.strip() or block.startswith(":"):  # blank, or a keep-alive comment
             continue
         lines = block.split("\n")
         assert len(lines) == 2, f"bad SSE block: {block!r}"
@@ -98,3 +98,26 @@ def fake_factory(
             yield served.service
 
     return factory
+
+
+async def idle(service: AgentService) -> None:
+    """Wait until every turn the service started has finished."""
+    while pending := [task for task in service._tasks if not task.done()]:
+        await asyncio.wait(pending)
+
+
+class HeldSave:
+    """Make the service's next save hold the game's lock until `release` is set."""
+
+    def __init__(self, monkeypatch, service: AgentService) -> None:
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+        client = service._deps.client
+        real = client.save_game
+
+        async def save_game(game):
+            self.entered.set()
+            await self.release.wait()
+            return await real(game)
+
+        monkeypatch.setattr(client, "save_game", save_game)

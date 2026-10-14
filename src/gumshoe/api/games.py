@@ -1,6 +1,8 @@
 """The game endpoints: create, load, read, play (as server-sent events), save and delete."""
 
-from collections.abc import AsyncIterator
+import asyncio
+import contextlib
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -14,6 +16,8 @@ from gumshoe.api.service import AgentService, GameState
 router = APIRouter(prefix="/api/games")
 
 MAX_TURN_CHARS = 1000
+PING_INTERVAL_S = 15.0  # a comment line this often while a turn is quiet, so proxies keep it open
+PING = b": ping\n\n"
 
 
 class NewGameBody(BaseModel):
@@ -33,6 +37,9 @@ class TurnBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(min_length=1, max_length=MAX_TURN_CHARS)
+    # the id of the confirmation on screen, if any (from the `confirm` event): only a yes that
+    # carries it can run the pending action
+    pending_id: str | None = Field(None, min_length=1, max_length=64)
 
 
 def service_of(request: Request) -> AgentService:
@@ -65,19 +72,44 @@ async def read(game: str, service: Service) -> GameState:
     return await service.state(game)
 
 
-@router.post("/{game}/turn")
-async def play(game: str, body: TurnBody, service: Service) -> StreamingResponse:
-    events = service.start_turn(game, body.text)  # an unknown game raises here: a real 404
+async def with_pings(events: AsyncIterator[TurnEvent], interval_s: float) -> AsyncGenerator[bytes]:
+    """Each event as SSE, plus a `: ping` comment whenever `interval_s` passes without one.
 
-    async def stream() -> AsyncIterator[bytes]:
-        async for event in events:
+    The next event is awaited in a task that a quiet spell never cancels (cancelling the read
+    would close the event stream). When the client leaves, that task is cancelled, which closes
+    the stream and so tells the service the reader is gone."""
+    following = asyncio.ensure_future(anext(events))
+    try:
+        while True:
+            done, _ = await asyncio.wait({following}, timeout=interval_s)
+            if not done:
+                yield PING
+                continue
+            try:
+                event = following.result()
+            except StopAsyncIteration:
+                return
             yield sse(event)
+            following = asyncio.ensure_future(anext(events))
+    finally:
+        following.cancel()
+        with contextlib.suppress(asyncio.CancelledError, StopAsyncIteration):
+            await following
 
+
+def event_stream(events: AsyncIterator[TurnEvent]) -> StreamingResponse:
+    # PING_INTERVAL_S is read here, at call time, so a test can shorten it
     return StreamingResponse(
-        stream(),
+        with_pings(events, PING_INTERVAL_S),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/{game}/turn")
+async def play(game: str, body: TurnBody, service: Service) -> StreamingResponse:
+    # an unknown game (404) or a turn in progress (409) raises here, before streaming starts
+    return event_stream(service.start_turn(game, body.text, pending_id=body.pending_id))
 
 
 @router.post("/{game}/save")

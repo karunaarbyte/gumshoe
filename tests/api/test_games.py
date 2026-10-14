@@ -1,12 +1,16 @@
+import asyncio
+from contextlib import asynccontextmanager
+
 import pytest
 from starlette.testclient import TestClient
 
-from gumshoe.agent.events import EVENT_ADAPTER
+from gumshoe.agent.events import EVENT_ADAPTER, Done
 from gumshoe.api import create_app
 from gumshoe.api.errors import status_for
+from gumshoe.api.games import PING, sse, with_pings
 from gumshoe.stats import SqliteStatsStore
-from tests.agent.fakes import Script
-from tests.api.helpers import fake_factory, parse_sse
+from tests.agent.fakes import Script, ScriptedDecider
+from tests.api.helpers import fake_factory, parse_sse, serving
 
 
 @pytest.fixture
@@ -207,3 +211,82 @@ def test_an_unexpected_error_is_a_500_with_code_and_message_only(store):
         response = client.get("/api/games/x")
     assert response.status_code == 500
     assert response.json() == {"code": "internal", "message": "something went wrong"}
+
+
+def test_a_turn_while_another_runs_is_409_before_streaming(store):
+    with client_for(store, Script()) as client:
+        game = new_game(client)["game"]
+        client.app.state.service._slots[game].busy = True  # as if a turn were running
+        response = client.post(f"/api/games/{game}/turn", json={"text": "hi"})
+    assert response.status_code == 409
+    assert response.json()["code"] == "turn_in_progress"
+    assert response.headers["content-type"].startswith("application/json")
+
+
+def test_a_typed_yes_carrying_the_confirmations_id_runs_it(store):
+    script = Script().understand(intent="give_up").understand(intent="other", confirm=0.95)
+    with client_for(store, script) as client:
+        game = new_game(client)["game"]
+        first = parse_sse(client.post(f"/api/games/{game}/turn", json={"text": "I quit"}).text)
+        [confirm] = [data for name, data in first if name == "confirm"]
+        body = {"text": "yes", "pending_id": confirm["pending_id"]}
+        second = parse_sse(client.post(f"/api/games/{game}/turn", json=body).text)
+    assert [name for name, _ in second][-2:] == ["game_over", "done"]
+
+
+def test_an_empty_pending_id_is_refused(store):
+    with client_for(store, Script()) as client:
+        game = new_game(client)["game"]
+        body = {"text": "yes", "pending_id": ""}
+        assert client.post(f"/api/games/{game}/turn", json=body).status_code == 422
+
+
+# --- keep-alive pings ----------------------------------------------------------------------------
+
+
+async def test_a_quiet_stream_gets_pings_between_its_events():
+    async def slow():
+        await asyncio.sleep(0.05)
+        yield Done()
+
+    chunks = [chunk async for chunk in with_pings(slow(), 0.01)]
+    assert chunks[0] == PING and chunks[-1] == sse(Done())
+    assert set(chunks[:-1]) == {PING}
+
+
+async def test_leaving_a_pinged_stream_closes_the_events_behind_it():
+    closed = asyncio.Event()
+
+    async def endless():
+        try:
+            await asyncio.sleep(10)
+            yield Done()
+        finally:
+            closed.set()
+
+    stream = with_pings(endless(), 0.01)
+    assert await anext(stream) == PING
+    await stream.aclose()
+    assert closed.is_set()  # so the service learns its reader is gone
+
+
+def test_a_slow_turn_streams_pings_that_parse_sse_skips(store, monkeypatch):
+    monkeypatch.setattr("gumshoe.api.games.PING_INTERVAL_S", 0.01)
+
+    class Slow(ScriptedDecider):
+        async def decide(self, state, questions, *, node="adhoc", decision_id=None):
+            await asyncio.sleep(0.1)
+            return await super().decide(state, questions, node=node, decision_id=decision_id)
+
+    script = Script().understand(intent="notebook")
+
+    @asynccontextmanager
+    async def factory(_store):
+        async with serving(script, decider=Slow(script)) as served:
+            yield served.service
+
+    with TestClient(create_app(store, make_service=factory)) as client:
+        game = new_game(client)["game"]
+        body = client.post(f"/api/games/{game}/turn", json={"text": "notes"}).text
+    assert body.startswith(": ping\n\n")
+    assert [name for name, _ in parse_sse(body)] == ["intent", "tool_call", "tool_result", "done"]

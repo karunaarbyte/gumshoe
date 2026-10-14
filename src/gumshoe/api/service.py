@@ -1,13 +1,14 @@
 """The games the API serves: one conversation record and one lock per game.
 
-A turn runs in a detached task that holds the game's lock, so a second turn on the same game
-waits its turn and a dropped client never cancels the work. The reader of a turn only drains a
-queue.
+A turn runs in a detached task that holds the game's lock, so a dropped client never cancels the
+work. One turn at a time per game: a second one while the first runs is refused with 409
+`turn_in_progress` (each turn is billed, so they are never queued). Save and delete wait for the
+lock. The reader of a turn only drains a queue.
 """
 
 import asyncio
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel, ConfigDict
@@ -21,12 +22,14 @@ from gumshoe.agent import (
     TurnEvent,
     take_turn,
 )
-from gumshoe.agent.events import Done
+from gumshoe.agent.events import Clarify, Done
+from gumshoe.api.errors import ApiError
 from gumshoe.cases import NotebookView, PlayerCaseView
 
 logger = logging.getLogger(__name__)
 
 _UNKNOWN = "no such game"
+SHUTTING_DOWN = "The game server is shutting down. Please try again in a moment."
 
 
 class GameState(BaseModel):
@@ -41,6 +44,7 @@ class _Slot:
     ctx: TurnContext
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     gone: bool = False
+    busy: bool = False  # a turn is running or waiting for the lock: the next one is refused
 
 
 @dataclass
@@ -57,7 +61,7 @@ async def _drain(
         while (event := await queue.get()) is not None:
             yield event
     finally:
-        reader.gone = True  # a turn still queued for the lock now has nobody to serve
+        reader.gone = True  # a turn still waiting for the lock now has nobody to serve
 
 
 class AgentService:
@@ -89,29 +93,56 @@ class AgentService:
         notebook = await self._deps.client.notebook(game)
         return GameState(brief=brief, notebook=notebook)
 
-    def start_turn(self, game: str, text: str) -> AsyncGenerator[TurnEvent]:
+    def start_turn(
+        self, game: str, text: str, *, pending_id: str | None = None
+    ) -> AsyncGenerator[TurnEvent]:
+        """Raises at once (before any streaming) for an unknown game or a turn in progress."""
         slot = self._slot(game)
+        return self._start(
+            slot, lambda: take_turn(self._deps, slot.ctx, text, pending_id=pending_id)
+        )
+
+    def _start(
+        self, slot: _Slot, events: Callable[[], AsyncIterator[TurnEvent]]
+    ) -> AsyncGenerator[TurnEvent]:
+        if slot.busy:
+            raise ApiError(
+                409, "turn_in_progress", "a turn is already running for this game; wait for it"
+            )
+        slot.busy = True
         queue: asyncio.Queue[TurnEvent | None] = asyncio.Queue()
         reader = _Reader()
-        task = asyncio.create_task(self._run(slot, text, queue, reader))
+        task = asyncio.create_task(self._run(slot, events, queue, reader))
         self._tasks.add(task)  # a strong reference: the loop only keeps a weak one
         task.add_done_callback(self._finished)
-        # The reader's end-of-stream. A done callback runs however the task ended, even when
-        # it was cancelled before its first step (a finally block would never be entered).
+        # Done callbacks run in order and however the task ended, even when it was cancelled
+        # before its first step (a finally block would never be entered): free the game first,
+        # then end the reader's stream, so a client that saw the end can start the next turn.
+        task.add_done_callback(lambda _task: setattr(slot, "busy", False))
         task.add_done_callback(lambda _task: queue.put_nowait(None))
         return _drain(queue, reader)
 
     async def _run(
-        self, slot: _Slot, text: str, queue: "asyncio.Queue[TurnEvent | None]", reader: _Reader
+        self,
+        slot: _Slot,
+        events: Callable[[], AsyncIterator[TurnEvent]],
+        queue: "asyncio.Queue[TurnEvent | None]",
+        reader: _Reader,
     ) -> None:
-        async with slot.lock:
-            if slot.gone:  # deleted while this turn waited
-                queue.put_nowait(Done())
-                return
-            if reader.gone:  # the client left while this turn waited: do not run it
-                return
-            async for event in take_turn(self._deps, slot.ctx, text):
-                queue.put_nowait(event)
+        try:
+            async with slot.lock:
+                if slot.gone:  # deleted while this turn waited
+                    queue.put_nowait(Done())
+                    return
+                if reader.gone:  # the client left while this turn waited: do not run it
+                    return
+                async for event in events():
+                    queue.put_nowait(event)
+        except asyncio.CancelledError:
+            # shutdown: tell the client, so it can tell this from a dropped connection
+            queue.put_nowait(Clarify(reason="error", text=SHUTTING_DOWN))
+            queue.put_nowait(Done())
+            raise
 
     def _finished(self, task: "asyncio.Task[None]") -> None:
         self._tasks.discard(task)
@@ -137,14 +168,6 @@ class AgentService:
                     raise  # the host may still hold the game: keep the slot, DELETE can retry
             slot.gone = True
             self._slots.pop(game, None)
-
-    async def idle(self) -> None:
-        """Wait until every running or queued turn has finished."""
-        # Wait on the unfinished tasks only: a finished task stays in `_tasks` until its done
-        # callback runs, and gather() over finished tasks returns without yielding (3.12+), so
-        # looping on `self._tasks` would spin and starve that very callback.
-        while pending := [task for task in self._tasks if not task.done()]:
-            await asyncio.wait(pending)
 
     async def aclose(self) -> None:
         tasks = list(self._tasks)
