@@ -5,6 +5,7 @@ A rejected draft's text is never kept, logged or sent anywhere except back to no
 prompt names only the violation categories.
 """
 
+import asyncio
 import time
 import uuid
 from collections.abc import Sequence
@@ -93,27 +94,38 @@ async def draft_reply(
         elapsed = round((time.perf_counter() - started) * 1000, 1)
         return Draft(text, source, degraded, violations, model, calls, elapsed)
 
-    for _ in range(deps.config.max_redrafts + 1):
-        calls += 1
-        try:
-            raw = await deps.llm.complete(model, system, messages)
-        except LlmError:
-            return done(canned_line(persona), "canned", True)
-        text = raw.strip()[: deps.config.max_text]
-        if not text:
-            system = base + "\nYour last answer was empty. Answer the detective in a sentence."
-            continue
-        check = await deps.client.check_reply(game, suspect, player_text, text)
-        if check.ok:
-            return done(text, "draft", False)
-        rejected.update(v.category for v in check.violations)
-        categories = ", ".join(sorted({v.category for v in check.violations}))
-        system = (
-            base
-            + f"\nYour last draft was rejected because it named a {categories} the detective has "
-            "not met. Rewrite it without naming anything outside your statements."
-        )
-    return done(canned_line(persona), "canned", False)
+    async def attempts() -> Draft:
+        nonlocal system, calls
+        for _ in range(deps.config.max_redrafts + 1):
+            calls += 1
+            try:
+                raw = await deps.llm.complete(model, system, messages)
+            except LlmError:
+                return done(canned_line(persona), "canned", True)
+            text = raw.strip()[: deps.config.max_text]
+            if not text:
+                system = base + "\nYour last answer was empty. Answer the detective in a sentence."
+                continue
+            check = await deps.client.check_reply(game, suspect, player_text, text)
+            if check.ok:
+                return done(text, "draft", False)
+            rejected.update(v.category for v in check.violations)
+            categories = ", ".join(sorted({v.category for v in check.violations}))
+            system = (
+                base
+                + f"\nYour last draft was rejected because it named a {categories} the detective "
+                "has not met. Rewrite it without naming anything outside your statements."
+            )
+        return done(canned_line(persona), "canned", False)
+
+    budget = asyncio.timeout(deps.config.draft_budget_s)
+    try:
+        async with budget:
+            return await attempts()
+    except TimeoutError:
+        if not budget.expired():
+            raise  # not ours: a bug like any other
+        return done(canned_line(persona), "canned", True)  # too slow counts as unavailable
 
 
 def post_check_questions() -> dict[str, Question]:

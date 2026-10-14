@@ -26,6 +26,9 @@ def test_defaults_match_the_spec():
         {"max_text": 0},
         {"notebook_cap": 0},
         {"exchanges_kept": -1},
+        {"turn_timeout_s": 0.0},
+        {"turn_timeout_s": float("inf")},
+        {"turn_timeout_s": float("nan")},
     ],
 )
 def test_invalid_values_are_refused(bad):
@@ -35,3 +38,8 @@ def test_invalid_values_are_refused(bad):
 
 def test_the_gate_can_be_exactly_one():
     assert AgentConfig(confirm_gate=1.0).confirm_gate == 1.0
+
+
+def test_drafting_gets_half_the_turn_budget():
+    c = AgentConfig()
+    assert (c.turn_timeout_s, c.draft_budget_s) == (120.0, 60.0)

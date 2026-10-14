@@ -1,5 +1,6 @@
 """take_turn: the only place the stages meet. One call of `take_turn` is one player message."""
 
+import asyncio
 import logging
 import re
 import time
@@ -110,7 +111,7 @@ async def take_turn(
     """Yield the events of one turn, always ending with `Done`. No Exception raises out of here
     (CancelledError and other BaseExceptions propagate by design). `pending_id` is the id of the
     confirmation the player had in front of them, if any: only then can a yes run it."""
-    async for event in _guarded(ctx, _turn(deps, ctx, text, pending_id)):
+    async for event in _guarded(deps, ctx, _turn(deps, ctx, text, pending_id)):
         yield event
 
 
@@ -120,19 +121,37 @@ async def take_confirm(
     """The confirm button: run or cancel the stored pending action. Deterministic: no decision is
     asked for. The API checks `pending_id` before it starts (409 otherwise); if the action has
     changed by the time this runs, the turn says there is nothing to confirm and does nothing."""
-    async for event in _guarded(ctx, _confirm(deps, ctx, pending_id, answer)):
+    async for event in _guarded(deps, ctx, _confirm(deps, ctx, pending_id, answer)):
         yield event
 
 
-async def _guarded(ctx: TurnContext, events: AsyncIterator[TurnEvent]) -> AsyncIterator[TurnEvent]:
+async def _guarded(
+    deps: Deps, ctx: TurnContext, events: AsyncIterator[TurnEvent]
+) -> AsyncIterator[TurnEvent]:
     """Every turn's frame: remember how the game ended, turn failures into the apology, end
-    with `Done`."""
+    with `Done`, and stop a turn that outlives `turn_timeout_s` (a safety net: the stages have
+    their own timeouts). The deadline covers only the waits for the next event, never a
+    `yield`, so a slow reader cannot be cancelled by it."""
     started = time.perf_counter()
+    deadline = asyncio.get_running_loop().time() + deps.config.turn_timeout_s
+    budget = asyncio.timeout_at(deadline)
     try:
-        async for event in events:
+        while True:
+            budget = asyncio.timeout_at(deadline)
+            try:
+                async with budget:
+                    event = await anext(events)
+            except StopAsyncIteration:
+                break
             if isinstance(event, GameOver):
                 ctx.outcome = event.outcome
             yield event
+    except TimeoutError:
+        if budget.expired():
+            logger.warning("a turn ran out of time after %s s", deps.config.turn_timeout_s)
+        else:
+            logger.exception("turn failed")
+        yield Clarify(reason="error", text=APOLOGY)
     except ToolFailure as exc:
         if exc.code != "unknown_game":
             logger.error("turn failed: %s", exc)

@@ -22,6 +22,7 @@ def agent_config(settings: Settings) -> AgentConfig:
         dramatic_from=settings.dramatic_from,
         model_default=settings.persona_model_default,
         model_dramatic=settings.persona_model_dramatic,
+        turn_timeout_s=settings.turn_timeout_s,
     )
 
 

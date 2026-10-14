@@ -1,5 +1,6 @@
 """Tunables for the agent loop. Plan 4c maps the application settings onto this."""
 
+import math
 from dataclasses import dataclass
 
 
@@ -16,6 +17,13 @@ class AgentConfig:
     exchanges_kept: int = (
         2  # past exchanges sent to the decider; also the length of a suspect's persona history
     )
+    # The whole turn's safety net. Persona drafting gets half of it, so a slow model ends in the
+    # canned line well before the net ends the turn with the apology.
+    turn_timeout_s: float = 120.0
+
+    @property
+    def draft_budget_s(self) -> float:
+        return self.turn_timeout_s / 2
 
     def __post_init__(self) -> None:
         if not 0 < self.confidence_gate <= 1:
@@ -26,3 +34,5 @@ class AgentConfig:
             raise ValueError("max_redrafts must not be negative")
         if self.max_text < 1 or self.notebook_cap < 1 or self.exchanges_kept < 0:
             raise ValueError("max_text and notebook_cap must be positive, exchanges_kept >= 0")
+        if not (self.turn_timeout_s > 0 and math.isfinite(self.turn_timeout_s)):
+            raise ValueError("turn_timeout_s must be a positive number of seconds")

@@ -1,4 +1,6 @@
+import asyncio
 import logging
+from dataclasses import replace
 
 import pytest
 
@@ -26,7 +28,7 @@ from gumshoe.agent.turn import (
 )
 from gumshoe.cases import AccusationResult, SourceResult
 from gumshoe.decider import DeciderAllFailedError, DeciderAPIError, DeciderConnectionError
-from tests.agent.fakes import Script, ScriptedLlm
+from tests.agent.fakes import Script, ScriptedDecider, ScriptedLlm
 from tests.agent.harness import answer, playing, press, turn
 from tests.mcp_server.helpers import castle_case, explore_all, true_triple
 
@@ -888,3 +890,42 @@ async def test_other_clarifies_carry_no_problems():
     async with playing(script) as h:
         events = await turn(h, "search")
     assert only(events, Clarify).problems == ()
+
+
+# --- the turn budget ---------------------------------------------------------------------------
+
+
+class SlowLlm(ScriptedLlm):
+    async def complete(self, model, system, messages):
+        self.calls.append((model, system, list(messages)))
+        await asyncio.sleep(5)
+        return "too late"
+
+
+class SlowDecider(ScriptedDecider):
+    async def decide(self, state, questions, *, node="adhoc", decision_id=None):
+        if node == "understand":
+            await asyncio.sleep(5)
+        return await super().decide(state, questions, node=node, decision_id=decision_id)
+
+
+async def test_a_persona_model_slower_than_its_budget_gives_the_canned_line():
+    script = Script().understand(intent="interrogate", target="suspect_1").post_check()
+    llm = SlowLlm([])
+    async with playing(script, llm, config=AgentConfig(turn_timeout_s=0.4)) as h:
+        async with asyncio.timeout(3):
+            events = await turn(h, "where were you")
+    reply = only(events, Reply)
+    assert (reply.source, reply.degraded, reply.drafts) == ("canned", True, 1)
+    assert kinds(events)[-2:] == ["post_check", "done"]  # the turn itself went on
+
+
+async def test_a_turn_that_outlives_its_budget_ends_with_the_apology_and_done():
+    script = Script().understand(intent="notebook")
+    async with playing(script, config=AgentConfig(turn_timeout_s=0.2)) as h:
+        h.deps = replace(h.deps, decider=SlowDecider(script))
+        h.ctx.pending = kept = Pending(kind="give_up", line="Give up?")
+        async with asyncio.timeout(3):
+            events = await turn(h, "notes")
+    assert kinds(events) == ["clarify", "done"]
+    assert only(events, Clarify).text == APOLOGY and h.ctx.pending is kept

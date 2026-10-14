@@ -25,6 +25,7 @@ def test_every_agent_setting_reaches_the_config(monkeypatch):
     monkeypatch.setenv("DRAMATIC_FROM", "3")
     monkeypatch.setenv("PERSONA_MODEL_DEFAULT", "a")
     monkeypatch.setenv("PERSONA_MODEL_DRAMATIC", "b")
+    monkeypatch.setenv("TURN_TIMEOUT_S", "30")
     config = agent_config(Settings(_env_file=None))
     assert config == AgentConfig(
         confidence_gate=0.7,
@@ -33,6 +34,7 @@ def test_every_agent_setting_reaches_the_config(monkeypatch):
         dramatic_from=3.0,
         model_default="a",
         model_dramatic="b",
+        turn_timeout_s=30.0,
     )
 
 
