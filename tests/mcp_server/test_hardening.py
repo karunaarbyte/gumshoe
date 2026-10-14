@@ -72,3 +72,62 @@ def test_endless_handle_collisions_end_in_a_runtime_error_not_a_hang(monkeypatch
 def test_a_game_error_still_needs_a_known_code():
     with pytest.raises(ValueError, match="unknown error code"):
         GameError("nope", "x")
+
+
+def asked(host, game):
+    """The host after accusation_questions, so interpret_accusation gets past its first check."""
+    host.accusation_questions(game, "Boris did it")
+    return host
+
+
+def started():
+    host = GameHost(ids=SeqIds())
+    new = host.new_game(1)
+    return host, new.game, new.brief.suspects[0].handle
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda h, g, s: h.case_brief(["x"]),
+        lambda h, g, s: h.close_game(None),
+        lambda h, g, s: h.new_game(1, ["standard"]),
+        lambda h, g, s: h.new_game(1, "standard", {"pack": "castle"}),
+        lambda h, g, s: h.search(g, ["a"]),
+        lambda h, g, s: h.interrogate(g, 5),
+        lambda h, g, s: h.check_records(g, ["a"]),
+        lambda h, g, s: h.check_records(g, s, ["kind"]),
+        lambda h, g, s: h.nameable(g, ["who"]),
+        lambda h, g, s: h.describe_accusation(g, 5),
+        lambda h, g, s: h.accuse(g, s, None, "x"),
+        lambda h, g, s: h.accuse(g, s, "x", "y", confirmed="yes"),
+        lambda h, g, s: h.persona_brief(g, {"h": 1}),
+        lambda h, g, s: h.accusation_questions(g, None),
+        lambda h, g, s: h.check_reply(g, s, None, "hi"),
+        lambda h, g, s: h.check_reply(g, s, "hi", 7),
+        lambda h, g, s: h.check_reply(g, ["s"], "hi", "hello"),
+        lambda h, g, s: asked(h, g).interpret_accusation(g, {"who": {"A": "0.9"}}),
+        lambda h, g, s: asked(h, g).interpret_accusation(g, {"who": [1, 2]}),
+        lambda h, g, s: asked(h, g).interpret_accusation(g, {"who": {"A": True}}),
+        lambda h, g, s: asked(h, g).interpret_accusation(g, ["who"]),
+        lambda h, g, s: h.save_game(["g"]),
+    ],
+)
+def test_a_wrongly_typed_argument_is_a_bad_argument_not_a_crash(call):
+    host, game, suspect = started()
+    assert code_of(lambda: call(host, game, suspect)) == "bad_argument"
+
+
+def test_a_full_host_refuses_a_new_game_before_generating_it(monkeypatch):
+    monkeypatch.setattr(host_module, "MAX_GAMES", 1)
+    host = GameHost(ids=SeqIds())
+    host.new_game(1)
+    made: list[int] = []
+
+    def counting(seed, preset, pack):
+        made.append(seed)
+        raise AssertionError("generated a case for a host that is full")
+
+    monkeypatch.setattr(host_module, "generate_case", counting)
+    assert code_of(lambda: host.new_game(2)) == "too_many_games"
+    assert made == []

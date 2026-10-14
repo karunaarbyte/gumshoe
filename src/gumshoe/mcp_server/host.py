@@ -1,6 +1,8 @@
 """GameHost: the games, behind one lock.
 
-Every public method returns a play view or a `View` the host made (`NewGame`, `SaveRef`).
+Every public method returns a play view or a `View` the host made (`NewGame`, `SaveRef`,
+`CloseRef`). Arguments are type-checked here, not only by the MCP schema: tests and the agent
+call the host directly, and a wrong type is a `bad_argument`, never a crash.
 
 Nothing here imports the `mcp` SDK, so tests and the agent loop use it directly. The SDK runs sync
 tools on a worker thread, so every public method holds `self._lock` for its whole body. One lock
@@ -52,11 +54,13 @@ from gumshoe.cases import (
 )
 from gumshoe.mcp_server.errors import GameError
 from gumshoe.mcp_server.saves import (
+    MAX_SAVES,
     SAVE_FORMAT,
     SaveExists,
     SaveFile,
     SaveRef,
     check_name,
+    count_saves,
     default_saves_dir,
     path_for,
     read_save,
@@ -129,9 +133,37 @@ def _require_regenerated(case: Case, case_bytes: bytes, pack: Pack) -> None:
         raise GameError("bad_save", "that save does not hold a sound case")
 
 
-def _check_length(name: str, text: str) -> None:
+def _need_str(name: str, value: object) -> None:
+    if not isinstance(value, str):
+        raise GameError("bad_argument", f"{name} must be a string")
+
+
+def _need_str_or_none(name: str, value: object) -> None:
+    if value is not None:
+        _need_str(name, value)
+
+
+def _check_length(name: str, text: object) -> None:
+    if not isinstance(text, str):
+        raise GameError("bad_argument", f"{name} must be a string")
     if len(text) > MAX_TEXT:
         raise GameError("bad_argument", f"{name} is longer than {MAX_TEXT} characters")
+
+
+def _check_probabilities(value: object) -> None:
+    """axis -> option letter -> a number (bools are not numbers here)."""
+    if not isinstance(value, dict) or not all(
+        isinstance(axis, str)
+        and isinstance(picks, dict)
+        and all(
+            isinstance(letter, str) and isinstance(p, int | float) and not isinstance(p, bool)
+            for letter, p in picks.items()
+        )
+        for axis, picks in value.items()
+    ):
+        raise GameError(
+            "bad_argument", "probabilities must map each axis to option letters and numbers"
+        )
 
 
 class GameHost:
@@ -170,9 +202,12 @@ class GameHost:
                 return name
         raise RuntimeError("no unused save name")
 
-    def _fresh_game_id(self) -> str:
+    def _check_capacity(self) -> None:
         if len(self._games) >= MAX_GAMES:
             raise GameError("too_many_games", f"{MAX_GAMES} games are open; close_game one first")
+
+    def _fresh_game_id(self) -> str:
+        self._check_capacity()
         for _ in range(SALT_TRIES):
             game_id = self._ids.next()
             if game_id not in self._games:
@@ -180,6 +215,7 @@ class GameHost:
         raise RuntimeError("no unused game id")
 
     def _game(self, game: str) -> _Game:
+        _need_str("game", game)
         found = self._games.get(game)
         if found is None:
             raise GameError("unknown_game", "no such game")
@@ -188,7 +224,10 @@ class GameHost:
     def new_game(self, seed: int, preset: str = "standard", pack: str = "castle") -> NewGame:
         if type(seed) is not int or not 0 <= seed <= MAX_SEED:
             raise GameError("bad_argument", f"seed must be an int from 0 to {MAX_SEED}")
+        _need_str("preset", preset)
+        _need_str("pack", pack)
         with self._lock:
+            self._check_capacity()  # before the generation work, not after it
             the_pack = self._pack(pack)
             try:
                 case = generate_case(seed, preset, the_pack)
@@ -214,16 +253,20 @@ class GameHost:
             return self._game(game).session.brief()
 
     def search(self, game: str, location: str) -> SourceResult:
+        _need_str("location", location)
         with self._lock:
             session = self._game(game).session
             return _ended(lambda: session.search(location))
 
     def interrogate(self, game: str, suspect: str) -> SourceResult:
+        _need_str("suspect", suspect)
         with self._lock:
             session = self._game(game).session
             return _ended(lambda: session.interrogate(suspect))
 
     def check_records(self, game: str, subject: str, kind: str | None = None) -> SourceResult:
+        _need_str("subject", subject)
+        _need_str_or_none("kind", kind)
         with self._lock:
             session = self._game(game).session
             return _ended(lambda: session.check_records(subject, kind))
@@ -244,7 +287,7 @@ class GameHost:
             return _ended(session.reveal)
 
     def nameable(self, game: str, axis: str) -> AxisOptions:
-        if axis not in AXES:
+        if not isinstance(axis, str) or axis not in AXES:
             raise GameError("bad_argument", f"axis must be one of {', '.join(AXES)}")
         with self._lock:
             return self._game(game).session.nameable(axis)
@@ -252,6 +295,8 @@ class GameHost:
     def describe_accusation(
         self, game: str, who: str | None = None, how: str | None = None, why: str | None = None
     ) -> AccusationPlan:
+        for name, value in (("who", who), ("how", how), ("why", why)):
+            _need_str_or_none(name, value)
         with self._lock:
             session = self._game(game).session
             return session.describe_accusation(ParsedAccusation(who=who, how=how, why=why))
@@ -259,12 +304,17 @@ class GameHost:
     def accuse(
         self, game: str, who: str, how: str, why: str, confirmed: bool = False
     ) -> AccusationResult:
+        for name, value in (("who", who), ("how", how), ("why", why)):
+            _need_str(name, value)
+        if not isinstance(confirmed, bool):
+            raise GameError("bad_argument", "confirmed must be true or false")
         with self._lock:
             session = self._game(game).session
             parsed = ParsedAccusation(who=who, how=how, why=why)
             return _ended(lambda: session.accuse(parsed, confirmed=confirmed))
 
     def persona_brief(self, game: str, suspect: str) -> PersonaBrief:
+        _need_str("suspect", suspect)
         with self._lock:
             session = self._game(game).session
             try:
@@ -278,8 +328,9 @@ class GameHost:
             return self._game(game).session.accusation_questions(text)
 
     def interpret_accusation(
-        self, game: str, probabilities: dict[str, dict[str, float]]
+        self, game: str, probabilities: dict[str, dict[str, int | float]]
     ) -> ParsedAccusation:
+        _check_probabilities(probabilities)
         with self._lock:
             session = self._game(game).session
             try:
@@ -290,6 +341,7 @@ class GameHost:
                 raise GameError("bad_argument", str(exc)) from exc
 
     def check_reply(self, game: str, suspect: str, player_text: str, reply: str) -> ReplyCheck:
+        _need_str("suspect", suspect)
         for name, text in (("player_text", player_text), ("reply", reply)):
             _check_length(name, text)
         with self._lock:
@@ -302,6 +354,10 @@ class GameHost:
         with self._lock:
             found = self._game(game)
             folder = self._folder()
+            if count_saves(folder) >= MAX_SAVES:
+                raise GameError(
+                    "bad_save", f"the saves folder already holds {MAX_SAVES} saves; delete some"
+                )
             save = SaveFile(
                 save_format=SAVE_FORMAT,
                 pack=found.pack,

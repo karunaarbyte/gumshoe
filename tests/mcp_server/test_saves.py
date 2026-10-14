@@ -1,8 +1,12 @@
+import errno
 import json
+import os
+import stat
 
 import pytest
 
 import gumshoe.cases.play.session as session_module
+import gumshoe.mcp_server.host as host_module
 import gumshoe.mcp_server.saves as saves_module
 from gumshoe.cases import dump_case, load_case, skin_hash
 from gumshoe.mcp_server import GameError, GameHost
@@ -360,3 +364,85 @@ def test_a_forged_accusation_history_is_a_bad_save(tmp_path):
         "bad_save",
         "that save's progress is not a state the game can reach",
     )
+
+
+def test_a_save_file_is_readable_by_its_owner_only(tmp_path):
+    folder = tmp_path / "new"
+    host = host_in(folder)
+    game, _ = played(host)
+    path = folder / f"{host.save_game(game).name}.json"
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(folder.stat().st_mode) == 0o700
+
+
+def test_a_save_larger_than_the_cap_is_refused_without_being_parsed(tmp_path, monkeypatch):
+    document = good_document(tmp_path)
+    name = write(tmp_path / "saves", "c" * 16, document)
+    size = (tmp_path / "saves" / f"{name}.json").stat().st_size
+    monkeypatch.setattr(saves_module, "MAX_SAVE_BYTES", size - 1)
+    parsed: list[str] = []
+    monkeypatch.setattr(
+        saves_module.SaveFile, "model_validate_json", lambda text: parsed.append(text)
+    )
+    assert code_of(lambda: host_in(tmp_path / "saves").load_game(name)) == "bad_save"
+    assert parsed == []
+
+
+def test_the_real_cap_is_a_megabyte_and_a_real_save_is_far_below_it(tmp_path):
+    host = host_in(tmp_path)
+    game, _ = played(host)
+    path = tmp_path / f"{host.save_game(game).name}.json"
+    assert saves_module.MAX_SAVE_BYTES == 1_000_000
+    assert path.stat().st_size < saves_module.MAX_SAVE_BYTES // 10
+
+
+def test_a_save_name_that_is_a_folder_is_a_bad_save(tmp_path):
+    (tmp_path / f"{'d' * 16}.json").mkdir()
+    assert code_of(lambda: host_in(tmp_path).load_game("d" * 16)) == "bad_save"
+
+
+def test_a_full_saves_folder_refuses_another_save(tmp_path, monkeypatch):
+    monkeypatch.setattr(host_module, "MAX_SAVES", 2)
+    host = host_in(tmp_path)
+    game, _ = played(host)
+    host.save_game(game)
+    (tmp_path / "notes.json").write_text("not a save, not counted")
+    host.save_game(game)
+    assert message_of(lambda: host.save_game(game)) == (
+        "bad_save",
+        "the saves folder already holds 2 saves; delete some",
+    )
+    assert len(list(tmp_path.glob("*.json"))) == 3
+
+
+def test_the_real_save_cap_is_five_hundred():
+    assert saves_module.MAX_SAVES == 500
+
+
+def test_a_filesystem_without_hard_links_still_saves_and_never_overwrites(tmp_path, monkeypatch):
+    def no_links(src, dst):
+        raise OSError(errno.EPERM, "Operation not permitted")
+
+    monkeypatch.setattr(os, "link", no_links)
+    host = host_in(tmp_path)
+    game, _ = played(host)
+    ref = host.save_game(game)
+    path = tmp_path / f"{ref.name}.json"
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert host.load_game(ref.name).brief.status == "playing"
+    assert sorted(p.name for p in tmp_path.iterdir()) == [path.name]  # no temp file left
+    save = saves_module.read_save(tmp_path, ref.name)
+    with pytest.raises(saves_module.SaveExists):
+        saves_module.write_save(tmp_path, ref.name, save)
+    assert saves_module.read_save(tmp_path, ref.name) == save
+
+
+def test_another_link_failure_is_still_a_bad_save(tmp_path, monkeypatch):
+    def broken(src, dst):
+        raise OSError(errno.EIO, "I/O error")
+
+    monkeypatch.setattr(os, "link", broken)
+    host = host_in(tmp_path)
+    game, _ = played(host)
+    assert code_of(lambda: host.save_game(game)) == "bad_save"
+    assert list(tmp_path.iterdir()) == []
