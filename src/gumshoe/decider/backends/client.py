@@ -60,6 +60,10 @@ class SystemOneClient:
             raise DeciderConnectionError(
                 self.name, f"cannot reach {url} ({type(exc).__name__})"
             ) from exc
+        except httpx.HTTPError as exc:  # the rest: a body that will not decode, redirects, ...
+            raise DeciderConnectionError(
+                self.name, f"the call to {url} failed ({type(exc).__name__})"
+            ) from exc
 
         if response.is_error:
             raise DeciderAPIError(self.name, response.status_code, response.text)

@@ -3,7 +3,7 @@ import pytest
 from gumshoe.config import Settings
 from gumshoe.decider import ShadowDecider
 from gumshoe.decider.backends.client import SystemOneClient
-from gumshoe.decider.backends.factory import build_profile, make_decider
+from gumshoe.decider.backends.factory import DRAIN_SLACK_S, build_profile, make_decider
 from gumshoe.decider.contract.base import Decider
 from gumshoe.decider.contract.errors import DeciderConfigError
 from tests.decider.fakes import FakeRecorder
@@ -115,3 +115,10 @@ def test_no_client_is_built_when_the_shadow_config_is_invalid(monkeypatch):
     with pytest.raises(DeciderConfigError):
         make_decider(settings, recorder=FakeRecorder())
     assert built == []  # the primary client was not created and then abandoned unclosed
+
+
+def test_shutdown_waits_as_long_as_a_shadow_call_may_take():
+    settings = Settings(_env_file=None, jev_api_key="k", request_timeout_s=12)
+    decider = make_decider(settings, recorder=FakeRecorder())
+    assert isinstance(decider, ShadowDecider)
+    assert decider.drain_grace_s == 12 + DRAIN_SLACK_S == 17

@@ -33,6 +33,7 @@ class ShadowDecider:
         recorder: Recorder,
         *,
         cold_after_s: float = COLD_AFTER_S,
+        drain_grace_s: float = DRAIN_GRACE_S,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if shadow is not None and shadow.name == primary.name:
@@ -42,6 +43,7 @@ class ShadowDecider:
         self._shadow = shadow
         self._recorder = recorder
         self.cold_after_s = cold_after_s
+        self.drain_grace_s = drain_grace_s  # how long aclose waits for unfinished shadow calls
         self._clock = clock
         self._last_end: dict[str, float] = {}  # backend name -> clock() when its last call ended
         self._background: set[asyncio.Task[None]] = set()
@@ -91,7 +93,7 @@ class ShadowDecider:
 
     async def aclose(self) -> None:
         try:
-            await self.drain(grace_s=DRAIN_GRACE_S)
+            await self.drain(grace_s=self.drain_grace_s)
         finally:
             await self._primary.aclose()
             if self._shadow is not None:
@@ -107,7 +109,9 @@ class ShadowDecider:
         questions: Mapping[str, Question],
         node: str,
     ) -> CallOutcome:
-        """One backend call. Backend failures become part of the outcome; bugs still raise."""
+        """One backend call. Any failure becomes part of the outcome, so fallback and recording
+        never depend on a backend classifying its errors perfectly. An exception that is not a
+        DeciderError is a backend bug: it is logged with its traceback and recorded as a failure."""
         started = self._clock()
         last_end = self._last_end.get(decider.name)
         cold = last_end is None or started - last_end > self.cold_after_s
@@ -119,6 +123,10 @@ class ShadowDecider:
             result = await decider.decide(state, questions, node=node)
         except DeciderError as exc:
             failure = exc
+        except Exception as exc:
+            logger.error("%s call crashed (%s)", role, decider.name, exc_info=exc)
+            failure = DeciderError(decider.name, f"unexpected {type(exc).__name__}")
+            failure.__cause__ = exc
         finally:
             self._last_end[decider.name] = self._clock()
         latency_ms = round((time.perf_counter() - t0) * 1000, 1)

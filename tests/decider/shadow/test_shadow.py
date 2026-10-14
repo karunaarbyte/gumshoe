@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+import httpx
 import pytest
 
 from gumshoe.decider.contract.base import Decider
@@ -8,6 +9,7 @@ from gumshoe.decider.contract.errors import (
     DeciderAllFailedError,
     DeciderConfigError,
     DeciderConnectionError,
+    DeciderError,
 )
 from gumshoe.decider.contract.models import DecisionResult
 from gumshoe.decider.contract.samples import DEMO_QUESTIONS, DEMO_STATE
@@ -83,13 +85,15 @@ async def test_shadow_error_is_recorded_not_raised(result):
     assert by_role["primary"].error is None and by_role["primary"].used
 
 
-async def test_unexpected_shadow_crash_does_not_affect_the_turn(result):
+async def test_unexpected_shadow_crash_does_not_affect_the_turn_and_is_recorded(result):
     shadow = FakeDecider("nimble", error=RuntimeError("bug in shadow"))
     decider, recorder = make(FakeDecider("jev", result), shadow)
     assert await decider.decide(DEMO_STATE, DEMO_QUESTIONS) is result
     await decider.drain()
     [batch] = recorder.batches
-    assert [r.backend for r in batch] == ["jev"]  # primary still recorded
+    by_role = {r.role: r for r in batch}
+    assert by_role["primary"].error is None and by_role["primary"].used
+    assert by_role["shadow"].error == "[nimble] unexpected RuntimeError"
 
 
 async def test_recorder_failure_does_not_fail_the_turn(result):
@@ -114,14 +118,45 @@ async def test_cancelling_a_turn_cancels_the_shadow_call(result):
     await asyncio.wait_for(asyncio.gather(primary.cancelled.wait(), shadow.cancelled.wait()), 1)
 
 
-async def test_unexpected_primary_bug_cancels_the_shadow_and_propagates(result):
+async def test_an_unexpected_primary_bug_falls_back_to_the_shadow_and_is_recorded(result):
     primary = FakeDecider("jev", error=RuntimeError("bug in primary"))
-    shadow = FakeDecider("nimble", result, delay=10)
-    decider, recorder = make(primary, shadow)
-    with pytest.raises(RuntimeError, match="bug in primary"):
+    decider, recorder = make(primary, FakeDecider("nimble", result))
+    assert await decider.decide(DEMO_STATE, DEMO_QUESTIONS) is result
+    [batch] = recorder.batches
+    by_role = {r.role: r for r in batch}
+    assert by_role["primary"].error == "[jev] unexpected RuntimeError"
+    assert (by_role["shadow"].used, by_role["shadow"].fallback) == (True, True)
+
+
+async def test_an_httpx_error_the_client_did_not_classify_still_falls_back(result):
+    primary = FakeDecider("jev", error=httpx.DecodingError("bad gzip"))
+    decider, recorder = make(primary, FakeDecider("nimble", result))
+    assert await decider.decide(DEMO_STATE, DEMO_QUESTIONS) is result
+    [batch] = recorder.batches
+    assert {r.backend: r.error for r in batch} == {
+        "jev": "[jev] unexpected DecodingError",
+        "nimble": None,
+    }
+
+
+async def test_an_unexpected_primary_bug_with_no_shadow_is_a_decider_error():
+    primary = FakeDecider("jev", error=RuntimeError("bug in primary"))
+    decider, recorder = make(primary, None)
+    with pytest.raises(DeciderError, match="unexpected RuntimeError") as info:
         await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
-    await asyncio.wait_for(shadow.cancelled.wait(), 1)
-    assert recorder.batches == []
+    assert isinstance(info.value.__cause__, RuntimeError)
+    [batch] = recorder.batches
+    assert [(r.backend, r.used) for r in batch] == [("jev", False)]
+
+
+async def test_aclose_waits_only_the_configured_grace_for_a_stuck_shadow(result):
+    gate = asyncio.Event()  # the shadow never finishes
+    shadow = FakeDecider("nimble", result, gate=gate)
+    decider, recorder = make(FakeDecider("jev", result), shadow, drain_grace_s=0.05)
+    await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    await asyncio.wait_for(decider.aclose(), 1)
+    assert shadow.cancelled.is_set()
+    assert [(r.backend, r.used) for r in recorder.batches[0]] == [("jev", True)]
 
 
 async def test_aclose_waits_for_recording_then_closes_both(result):
@@ -186,13 +221,16 @@ async def test_a_crashing_shadow_is_logged_exactly_once(result, caplog):
     assert len(crashes) == 1
 
 
-async def test_a_shadow_crash_is_logged_even_when_the_primary_blows_up_first(result, caplog):
+async def test_two_crashing_backends_are_both_logged_and_end_in_all_failed(result, caplog):
     shadow = FakeDecider("nimble", error=RuntimeError("bug in shadow"))
     primary = FakeDecider("jev", error=RuntimeError("bug in primary"), delay=0.05)
-    decider, _ = make(primary, shadow)
-    with caplog.at_level(logging.ERROR), pytest.raises(RuntimeError, match="bug in primary"):
+    decider, recorder = make(primary, shadow)
+    with caplog.at_level(logging.ERROR), pytest.raises(DeciderAllFailedError):
         await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
-    assert any("shadow call crashed" in r.getMessage() for r in caplog.records)
+    messages = [r.getMessage() for r in caplog.records]
+    assert "shadow call crashed (nimble)" in messages
+    assert "primary call crashed (jev)" in messages
+    assert len(recorder.batches[0]) == 2
 
 
 async def test_primary_failure_falls_back_to_the_shadow_and_flags_it(result):
@@ -271,16 +309,18 @@ async def test_cancelling_during_a_fallback_cancels_the_shadow(result):
     await asyncio.wait_for(shadow.cancelled.wait(), 1)
 
 
-async def test_primary_failure_plus_a_shadow_bug_surfaces_the_primary_failure(caplog):
+async def test_primary_failure_plus_a_shadow_bug_is_all_failed_with_both_recorded(caplog):
     primary_err = DeciderConnectionError("jev", "timed out")
     shadow = FakeDecider("nimble", error=RuntimeError("bug in shadow"))
     decider, recorder = make(FakeDecider("jev", error=primary_err), shadow)
-    with caplog.at_level(logging.ERROR), pytest.raises(DeciderConnectionError) as info:
+    with caplog.at_level(logging.ERROR), pytest.raises(DeciderAllFailedError) as info:
         await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
-    assert info.value is primary_err  # not the shadow's RuntimeError
-    [batch] = recorder.batches  # the primary's failure is still recorded
-    assert [(r.backend, r.used, r.fallback) for r in batch] == [("jev", False, False)]
-    await asyncio.sleep(0)  # the shadow was already done, so its done-callback has not run yet
+    assert info.value.failures["jev"] is primary_err
+    [batch] = recorder.batches
+    assert {r.backend: (r.used, r.fallback) for r in batch} == {
+        "jev": (False, False),
+        "nimble": (False, False),
+    }
     assert any("shadow call crashed" in r.getMessage() for r in caplog.records)
 
 

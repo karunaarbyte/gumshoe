@@ -8,6 +8,9 @@ from gumshoe.decider.contract.errors import DeciderConfigError
 from gumshoe.decider.shadow.records import Recorder
 from gumshoe.decider.shadow.shadow import ShadowDecider
 
+# On shutdown, a shadow call may still be running: wait as long as a call may take, plus this.
+DRAIN_SLACK_S = 5.0
+
 
 def build_profile(settings: Settings, backend: Backend) -> BackendProfile:
     if backend == "nimble":
@@ -37,7 +40,11 @@ def make_decider(
     shadow_profile = build_profile(settings, shadow_backend) if shadow_backend else None
     shadow = _client(settings, shadow_profile) if shadow_profile else None
     return ShadowDecider(
-        _client(settings, primary_profile), shadow, recorder, cold_after_s=settings.cold_after_s
+        _client(settings, primary_profile),
+        shadow,
+        recorder,
+        cold_after_s=settings.cold_after_s,
+        drain_grace_s=settings.request_timeout_s + DRAIN_SLACK_S,
     )
 
 

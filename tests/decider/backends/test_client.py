@@ -175,3 +175,12 @@ async def test_a_nan_in_a_200_body_is_a_parse_error_not_an_answer():
     async with make_client(lambda request: httpx.Response(200, text=body)) as client:
         with pytest.raises(DeciderParseError):
             await client.decide(DEMO_STATE, DEMO_QUESTIONS)
+
+
+async def test_a_body_that_will_not_decode_is_a_connection_error():
+    def handler(request):
+        return httpx.Response(200, headers={"content-encoding": "gzip"}, content=b"not gzip")
+
+    async with make_client(handler, name="jev") as client:
+        with pytest.raises(DeciderConnectionError, match="DecodingError"):
+            await client.decide(DEMO_STATE, DEMO_QUESTIONS)
