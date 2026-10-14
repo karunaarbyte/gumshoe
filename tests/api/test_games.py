@@ -290,3 +290,39 @@ def test_a_slow_turn_streams_pings_that_parse_sse_skips(store, monkeypatch):
         body = client.post(f"/api/games/{game}/turn", json={"text": "notes"}).text
     assert body.startswith(": ping\n\n")
     assert [name for name, _ in parse_sse(body)] == ["intent", "tool_call", "tool_result", "done"]
+
+
+async def test_leaving_right_after_an_event_closes_the_events_behind_it():
+    closed = asyncio.Event()
+
+    async def two():
+        try:
+            yield Done()
+            await asyncio.sleep(10)
+            yield Done()
+        finally:
+            closed.set()
+
+    stream = with_pings(two(), 1.0)
+    assert await anext(stream) == sse(Done())  # suspended at `yield sse(event)`
+    await stream.aclose()
+    assert closed.is_set()  # closed explicitly, not by the garbage collector
+
+
+async def test_closing_before_the_first_read_still_closes_the_events():
+    class Events:
+        closed = False
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+        async def aclose(self):
+            self.closed = True
+
+    events = Events()
+    stream = with_pings(events, 1.0)
+    await stream.aclose()
+    assert events.closed

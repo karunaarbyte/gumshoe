@@ -2,7 +2,7 @@
 
 import asyncio
 import contextlib
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -72,7 +72,7 @@ async def read(game: str, service: Service) -> GameState:
     return await service.state(game)
 
 
-async def with_pings(events: AsyncIterator[TurnEvent], interval_s: float) -> AsyncGenerator[bytes]:
+async def _pinged(events: AsyncIterator[TurnEvent], interval_s: float) -> AsyncGenerator[bytes]:
     """Each event as SSE, plus a `: ping` comment whenever `interval_s` passes without one.
 
     The next event is awaited in a task that a quiet spell never cancels (cancelling the read
@@ -95,6 +95,36 @@ async def with_pings(events: AsyncIterator[TurnEvent], interval_s: float) -> Asy
         following.cancel()
         with contextlib.suppress(asyncio.CancelledError, StopAsyncIteration):
             await following
+        await _close(events)  # the read is over, so the stream can be closed now
+
+
+async def _close(events: AsyncIterator[TurnEvent]) -> None:
+    """Close the event stream so the service learns its reader is gone, without waiting for GC."""
+    if (aclose := getattr(events, "aclose", None)) is not None:
+        await aclose()
+
+
+class _Pinged:
+    """`_pinged`, but closing it always closes `events`, even when it was never read from (a
+    generator closed before its first step never runs its `finally`)."""
+
+    def __init__(self, events: AsyncIterator[TurnEvent], interval_s: float) -> None:
+        self._events = events
+        self._stream = _pinged(events, interval_s)
+
+    def __aiter__(self) -> "_Pinged":
+        return self
+
+    def __anext__(self) -> Awaitable[bytes]:
+        return self._stream.__anext__()
+
+    async def aclose(self) -> None:
+        await self._stream.aclose()
+        await _close(self._events)
+
+
+def with_pings(events: AsyncIterator[TurnEvent], interval_s: float) -> _Pinged:
+    return _Pinged(events, interval_s)
 
 
 def event_stream(events: AsyncIterator[TurnEvent]) -> StreamingResponse:

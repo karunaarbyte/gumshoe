@@ -54,6 +54,10 @@ class _Reader:
     gone: bool = False
 
 
+def _free(slot: "_Slot") -> None:
+    slot.busy = False
+
+
 async def _drain(
     queue: "asyncio.Queue[TurnEvent | None]", reader: _Reader
 ) -> AsyncGenerator[TurnEvent]:
@@ -118,7 +122,7 @@ class AgentService:
         # Done callbacks run in order and however the task ended, even when it was cancelled
         # before its first step (a finally block would never be entered): free the game first,
         # then end the reader's stream, so a client that saw the end can start the next turn.
-        task.add_done_callback(lambda _task: setattr(slot, "busy", False))
+        task.add_done_callback(lambda _task: _free(slot))
         task.add_done_callback(lambda _task: queue.put_nowait(None))
         return _drain(queue, reader)
 
