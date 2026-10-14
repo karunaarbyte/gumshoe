@@ -9,6 +9,7 @@ from gumshoe.cases.play.session import (
     GameOver,
     GameSession,
     HandleCollision,
+    InconsistentState,
     NoAccusationPrompt,
     StateMismatch,
     UnknownHandle,
@@ -44,7 +45,8 @@ from gumshoe.cases.play.views import (
 __all__ = [
     "AccusationPlan", "AccusationPrompt", "AccusationQuestions", "AccusationResult",
     "AxisOptions", "AxisProblem", "BadAnswers", "Candidate", "ContradictionView", "FactView",
-    "GameNotOver", "GameOver", "GameSession", "HandleCollision", "LocationView",
+    "GameNotOver", "GameOver", "GameSession", "HandleCollision", "InconsistentState",
+    "LocationView",
     "NoAccusationPrompt", "NotebookFact", "NotebookSection", "NotebookView", "ParsedAccusation",
     "PersonaBrief", "PlayerCaseView", "QuestionView", "RecordKindView", "ReplyCheck",
     "ReplyViolation", "ResolvedPart", "RevealView", "SourceResult", "StateMismatch",

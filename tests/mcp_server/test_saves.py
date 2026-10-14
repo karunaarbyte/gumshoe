@@ -344,3 +344,19 @@ def test_any_crash_while_rebuilding_a_save_is_a_bad_save(tmp_path, monkeypatch, 
         "bad_save",
         "that save does not hold a sound case",
     )
+
+
+def test_a_forged_accusation_history_is_a_bad_save(tmp_path):
+    document = good_document(tmp_path)
+    state = json.loads(document["state"])
+    state.update(
+        attempts=1,
+        accusations=[{"triple": {"who": "x", "how": "y", "why": "z"}, "correct": 3}],
+        status="won",
+    )
+    document["state"] = json.dumps(state)
+    name = write(tmp_path / "saves", "b" * 16, document)
+    assert message_of(lambda: host_in(tmp_path / "saves").load_game(name)) == (
+        "bad_save",
+        "that save's progress is not a state the game can reach",
+    )

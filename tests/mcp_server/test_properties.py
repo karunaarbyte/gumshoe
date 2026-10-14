@@ -161,9 +161,13 @@ def play(seed, preset, folder):
                 f"an unfound secret leaked into the {action} result"
             )
         if action in PLAYER_VIEWS:
-            assert not all(name in blob for name in truth_names), (
-                "the true triple appeared as a unit"
-            )
+            earned = " ".join(sorted(notebook))
+            # the culprit's name is public (every suspect is in the brief); the true method and
+            # motive may show only once a held fact says them
+            for axis, name in zip(("how", "why"), truth_names[1:], strict=True):
+                assert name not in blob or name in earned, (
+                    f"the true {axis} reached the {action} result before the player held it"
+                )
     return log
 
 

@@ -10,6 +10,7 @@ from gumshoe.cases.play.session import (
     FALLBACK_CONTRADICTION,
     GameOver,
     GameSession,
+    InconsistentState,
     StateMismatch,
     load_session,
 )
@@ -306,3 +307,54 @@ def test_a_saved_ghost_fact_is_dropped_on_load():
     state = PlayState(case_digest=digest, discovered=("f_ghost", "f_key"))
     s = GameSession(build_case(), "salt-1", state)
     assert json.loads(s.state_json())["discovered"] == ["f_key"]
+
+
+def forged(digest, accusations, status="playing"):
+    return json.dumps(
+        {
+            "case_digest": digest,
+            "attempts": len(accusations),
+            "accusations": [
+                {"triple": {"who": who, "how": how, "why": why}, "correct": correct}
+                for (who, how, why), correct in accusations
+            ],
+            "status": status,
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("accusations", "status"),
+    [
+        ([(("x", "y", "z"), 3)], "won"),  # a win with names the case does not have
+        ([(("s_anna", "m_rope", "v_jealousy"), 2)], "playing"),  # the real score is 0
+        ([(("s_boris", "m_poison", "v_debt"), 1)], "playing"),  # the truth, scored 1
+        (
+            [(("s_anna", "m_rope", "v_debt"), 1), (("s_anna", "m_rope", "v_debt"), 1)],
+            "playing",
+        ),  # the same accusation twice
+    ],
+)
+def test_a_forged_but_well_formed_history_is_refused(accusations, status):
+    data = dump_case(build_case())
+    digest = PlayState.model_validate_json(session().state_json()).case_digest
+    with pytest.raises(InconsistentState):
+        load_session(data, "salt-1", forged(digest, accusations, status))
+
+
+def test_a_score_outside_zero_to_three_is_not_a_state():
+    digest = PlayState.model_validate_json(session().state_json()).case_digest
+    with pytest.raises(ValidationError):
+        PlayState.model_validate_json(forged(digest, [(("s_anna", "m_rope", "v_debt"), -7)]))
+
+
+def test_a_real_history_loads():
+    s = session()
+    data = dump_case(build_case())
+    digest = PlayState.model_validate_json(s.state_json()).case_digest
+    real = forged(
+        digest,
+        [(("s_anna", "m_rope", "v_debt"), 1), (("s_boris", "m_poison", "v_debt"), 3)],
+        "won",
+    )
+    assert load_session(data, "salt-1", real).status == "won"

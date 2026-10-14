@@ -33,7 +33,7 @@ class Triple(Frozen):
 
 class AccusationRecord(Frozen):
     triple: Triple
-    correct: int
+    correct: int = Field(ge=0, le=len(Axis))
 
 
 class PlayState(Frozen):

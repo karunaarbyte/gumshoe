@@ -7,7 +7,7 @@ EXPECTED = {
     "ParsedAccusation", "Candidate", "AxisOptions", "ResolvedPart", "AxisProblem",
     "AccusationPlan", "AccusationResult", "RevealView", "ReplyViolation", "ReplyCheck",
     "HandleCollision", "PersonaBrief", "UnknownHandle", "QuestionView", "AccusationQuestions",
-    "NoAccusationPrompt", "BadAnswers",
+    "NoAccusationPrompt", "BadAnswers", "InconsistentState",
 }  # fmt: skip
 
 

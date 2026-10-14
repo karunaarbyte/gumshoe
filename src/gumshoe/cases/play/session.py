@@ -11,7 +11,7 @@ from gumshoe.cases.model.enums import Axis, SourceKind
 from gumshoe.cases.model.index import CaseIndex
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.serialize import load_case, skeleton_digest
-from gumshoe.cases.play.accuse import AccuseKind, GameNotOver, give_up
+from gumshoe.cases.play.accuse import AccuseKind, GameNotOver, give_up, score
 from gumshoe.cases.play.accuse import accuse as engine_accuse
 from gumshoe.cases.play.accuse import reveal as engine_reveal
 from gumshoe.cases.play.engine import (
@@ -69,6 +69,7 @@ __all__ = [
     "GameOver",
     "GameSession",
     "HandleCollision",
+    "InconsistentState",
     "NoAccusationPrompt",
     "StateMismatch",
     "UnknownHandle",
@@ -86,6 +87,10 @@ class HandleCollision(ValueError):
 
 class UnknownHandle(LookupError):
     """A handle that does not name what the call needs (for example a non-suspect)."""
+
+
+class InconsistentState(ValueError):
+    """A saved play state no game of this case could reach (a hand-edited save)."""
 
 
 class StateMismatch(ValueError):
@@ -106,6 +111,21 @@ def _humanise(key: str) -> str:
 
 def _capital(text: str) -> str:
     return text[:1].upper() + text[1:]
+
+
+def _check_history(ix: CaseIndex, state: PlayState) -> None:
+    """Every saved accusation names candidates of this case, appears once, and carries the
+    score it really has: what the accusation flow writes, and nothing else."""
+    seen: set[Triple] = set()
+    for record in state.accusations:
+        triple = record.triple
+        if any(triple.on(axis) not in ix.candidates[axis] for axis in Axis):
+            raise InconsistentState("a saved accusation names something that is not a candidate")
+        if triple in seen:
+            raise InconsistentState("a saved accusation appears twice")
+        if record.correct != score(ix, triple):
+            raise InconsistentState("a saved accusation carries the wrong score")
+        seen.add(triple)
 
 
 def _make_handles(case: Case, salt: str) -> dict[str, str]:
@@ -141,6 +161,7 @@ class GameSession:
                 update={"discovered": tuple(f for f in state.discovered if f in known)}
             )
         self._ix = CaseIndex.of(case)
+        _check_history(self._ix, state)
         self._state = state
         self._handles = _make_handles(case, salt)
         self._ids = {handle: entity for entity, handle in self._handles.items()}

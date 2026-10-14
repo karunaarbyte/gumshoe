@@ -28,6 +28,7 @@ from gumshoe.cases import (
     GameOver,
     GameSession,
     HandleCollision,
+    InconsistentState,
     NoAccusationPrompt,
     NotebookView,
     Pack,
@@ -330,6 +331,10 @@ class GameHost:
             except StateMismatch as exc:
                 raise GameError(
                     "state_mismatch", "that save's progress is for another case"
+                ) from exc
+            except InconsistentState as exc:
+                raise GameError(
+                    "bad_save", "that save's progress is not a state the game can reach"
                 ) from exc
             except GameError as exc:
                 if exc.code == "bad_argument":
