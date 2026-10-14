@@ -2,8 +2,7 @@ import pytest
 
 from gumshoe.cases.model.enums import Axis
 from gumshoe.cases.model.index import CaseIndex
-from gumshoe.cases.play.parse import accusation_questions, interpret, interpret_probabilities
-from gumshoe.decider import ChoiceAnswer, DecisionResult
+from gumshoe.cases.play.parse import accusation_questions, interpret_probabilities
 from tests.cases.fixtures import build_case
 from tests.cases.helpers import replace_in
 
@@ -18,21 +17,16 @@ def prompt(n=0, text="Boris did it"):
     return accusation_questions(IX, handle_of, n, text)
 
 
-def answer(letter, probabilities):
-    return ChoiceAnswer(
-        type="choice", choice=letter, probabilities=probabilities, confidence=probabilities[letter]
-    )
-
-
 def result(prompt_, picks):
-    """picks: axis -> (candidate handle or None, top probability, runner-up probability)."""
-    answers = {}
+    """picks: axis -> (candidate handle or None, top probability, runner-up probability);
+    returns axis -> option letter -> probability, as interpret_probabilities takes it."""
+    probabilities = {}
     for axis, (target, top, second) in picks.items():
         keymap = prompt_.keys[axis]
         letter = next(k for k, v in keymap.items() if v == target)
         other = next(k for k in keymap if k != letter)
-        answers[axis] = answer(letter, {letter: top, other: second})
-    return DecisionResult(model="fake", answers=answers)
+        probabilities[axis] = {letter: top, other: second}
+    return probabilities
 
 
 def test_each_axis_has_one_option_per_candidate_plus_one_unclear():
@@ -63,7 +57,11 @@ def test_a_confident_clear_answer_resolves_to_the_handle():
             "why": ("h_v_debt", 0.7, 0.2),
         },
     )
-    assert interpret(p, r) == {Axis.WHO: "h_s_boris", Axis.HOW: "h_m_poison", Axis.WHY: "h_v_debt"}
+    assert interpret_probabilities(p, r) == {
+        Axis.WHO: "h_s_boris",
+        Axis.HOW: "h_m_poison",
+        Axis.WHY: "h_v_debt",
+    }
 
 
 def test_low_confidence_near_ties_and_the_unclear_option_all_give_none():
@@ -76,13 +74,13 @@ def test_low_confidence_near_ties_and_the_unclear_option_all_give_none():
             "why": (None, 0.95, 0.01),  # the unclear option wins
         },
     )
-    assert interpret(p, r) == {Axis.WHO: None, Axis.HOW: None, Axis.WHY: None}
+    assert interpret_probabilities(p, r) == {Axis.WHO: None, Axis.HOW: None, Axis.WHY: None}
 
 
 def test_a_missing_or_foreign_answer_is_none():
     p = prompt()
-    r = DecisionResult(model="fake", answers={"who": answer("Z", {"Z": 0.99, "Y": 0.0})})
-    assert interpret(p, r) == {Axis.WHO: None, Axis.HOW: None, Axis.WHY: None}
+    r = {"who": {"Z": 0.99, "Y": 0.0}, "nonsense": {"A": 1.0}}
+    assert interpret_probabilities(p, r) == {Axis.WHO: None, Axis.HOW: None, Axis.WHY: None}
 
 
 def test_jev_criteria_never_carry_the_display_name():
@@ -100,16 +98,6 @@ def test_more_options_than_letters_is_a_programming_error():
     ix = CaseIndex.of(build_case().model_copy(update={"methods": many}))
     with pytest.raises(ValueError, match="option letters"):
         accusation_questions(ix, handle_of, 0, "x")
-
-
-def test_probabilities_resolve_exactly_like_a_decision_result():
-    p = prompt()
-    r = result(p, {"who": ("h_s_boris", 0.9, 0.05), "how": ("h_m_poison", 0.8, 0.1)})
-    probabilities = {
-        name: dict(a.probabilities) for name, a in r.answers.items() if isinstance(a, ChoiceAnswer)
-    }
-    assert interpret_probabilities(p, probabilities) == interpret(p, r)
-    assert interpret_probabilities(p, probabilities)[Axis.WHO] == "h_s_boris"
 
 
 def test_empty_probabilities_pick_nothing():

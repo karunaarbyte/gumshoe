@@ -46,9 +46,3 @@ class ClaimKind(StrEnum):
 class Origin(StrEnum):
     GENERATED = "generated"
     IMPORTED = "imported"
-
-
-class Medium(StrEnum):
-    WRITTEN = "written"
-    TOKEN = "token"
-    ORAL = "oral"

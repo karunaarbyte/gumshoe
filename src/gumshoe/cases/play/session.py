@@ -27,7 +27,6 @@ from gumshoe.cases.play.engine import (
 )
 from gumshoe.cases.play.labels import match_label as match_label_ids
 from gumshoe.cases.play.parse import AccusationPrompt, accusation_questions
-from gumshoe.cases.play.parse import interpret as interpret_answers
 from gumshoe.cases.play.parse import interpret_probabilities as interpret_picks
 from gumshoe.cases.play.persona import persona_brief
 from gumshoe.cases.play.reply_check import reply_check
@@ -58,7 +57,6 @@ from gumshoe.cases.play.views import (
     SuspectView,
 )
 from gumshoe.cases.rules import gate
-from gumshoe.decider import DecisionResult
 
 FALLBACK_CONTRADICTION = 'That statement does not hold up against what you have found: "{text}"'
 
@@ -473,12 +471,6 @@ class GameSession:
             player_text,
             {axis: self._namable_ids(axis) for axis in Axis},
         )
-
-    def interpret(self, prompt: AccusationPrompt, result: DecisionResult) -> ParsedAccusation:
-        picks = {
-            axis: self._visible(axis, h) for axis, h in interpret_answers(prompt, result).items()
-        }
-        return ParsedAccusation(who=picks[Axis.WHO], how=picks[Axis.HOW], why=picks[Axis.WHY])
 
     def accusation_questions(self, player_text: str) -> AccusationQuestions:
         """The questions for a decision model, as plain views. The letter-to-handle keys stay

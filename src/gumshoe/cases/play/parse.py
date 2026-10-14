@@ -1,7 +1,8 @@
 """Turning the player's words into candidates through Jev: the question set and a pure reader.
 
 Only play/ may import gumshoe.decider, and only its public types. No call is made here: the
-agent loop sends `prompt.questions` through its own Decider and passes the result to `interpret`.
+agent loop sends `prompt.questions` through its own Decider and passes the option probabilities
+to `interpret_probabilities`.
 """
 
 import string
@@ -13,7 +14,7 @@ from gumshoe.cases.core.hashing import domain_digest
 from gumshoe.cases.model.enums import Axis
 from gumshoe.cases.model.index import CaseIndex
 from gumshoe.cases.play.labels import jev_forms
-from gumshoe.decider import ChoiceAnswer, ChoiceQuestion, DecisionResult
+from gumshoe.decider import ChoiceQuestion
 
 TOP_MIN = 0.6  # the best option must be more likely than this ...
 MARGIN_MIN = 0.25  # ... and ahead of the runner-up by more than this, else it is `unclear`
@@ -103,15 +104,3 @@ def interpret_probabilities(
         probs = probabilities.get(axis.value)
         out[axis] = _pick(keymap, probs) if keymap is not None and probs is not None else None
     return out
-
-
-def interpret(prompt: AccusationPrompt, result: DecisionResult) -> dict[Axis, str | None]:
-    """The same rule over a decider's answers (non-choice answers count as no answer)."""
-    return interpret_probabilities(
-        prompt,
-        {
-            name: answer.probabilities
-            for name, answer in result.answers.items()
-            if isinstance(answer, ChoiceAnswer)
-        },
-    )

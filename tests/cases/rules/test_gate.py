@@ -5,7 +5,7 @@ import pytest
 from gumshoe.cases.model.entities import Effect
 from gumshoe.cases.model.enums import Axis, EffectKind
 from gumshoe.cases.model.index import CaseIndex
-from gumshoe.cases.rules.gate import Permission, exposed, held_rule_out, lead, permission
+from gumshoe.cases.rules.gate import Permission, exposed, lead, permission
 from tests.cases.fixtures import build_case
 from tests.cases.helpers import replace_fact
 from tests.cases.model.builders import tiny_case
@@ -31,18 +31,23 @@ def test_exposed_needs_both_the_lie_and_an_exposer_held():
     )  # truthful facts are never "exposed"
 
 
+def warned(held_ids: frozenset[str], candidate: str) -> bool:
+    """The warning flag is exactly "a held rule-out against this candidate"."""
+    return permission(ix, held_ids, WHO, candidate).warn
+
+
 def test_held_rule_out_counts_truthful_and_unexposed_lies_alike():
-    assert held_rule_out(ix, held("f_alibi_anna"), WHO, "s_anna")
-    assert held_rule_out(ix, held("f_lie_anna"), WHO, "s_anna")
-    assert not held_rule_out(ix, held("f_alibi_anna"), WHO, "s_boris")
-    assert not held_rule_out(ix, held(), WHO, "s_anna")
+    assert warned(held("f_alibi_anna"), "s_anna")
+    assert warned(held("f_lie_anna"), "s_anna")
+    assert not warned(held("f_alibi_anna"), "s_boris")
+    assert not warned(held(), "s_anna")
 
 
 def test_an_exposed_lie_stops_counting_as_a_held_rule_out():
-    assert held_rule_out(ix, held("f_lie_boris"), WHO, "s_boris")
-    assert not held_rule_out(ix, held("f_lie_boris", "f_secret_boris"), WHO, "s_boris")
+    assert warned(held("f_lie_boris"), "s_boris")
+    assert not warned(held("f_lie_boris", "f_secret_boris"), "s_boris")
     # the truthful alibi still counts after unrelated exposures
-    assert held_rule_out(ix, held("f_alibi_anna", "f_lie_anna", "f_secret_anna"), WHO, "s_anna")
+    assert warned(held("f_alibi_anna", "f_lie_anna", "f_secret_anna"), "s_anna")
 
 
 def test_lead_is_any_held_supports_or_proves_including_lie_sourced():

@@ -33,7 +33,9 @@ INSTRUCTIONS = (
     "Play a detective game. Start with new_game(seed), read the brief, then search places, "
     "interrogate suspects and check records to find facts. Every place, suspect and fact is "
     "named by an opaque handle taken from earlier results. Accuse with accuse(who, how, why) "
-    "using handles from nameable(axis); the answer says only how many parts were right."
+    "using handles from nameable(axis); the answer says only how many parts were right. "
+    "A seed is the whole case: whoever starts (or saves and loads) a game on the same seed and "
+    "gives up sees its truth, so this server is for one trusted operator, not for players."
 )
 
 

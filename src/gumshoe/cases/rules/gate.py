@@ -43,10 +43,6 @@ def _has_effect(
     )
 
 
-def held_rule_out(index: CaseIndex, held: Held, axis: Axis, candidate: str) -> bool:
-    return _has_effect(index, held, axis, candidate, (EffectKind.RULES_OUT,), exposed(index, held))
-
-
 def lead(index: CaseIndex, held: Held, axis: Axis, candidate: str) -> bool:
     """Any held supports/proves fact on the candidate, lie-sourced or not."""
     return _has_effect(

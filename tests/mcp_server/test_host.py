@@ -101,3 +101,18 @@ def test_the_default_id_source_gives_16_lowercase_hex_characters():
     value = RandomIds().next()
     assert len(value) == 16 and value == value.lower() and int(value, 16) >= 0
     assert RandomIds().next() != value
+
+
+def test_close_ref_is_exported_with_the_other_views():
+    import gumshoe.mcp_server as server
+
+    host = make_host()
+    closed = host.close_game(host.new_game(1).game)
+    assert "CloseRef" in server.__all__ and isinstance(closed, server.CloseRef)
+
+
+def test_the_instructions_say_that_a_seed_is_the_whole_case():
+    from gumshoe.mcp_server.tools import INSTRUCTIONS
+
+    assert "A seed is the whole case" in INSTRUCTIONS
+    assert "gives up sees its truth" in INSTRUCTIONS

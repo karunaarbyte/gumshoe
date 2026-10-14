@@ -2,7 +2,6 @@ import pytest
 
 from gumshoe.cases.play.session import GameNotOver, GameOver, GameSession
 from gumshoe.cases.play.views import ParsedAccusation
-from gumshoe.decider import ChoiceAnswer, DecisionResult
 from tests.cases.fixtures import build_case
 
 
@@ -132,21 +131,20 @@ def test_give_up_ends_the_game_and_allows_the_reveal():
     assert s.reveal().culprit == "Boris"
 
 
-def test_the_jev_path_builds_questions_and_interprets_a_fake_result():
+def test_the_jev_path_builds_questions_and_interprets_option_probabilities():
     s = s_all()
-    prompt = s.accusation_prompt("Boris poisoned the wine to pay his debt")
+    text = "Boris poisoned the wine to pay his debt"
+    s.accusation_questions(text)  # stores the questions interpret_probabilities answers
+    prompt = s.accusation_prompt(text)  # the same letters, with their handles
     assert set(prompt.questions) == {"who", "how", "why"}
     want = handles(s)
-    answers = {}
+    probabilities = {}
     for axis in ("who", "how", "why"):
         keymap = prompt.keys[axis]
         letter = next(k for k, v in keymap.items() if v == getattr(want, axis))
         other = next(k for k in keymap if k != letter)
-        answers[axis] = ChoiceAnswer(
-            type="choice", choice=letter, probabilities={letter: 0.9, other: 0.05}, confidence=0.9
-        )
-    parsed = s.interpret(prompt, DecisionResult(model="fake", answers=answers))
-    assert parsed == want
+        probabilities[axis] = {letter: 0.9, other: 0.05}
+    assert s.interpret_probabilities(probabilities) == want
 
 
 def test_no_accusation_view_names_the_truth_unless_the_player_chose_it():
@@ -236,14 +234,11 @@ def test_a_hidden_candidate_is_not_an_option_until_the_gate_opens():
     rope, _ = hidden_handles()
     assert rope not in s.accusation_prompt("he strangled him with a rope").keys["how"].values()
     s.check_records(next(x.handle for x in s.brief().locations if x.name == "The garden"))
-    prompt = s.accusation_prompt("he strangled him with a rope")
-    keymap = prompt.keys["how"]
+    s.accusation_questions("he strangled him with a rope")
+    keymap = s.accusation_prompt("he strangled him with a rope").keys["how"]
     letter = next(k for k, v in keymap.items() if v == rope)
     other = next(k for k in keymap if k != letter)
-    answer = ChoiceAnswer(
-        type="choice", choice=letter, probabilities={letter: 0.95, other: 0.0}, confidence=0.95
-    )
-    assert s.interpret(prompt, DecisionResult(model="fake", answers={"how": answer})).how == rope
+    assert s.interpret_probabilities({"how": {letter: 0.95, other: 0.0}}).how == rope
 
 
 def handles_now(s):
