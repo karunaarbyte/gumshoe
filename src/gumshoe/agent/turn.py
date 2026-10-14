@@ -38,6 +38,7 @@ HELP = (
     "or make an accusation."
 )
 UNREACHABLE = "You cannot get to them yet."
+NOTHING_PENDING = "There is nothing waiting for your confirmation right now."
 MAX_EXCHANGES = 20
 NEEDS_TARGET = frozenset({"search", "interrogate", "talk", "records"})
 
@@ -100,9 +101,26 @@ async def take_turn(
     """Yield the events of one turn, always ending with `Done`. No Exception raises out of here
     (CancelledError and other BaseExceptions propagate by design). `pending_id` is the id of the
     confirmation the player had in front of them, if any: only then can a yes run it."""
+    async for event in _guarded(ctx, _turn(deps, ctx, text, pending_id)):
+        yield event
+
+
+async def take_confirm(
+    deps: Deps, ctx: TurnContext, pending_id: str, answer: Literal["yes", "no"]
+) -> AsyncIterator[TurnEvent]:
+    """The confirm button: run or cancel the stored pending action. Deterministic: no decision is
+    asked for. The API checks `pending_id` before it starts (409 otherwise); if the action has
+    changed by the time this runs, the turn says there is nothing to confirm and does nothing."""
+    async for event in _guarded(ctx, _confirm(deps, ctx, pending_id, answer)):
+        yield event
+
+
+async def _guarded(ctx: TurnContext, events: AsyncIterator[TurnEvent]) -> AsyncIterator[TurnEvent]:
+    """Every turn's frame: remember how the game ended, turn failures into the apology, end
+    with `Done`."""
     started = time.perf_counter()
     try:
-        async for event in _turn(deps, ctx, text, pending_id):
+        async for event in events:
             if isinstance(event, GameOver):
                 ctx.outcome = event.outcome
             yield event
@@ -191,6 +209,22 @@ async def _turn(
         yield Clarify(reason="pending", text=f"Still want to go ahead? {pending.line}")
         return
     async for event in _process(deps, ctx, text, brief, intent):
+        yield event
+
+
+async def _confirm(
+    deps: Deps, ctx: TurnContext, pending_id: str, answer: Literal["yes", "no"]
+) -> AsyncIterator[TurnEvent]:
+    pending = ctx.pending
+    if pending is None or pending.id != pending_id:
+        yield Clarify(reason="pending", text=NOTHING_PENDING)
+        return
+    ctx.pending = None  # cleared first, as for a typed yes
+    if answer == "no":
+        yield Cancelled()
+        _remember(ctx, "no", "cancelled")
+        return
+    async for event in _run_pending(deps, ctx, "yes", pending):
         yield event
 
 

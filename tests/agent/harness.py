@@ -3,6 +3,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import Literal
 
 from mcp.client import Client
 
@@ -10,7 +11,7 @@ from gumshoe.agent.config import AgentConfig
 from gumshoe.agent.deps import Deps, TurnContext
 from gumshoe.agent.events import TurnEvent
 from gumshoe.agent.game import GameClient
-from gumshoe.agent.turn import take_turn
+from gumshoe.agent.turn import take_confirm, take_turn
 from gumshoe.cases import PlayerCaseView
 from gumshoe.mcp_server import GameHost
 from gumshoe.mcp_server.tools import build_server
@@ -63,3 +64,8 @@ async def answer(h: Harness, text: str) -> list[TurnEvent]:
     """A turn sent the way the UI sends it while a confirmation is on screen: with its id."""
     pending_id = h.ctx.pending.id if h.ctx.pending is not None else None
     return await turn(h, text, pending_id=pending_id)
+
+
+async def press(h: Harness, pending_id: str, answer: Literal["yes", "no"]) -> list[TurnEvent]:
+    """The confirm button."""
+    return [event async for event in take_confirm(h.deps, h.ctx, pending_id, answer)]

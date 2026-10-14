@@ -21,7 +21,7 @@ from gumshoe.agent.turn import APOLOGY, HELP, UNREACHABLE, describe_failure
 from gumshoe.cases import AccusationResult, SourceResult
 from gumshoe.decider import DeciderAllFailedError, DeciderAPIError, DeciderConnectionError
 from tests.agent.fakes import Script, ScriptedLlm
-from tests.agent.harness import answer, playing, turn
+from tests.agent.harness import answer, playing, press, turn
 from tests.mcp_server.helpers import castle_case, explore_all, true_triple
 
 
@@ -791,3 +791,49 @@ async def test_a_failed_reparse_leaves_the_pending_accusation_alone():
         events = await answer(h, "yes, accuse him")
     assert kinds(events) == ["intent", "clarify", "done"]
     assert only(events, Clarify).text == APOLOGY and h.ctx.pending is kept
+
+
+# --- the confirm button ------------------------------------------------------------------------
+
+
+async def test_the_confirm_button_gives_up_without_asking_the_decider():
+    script = Script().understand(intent="give_up")
+    async with playing(script) as h:
+        confirm = only(await turn(h, "I give up"), Confirm)
+        events = await press(h, confirm.pending_id, "yes")
+    assert kinds(events) == ["tool_call", "tool_result", "game_over", "done"]
+    assert only(events, GameOver).outcome == "gave_up" and h.ctx.pending is None
+    assert [c[0] for c in h.decider.calls] == ["understand"]  # only the first turn's
+    assert h.ctx.exchanges[-1] == ("yes", "gave up")
+
+
+async def test_the_confirm_button_wins_with_the_stored_accusation():
+    async with playing(Script()) as h:
+        explore_all(h.host, h.ctx.game)
+        who, how, why = names_of_truth(h)
+        h.script.understand(intent="accuse").parse(who=who, how=how, why=why)
+        confirm = only(await turn(h, "accuse"), Confirm)
+        events = await press(h, confirm.pending_id, "yes")
+    assert only(events, GameOver).outcome == "won"
+    assert only(events, ToolCall).args["confirmed"] is True
+
+
+async def test_the_cancel_button_cancels_and_the_game_goes_on():
+    script = Script().understand(intent="give_up")
+    async with playing(script) as h:
+        confirm = only(await turn(h, "I give up"), Confirm)
+        events = await press(h, confirm.pending_id, "no")
+        brief = await h.deps.client.case_brief(h.ctx.game)
+    assert kinds(events) == ["cancelled", "done"] and h.ctx.pending is None
+    assert brief.status == "playing" and h.ctx.exchanges[-1] == ("no", "cancelled")
+
+
+@pytest.mark.parametrize("answer", ["yes", "no"])
+async def test_a_button_for_another_confirmation_does_nothing(answer):
+    script = Script().understand(intent="give_up")
+    async with playing(script) as h:
+        await turn(h, "I give up")
+        kept = h.ctx.pending
+        events = await press(h, "0" * 32, answer)
+    assert kinds(events) == ["clarify", "done"]
+    assert only(events, Clarify).reason == "pending" and h.ctx.pending is kept

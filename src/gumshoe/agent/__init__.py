@@ -12,10 +12,10 @@ from gumshoe.agent.events import EVENT_ADAPTER, TurnEvent
 from gumshoe.agent.game import GameClient, NewGameView, SaveView, ToolFailure
 from gumshoe.agent.llm import Llm, LlmError, LlmMessage, OllamaLlm
 from gumshoe.agent.pending import Pending
-from gumshoe.agent.turn import take_turn
+from gumshoe.agent.turn import take_confirm, take_turn
 
 __all__ = [
     "EVENT_ADAPTER", "AgentConfig", "Deps", "GameClient", "Llm", "LlmError", "LlmMessage",
     "NewGameView", "OllamaLlm", "Pending", "SaveView", "ToolFailure", "TurnContext", "TurnEvent",
-    "take_turn",
+    "take_confirm", "take_turn",
 ]  # fmt: skip
