@@ -15,7 +15,6 @@ def intent(name="other", p=0.9, confirm=None):
         target_confidence=0.9,
         weight=1.0,
         confirms_pending=confirm,
-        decision_id="d",
     )
 
 

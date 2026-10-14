@@ -29,7 +29,6 @@ class Intent:
     target_confidence: float
     weight: float  # score on the 0-4 scale
     confirms_pending: float | None  # P(yes) when a confirmation was pending
-    decision_id: str
 
 
 @dataclass(frozen=True)
@@ -74,7 +73,7 @@ def build_understand(brief: PlayerCaseView, *, pending: bool) -> UnderstandQuest
     return UnderstandQuestions(questions=questions, targets=targets)
 
 
-def read_intent(result: DecisionResult, targets: dict[str, str], decision_id: str) -> Intent:
+def read_intent(result: DecisionResult, targets: dict[str, str]) -> Intent:
     """Raises KeyError for a missing answer and TypeError for one of the wrong type: the caller
     treats both as a failed decision."""
     intent = result.choice("intent")
@@ -89,5 +88,4 @@ def read_intent(result: DecisionResult, targets: dict[str, str], decision_id: st
         target_confidence=target.confidence,
         weight=result.score("weight").score,
         confirms_pending=confirms,
-        decision_id=decision_id,
     )

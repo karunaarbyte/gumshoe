@@ -5,6 +5,7 @@ A rejected draft's text is never kept, logged or sent anywhere except back to no
 prompt names only the violation categories.
 """
 
+import time
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -21,9 +22,11 @@ from gumshoe.decider import DeciderError, NoulQuestion, Question
 class Draft:
     text: str
     source: Literal["draft", "canned"]
-    degraded: bool
-    check_ok: bool
-    violations: tuple[str, ...]
+    degraded: bool  # the model failed (unreachable, error) and the canned line stands in
+    violations: tuple[str, ...]  # categories check_reply rejected, sorted; never a text
+    model: str
+    drafts: int  # model calls made
+    latency_ms: float
 
 
 def canned_line(persona: PersonaBrief) -> str:
@@ -81,18 +84,28 @@ async def draft_reply(
     messages = _messages(history, player_text)
     rejected: set[str] = set()  # categories only, never a rejected text
     system = base
+    started = time.perf_counter()
+    calls = 0
+
+    def done(text: str, source: Literal["draft", "canned"], degraded: bool) -> Draft:
+        # an accepted draft passed its check: no violations; a canned line keeps what was rejected
+        violations = () if source == "draft" else tuple(sorted(rejected))
+        elapsed = round((time.perf_counter() - started) * 1000, 1)
+        return Draft(text, source, degraded, violations, model, calls, elapsed)
+
     for _ in range(deps.config.max_redrafts + 1):
+        calls += 1
         try:
             raw = await deps.llm.complete(model, system, messages)
         except LlmError:
-            return Draft(canned_line(persona), "canned", True, True, ())
+            return done(canned_line(persona), "canned", True)
         text = raw.strip()[: deps.config.max_text]
         if not text:
             system = base + "\nYour last answer was empty. Answer the detective in a sentence."
             continue
         check = await deps.client.check_reply(game, suspect, player_text, text)
         if check.ok:
-            return Draft(text, "draft", False, True, ())
+            return done(text, "draft", False)
         rejected.update(v.category for v in check.violations)
         categories = ", ".join(sorted({v.category for v in check.violations}))
         system = (
@@ -100,7 +113,7 @@ async def draft_reply(
             + f"\nYour last draft was rejected because it named a {categories} the detective has "
             "not met. Rewrite it without naming anything outside your statements."
         )
-    return Draft(canned_line(persona), "canned", False, True, tuple(sorted(rejected)))
+    return done(canned_line(persona), "canned", False)
 
 
 def post_check_questions() -> dict[str, Question]:

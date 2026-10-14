@@ -74,11 +74,11 @@ async def test_a_clean_first_draft_is_the_reply():
             model="m",
             evidence=[],
         )
-    assert (draft.text, draft.source, draft.degraded, draft.check_ok) == (
+    assert (draft.text, draft.source, draft.degraded, draft.violations) == (
         "I was in the hall.",
         "draft",
         False,
-        True,
+        (),
     )
     assert len(llm.calls) == 1 and llm.calls[0][0] == "m"
 
@@ -123,7 +123,7 @@ async def test_three_bad_drafts_and_then_one_more_end_in_the_canned_line():
         )
     assert draft.source == "canned" and draft.degraded is False
     assert draft.text == canned_line(persona) and method not in draft.text
-    assert draft.check_ok and draft.violations == ("how",)  # categories only, never the text
+    assert draft.violations == ("how",)  # categories only, never the text
     assert len(llm.calls) == 4  # one draft plus three redrafts
 
 
@@ -244,3 +244,40 @@ def test_the_canned_line_passes_check_reply_for_many_seeds(preset):
             persona = host.persona_brief(new.game, suspect.handle)
             check = host.check_reply(new.game, suspect.handle, "Tell me.", canned_line(persona))
             assert check.ok, (seed, preset, suspect.name, check.violations)
+
+
+async def test_a_draft_reports_its_model_its_calls_and_its_time():
+    llm = ScriptedLlm(["I was in the hall."])
+    async with playing(Script(), llm) as h:
+        handle, persona = await first_suspect(h)
+        draft = await draft_reply(
+            h.deps,
+            game=h.ctx.game,
+            suspect=handle,
+            persona=persona,
+            player_text="Where were you?",
+            history=[],
+            model="m",
+            evidence=[],
+        )
+    assert (draft.model, draft.drafts) == ("m", 1) and draft.latency_ms >= 0
+
+
+async def test_a_model_failure_on_a_redraft_keeps_the_categories_already_rejected():
+    case = castle_case(1)
+    method = next(m.label for m in case.methods if m.id == case.truth.how)
+    llm = ScriptedLlm([f"It was {method}!", LlmError("down")])
+    async with playing(Script(), llm) as h:
+        handle, persona = await first_suspect(h)
+        draft = await draft_reply(
+            h.deps,
+            game=h.ctx.game,
+            suspect=handle,
+            persona=persona,
+            player_text="Well?",
+            history=[],
+            model="m",
+            evidence=[],
+        )
+    assert (draft.source, draft.degraded, draft.violations) == ("canned", True, ("how",))
+    assert draft.drafts == 2

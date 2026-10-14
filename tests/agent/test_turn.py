@@ -1,9 +1,12 @@
+import logging
+
 import pytest
 
 from gumshoe.agent.config import AgentConfig
 from gumshoe.agent.events import (
     Clarify,
     Confirm,
+    Done,
     GameOver,
     IntentEvent,
     PostCheck,
@@ -14,9 +17,9 @@ from gumshoe.agent.events import (
 from gumshoe.agent.game import ToolFailure
 from gumshoe.agent.llm import LlmError
 from gumshoe.agent.pending import Pending
-from gumshoe.agent.turn import APOLOGY, HELP, UNREACHABLE
+from gumshoe.agent.turn import APOLOGY, HELP, UNREACHABLE, describe_failure
 from gumshoe.cases import AccusationResult, SourceResult
-from gumshoe.decider import DeciderAllFailedError, DeciderConnectionError
+from gumshoe.decider import DeciderAllFailedError, DeciderAPIError, DeciderConnectionError
 from tests.agent.fakes import Script, ScriptedLlm
 from tests.agent.harness import playing, turn
 from tests.mcp_server.helpers import castle_case, explore_all, true_triple
@@ -127,7 +130,7 @@ async def test_interrogating_voices_the_suspect_and_runs_a_post_check():
         events = await turn(h, "where were you")
     assert kinds(events) == ["intent", "tool_call", "tool_result", "reply", "post_check", "done"]
     reply = only(events, Reply)
-    assert reply.text == "I was in the hall." and reply.source == "draft" and reply.check_ok
+    assert reply.text == "I was in the hall." and reply.source == "draft"
     assert reply.speaker == h.brief.suspects[0].name
     post = only(events, PostCheck)
     assert (post.contradicts_says, post.claims_guilt_or_blames_other) == (0.3, 0.4)
@@ -622,3 +625,40 @@ async def test_a_cancel_with_a_new_request_is_one_exchange():
     said, summary = h.ctx.exchanges[-1]
     assert said == "no, search the first place"
     assert summary.startswith("cancelled, then searched ")
+
+
+# --- telemetry and logging ---------------------------------------------------------------------
+
+
+async def test_the_reply_carries_the_model_its_drafts_and_latency_and_done_the_turn_time():
+    script = Script().understand(intent="interrogate", target="suspect_1").post_check()
+    llm = ScriptedLlm(["I was in the hall."])
+    async with playing(script, llm) as h:
+        events = await turn(h, "where were you")
+    reply = only(events, Reply)
+    assert (reply.model, reply.drafts) == (AgentConfig().model_default, 1)
+    assert reply.latency_ms is not None and reply.latency_ms >= 0
+    done = events[-1]
+    assert isinstance(done, Done) and done.turn_ms is not None and done.turn_ms >= 0
+
+
+async def test_a_failed_understand_is_logged_by_class_and_backend_never_the_players_text(caplog):
+    error = DeciderAPIError("jev", 500, "echo: my private words")
+    script = Script().fail("understand", error)
+    async with playing(script) as h:
+        with caplog.at_level(logging.WARNING, logger="gumshoe.agent.turn"):
+            await turn(h, "my private words")
+    assert "DeciderAPIError from jev HTTP 500" in caplog.text
+    assert "private" not in caplog.text
+
+
+def test_a_total_failure_is_described_backend_by_backend():
+    error = DeciderAllFailedError(
+        {
+            "jev": DeciderConnectionError("jev", "down"),
+            "nimble": DeciderAPIError("nimble", 502, "body"),
+        }
+    )
+    assert describe_failure(error) == (
+        "all backends failed (jev: DeciderConnectionError, nimble: DeciderAPIError)"
+    )

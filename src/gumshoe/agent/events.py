@@ -47,8 +47,10 @@ class Reply(_Event):
     text: str
     source: Literal["draft", "canned", "help", "unreachable"]
     degraded: bool = False
-    check_ok: bool = True
     violations: tuple[str, ...] = ()  # check_reply categories only
+    model: str | None = None  # the persona model asked (draft and canned replies)
+    drafts: int = 0  # persona model calls made for this reply
+    latency_ms: float | None = None  # time spent drafting, checks included
 
 
 class PostCheck(_Event):
@@ -79,6 +81,7 @@ class GameOver(_Event):
 
 class Done(_Event):
     kind: Literal["done"] = "done"
+    turn_ms: float | None = None  # wall time of the whole turn
 
 
 TurnEvent = Annotated[

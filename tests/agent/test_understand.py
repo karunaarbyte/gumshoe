@@ -82,24 +82,22 @@ def test_read_intent_maps_keys_to_handles_and_reads_scores_and_confirmation():
         weight=3.2,
         confirm=0.9,
     )
-    intent = read_intent(DecisionResult(model="m", answers=answers), built.targets, "d1")
+    intent = read_intent(DecisionResult(model="m", answers=answers), built.targets)
     assert (intent.name, intent.target) == ("interrogate", "h_s2")
     assert (intent.intent_confidence, intent.target_confidence) == (0.8, 0.7)
-    assert intent.weight == 3.2 and intent.confirms_pending == 0.9 and intent.decision_id == "d1"
+    assert intent.weight == 3.2 and intent.confirms_pending == 0.9
 
 
 def test_none_target_and_unknown_keys_read_as_no_target_and_unknown_intent_as_other():
     built = build_understand(brief(), pending=False)
     answers = understand_answers(built.questions, intent="search", target=NO_TARGET)
-    assert (
-        read_intent(DecisionResult(model="m", answers=answers), built.targets, "d").target is None
-    )
+    assert read_intent(DecisionResult(model="m", answers=answers), built.targets).target is None
     odd = {
         "intent": choice(["bogus", "x"], "bogus"),
         "target": choice(["nope", "y"], "nope"),
         "weight": score(1.0),
     }
-    intent = read_intent(DecisionResult(model="m", answers=odd), built.targets, "d")
+    intent = read_intent(DecisionResult(model="m", answers=odd), built.targets)
     assert intent.name == "other" and intent.target is None
 
 
@@ -109,7 +107,6 @@ def test_a_missing_answer_raises_key_error_for_the_caller_to_treat_as_a_failed_d
         read_intent(
             DecisionResult(model="m", answers={"intent": choice(["a", "b"], "a")}),
             built.targets,
-            "d",
         )
     with pytest.raises(TypeError):
         read_intent(
@@ -118,5 +115,4 @@ def test_a_missing_answer_raises_key_error_for_the_caller_to_treat_as_a_failed_d
                 answers={"intent": noul(0.5), "target": noul(0.5), "weight": noul(0.5)},
             ),
             built.targets,
-            "d",
         )

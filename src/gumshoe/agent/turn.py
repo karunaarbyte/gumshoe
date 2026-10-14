@@ -1,6 +1,7 @@
 """take_turn: the only place the stages meet. One call of `take_turn` is one player message."""
 
 import logging
+import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
@@ -27,7 +28,7 @@ from gumshoe.agent.pending import Pending, Step, resolve_pending
 from gumshoe.agent.state import build_state
 from gumshoe.agent.understand import Intent, build_understand, read_intent
 from gumshoe.cases import NotebookView, PlayerCaseView
-from gumshoe.decider import DeciderError
+from gumshoe.decider import DeciderAllFailedError, DeciderAPIError, DeciderError
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,16 @@ HELP = (
 UNREACHABLE = "You cannot get to them yet."
 MAX_EXCHANGES = 20
 NEEDS_TARGET = frozenset({"search", "interrogate", "talk", "records"})
+
+
+def describe_failure(exc: DeciderError) -> str:
+    """The class and backend of a failed decision, for the log. Never the message: an API error
+    quotes the response body, which may echo the state and so the player's text."""
+    if isinstance(exc, DeciderAllFailedError):
+        parts = ", ".join(f"{name}: {type(e).__name__}" for name, e in exc.failures.items())
+        return f"all backends failed ({parts})"
+    status = f" HTTP {exc.status_code}" if isinstance(exc, DeciderAPIError) else ""
+    return f"{type(exc).__name__} from {exc.backend}{status}"
 
 
 def _remember(ctx: TurnContext, text: str, summary: str) -> None:
@@ -69,6 +80,7 @@ async def _tool[T: BaseModel](
 async def take_turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEvent]:
     """Yield the events of one turn, always ending with `Done`. No Exception raises out of here
     (CancelledError and other BaseExceptions propagate by design)."""
+    started = time.perf_counter()
     try:
         async for event in _turn(deps, ctx, text):
             yield event
@@ -79,7 +91,7 @@ async def take_turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[Tu
     except Exception:
         logger.exception("turn failed")
         yield Clarify(reason="error", text=APOLOGY)
-    yield Done()
+    yield Done(turn_ms=round((time.perf_counter() - started) * 1000, 1))
 
 
 async def _turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEvent]:
@@ -104,8 +116,13 @@ async def _turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEv
         result = await deps.decider.decide(
             state, built.questions, node="understand", decision_id=decision_id
         )
-        intent = read_intent(result, built.targets, decision_id)
-    except (DeciderError, KeyError, TypeError):
+        intent = read_intent(result, built.targets)
+    except DeciderError as exc:
+        logger.warning("the understand decision failed: %s", describe_failure(exc))
+        yield Clarify(reason="error", text=APOLOGY, decision_id=decision_id)
+        return
+    except (KeyError, TypeError):
+        logger.warning("the understand decision came back malformed")
         yield Clarify(reason="error", text=APOLOGY, decision_id=decision_id)
         return
     yield IntentEvent(
@@ -280,8 +297,10 @@ async def _converse(
         text=draft.text,
         source=draft.source,
         degraded=draft.degraded,
-        check_ok=draft.check_ok,
         violations=draft.violations,
+        model=draft.model,
+        drafts=draft.drafts,
+        latency_ms=draft.latency_ms,
     )
     talks.append((text, draft.text))
     del talks[:-MAX_EXCHANGES]
@@ -300,7 +319,8 @@ async def _start_accusation(deps: Deps, ctx: TurnContext, text: str) -> AsyncIte
             node="parse_accusation",
             decision_id=decision_id,
         )
-    except DeciderError:
+    except DeciderError as exc:
+        logger.warning("the parse_accusation decision failed: %s", describe_failure(exc))
         yield Clarify(reason="error", text=APOLOGY, decision_id=decision_id)
         return
     try:
