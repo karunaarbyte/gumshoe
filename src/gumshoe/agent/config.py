@@ -18,7 +18,7 @@ class AgentConfig:
         2  # past exchanges sent to the decider; also the length of a suspect's persona history
     )
     # The whole turn's safety net. Persona drafting gets half of it, so a slow model ends in the
-    # canned line well before the net ends the turn with the apology.
+    # canned line before the net ends the turn with the apology (when the earlier stages are fast).
     turn_timeout_s: float = 120.0
 
     @property

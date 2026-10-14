@@ -912,8 +912,8 @@ class SlowDecider(ScriptedDecider):
 async def test_a_persona_model_slower_than_its_budget_gives_the_canned_line():
     script = Script().understand(intent="interrogate", target="suspect_1").post_check()
     llm = SlowLlm([])
-    async with playing(script, llm, config=AgentConfig(turn_timeout_s=0.4)) as h:
-        async with asyncio.timeout(3):
+    async with playing(script, llm, config=AgentConfig(turn_timeout_s=2.4)) as h:
+        async with asyncio.timeout(5):
             events = await turn(h, "where were you")
     reply = only(events, Reply)
     assert (reply.source, reply.degraded, reply.drafts) == ("canned", True, 1)

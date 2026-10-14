@@ -130,11 +130,13 @@ async def _guarded(
 ) -> AsyncIterator[TurnEvent]:
     """Every turn's frame: remember how the game ended, turn failures into the apology, end
     with `Done`, and stop a turn that outlives `turn_timeout_s` (a safety net: the stages have
-    their own timeouts). The deadline covers only the waits for the next event, never a
-    `yield`, so a slow reader cannot be cancelled by it."""
+    their own timeouts). The deadline is absolute, so time a slow reader spends in a `yield`
+    still counts against it, but the reader is never cancelled mid-yield. Known limit: an
+    irreversible action (accuse, give up) that completes right as the net fires is reported as
+    failed; the tool calls are in-process and near-instant."""
     started = time.perf_counter()
     deadline = asyncio.get_running_loop().time() + deps.config.turn_timeout_s
-    budget = asyncio.timeout_at(deadline)
+    budget: asyncio.Timeout | None = None
     try:
         while True:
             budget = asyncio.timeout_at(deadline)
@@ -147,7 +149,7 @@ async def _guarded(
                 ctx.outcome = event.outcome
             yield event
     except TimeoutError:
-        if budget.expired():
+        if budget is not None and budget.expired():
             logger.warning("a turn ran out of time after %s s", deps.config.turn_timeout_s)
         else:
             logger.exception("turn failed")
