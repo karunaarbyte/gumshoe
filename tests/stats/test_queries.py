@@ -122,6 +122,8 @@ def test_errored_calls_are_counted_but_not_measured():
     nimble = backend(build_report([*pair("d1"), failed]).nodes[0], "nimble")
     assert nimble.calls == 2 and nimble.errors == 1
     assert nimble.latency_ms.p95 == 1000  # the 30 s failure is not a latency sample
+    assert nimble.error_latency_ms.p95 == 30000  # it is reported beside it instead
+    assert backend(build_report(pair("d1")).nodes[0], "nimble").error_latency_ms.p95 is None
 
 
 def test_node_whose_calls_all_failed_has_no_numbers_and_no_agreement():
@@ -282,3 +284,20 @@ def test_a_decision_with_no_shared_questions_is_not_counted_as_compared():
     [node] = build_report([a, b]).nodes
     assert node.decisions == 1
     assert node.compared == 0 and node.agreement_rate is None
+
+
+def test_error_latency_follows_the_cold_rule():
+    failed = make_record(
+        decision_id="d2",
+        backend="nimble",
+        role="shadow",
+        used=False,
+        cold=True,
+        error="[nimble] timed out",
+        answers=None,
+        latency_ms=30000,
+    )
+    calls = [*pair("d1"), failed]
+    assert backend(build_report(calls).nodes[0], "nimble").error_latency_ms.p95 is None
+    nimble = backend(build_report(calls, include_cold=True).nodes[0], "nimble")
+    assert nimble.error_latency_ms.p95 == 30000

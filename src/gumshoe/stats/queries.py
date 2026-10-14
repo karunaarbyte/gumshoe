@@ -31,12 +31,17 @@ class LatencyStats(BaseModel):
 
 
 class BackendStats(BaseModel):
+    """`latency_ms` measures the calls that answered; `error_latency_ms` the ones that failed,
+    reported beside it because timeouts are the slowest tail and would otherwise vanish (a
+    backend that often times out would look fast). Both follow the `include_cold` rule."""
+
     backend: str
     calls: int
     errors: int
     cold_calls: int
     used_calls: int
     latency_ms: LatencyStats
+    error_latency_ms: LatencyStats
     mean_input_tokens: float | None
     mean_output_tokens: float | None
     mean_confidence: float | None
@@ -141,18 +146,24 @@ def _node_stats(node: str, rows: list[CallRecord], include_cold: bool) -> NodeSt
     )
 
 
+def _latency(rows: list[CallRecord], include_cold: bool) -> LatencyStats:
+    values = [r.latency_ms for r in rows if include_cold or not r.cold]
+    return LatencyStats(
+        p50=percentile(values, 0.5), p95=percentile(values, 0.95), mean=_mean(values)
+    )
+
+
 def _backend_stats(backend: str, rows: list[CallRecord], include_cold: bool) -> BackendStats:
     ok = [r for r in rows if r.error is None]
-    latencies = [r.latency_ms for r in ok if include_cold or not r.cold]
+    failed = [r for r in rows if r.error is not None]
     return BackendStats(
         backend=backend,
         calls=len(rows),
-        errors=len(rows) - len(ok),
+        errors=len(failed),
         cold_calls=sum(r.cold for r in rows),
         used_calls=sum(r.used for r in rows),
-        latency_ms=LatencyStats(
-            p50=percentile(latencies, 0.5), p95=percentile(latencies, 0.95), mean=_mean(latencies)
-        ),
+        latency_ms=_latency(ok, include_cold),
+        error_latency_ms=_latency(failed, include_cold),
         mean_input_tokens=_mean([r.input_tokens for r in ok if r.input_tokens is not None]),
         mean_output_tokens=_mean([r.output_tokens for r in ok if r.output_tokens is not None]),
         mean_confidence=_mean([r.mean_confidence for r in ok if r.mean_confidence is not None]),

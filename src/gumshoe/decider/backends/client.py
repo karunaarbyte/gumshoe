@@ -15,6 +15,11 @@ from gumshoe.decider.contract.errors import (
 )
 from gumshoe.decider.contract.models import DecisionRequest, DecisionResult, Question
 
+# Idle connections are kept this long. httpx's default (5 s) is shorter than the gap between
+# human-paced turns, so every hosted Jev call would pay a fresh TLS handshake while local Nimble
+# (plain http) pays almost nothing: a latency bias in the comparison.
+KEEPALIVE_S = 60.0
+
 
 class SystemOneClient:
     def __init__(
@@ -30,7 +35,12 @@ class SystemOneClient:
         headers = {}
         if profile.api_key:
             headers["Authorization"] = f"Bearer {profile.api_key}"
-        self._http = httpx.AsyncClient(headers=headers, timeout=timeout, transport=transport)
+        limits = httpx.Limits(
+            max_connections=100, max_keepalive_connections=20, keepalive_expiry=KEEPALIVE_S
+        )
+        self._http = httpx.AsyncClient(
+            headers=headers, timeout=timeout, transport=transport, limits=limits
+        )
 
     async def decide(
         self,

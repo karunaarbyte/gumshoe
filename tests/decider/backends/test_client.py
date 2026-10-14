@@ -5,7 +5,7 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from gumshoe.decider.backends.client import SystemOneClient
+from gumshoe.decider.backends.client import KEEPALIVE_S, SystemOneClient
 from gumshoe.decider.backends.profile import BackendProfile
 from gumshoe.decider.contract.errors import (
     DeciderAPIError,
@@ -184,3 +184,17 @@ async def test_a_body_that_will_not_decode_is_a_connection_error():
     async with make_client(handler, name="jev") as client:
         with pytest.raises(DeciderConnectionError, match="DecodingError"):
             await client.decide(DEMO_STATE, DEMO_QUESTIONS)
+
+
+def test_idle_connections_are_kept_for_a_minute(monkeypatch):
+    seen: dict[str, Any] = {}
+    real = httpx.AsyncClient
+
+    def spy(**kwargs: Any) -> httpx.AsyncClient:
+        seen.update(kwargs)
+        return real(**kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", spy)
+    SystemOneClient(BackendProfile("jev", "https://x/v1", "m"))
+    assert seen["limits"].keepalive_expiry == KEEPALIVE_S == 60.0
+    assert seen["limits"].max_connections == 100
