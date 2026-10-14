@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from mcp.client import Client
 from pydantic import SecretStr
@@ -6,12 +8,16 @@ from starlette.testclient import TestClient
 import gumshoe.api.wiring as wiring
 from gumshoe.agent import AgentConfig
 from gumshoe.api import create_app
+from gumshoe.api.games import MAX_TURN_CHARS
 from gumshoe.api.service import AgentService
-from gumshoe.api.wiring import agent_config, default_service
+from gumshoe.api.wiring import agent_config, default_service, save_index
 from gumshoe.config import Settings
 from gumshoe.decider import DeciderConfigError
+from gumshoe.mcp_server import GameHost
+from gumshoe.mcp_server.host import MAX_TEXT
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script, ScriptedDecider, ScriptedLlm
+from tests.mcp_server.helpers import SeqIds
 
 
 def test_default_settings_give_the_default_agent_config():
@@ -124,3 +130,40 @@ async def test_default_service_records_into_the_store_and_closes_in_order(tmp_pa
         await service.new_game(1)
     assert seen == {"recorder": store, "ollama": ("http://ollama:1/v1", 7.0)}
     assert log == ["service", "client", "decider", "llm"]
+
+
+def test_the_agent_never_sends_the_server_more_text_than_it_accepts():
+    assert agent_config(Settings(_env_file=None)).max_text <= MAX_TEXT  # drafts to check_reply
+    assert MAX_TURN_CHARS <= MAX_TEXT  # the player's text to accusation_questions, check_reply
+
+
+def test_the_save_index_lists_saves_newest_first_and_never_their_case(tmp_path):
+    host = GameHost(ids=SeqIds(), saves_dir=tmp_path)
+    first = host.save_game(host.new_game(1).game).name
+    second = host.save_game(host.new_game(2, "short").game).name
+    os.utime(tmp_path / f"{first}.json", (1_000_000_000, 1_000_000_000))
+    (tmp_path / "notes.json").write_text("{}")  # not a save name: ignored
+    (tmp_path / "fedcba9876543210.json").write_text("not json")  # unreadable: left out
+    listed = save_index(tmp_path)
+    assert [s.name for s in listed] == [second, first]
+    assert {(s.pack, s.status) for s in listed} == {("castle", "playing")}
+    assert listed[1].created_at == "2001-09-09T01:46:40+00:00"
+    dumped = "".join(s.model_dump_json() for s in listed)
+    assert "truth" not in dumped and "case" not in dumped
+
+
+def test_the_save_index_of_a_missing_folder_is_empty(tmp_path):
+    assert save_index(tmp_path / "nowhere") == []
+
+
+async def test_default_service_saves_into_the_configured_folder(tmp_path):
+    settings = Settings(
+        _env_file=None, decider_primary="nimble", decider_shadow=None, saves_dir=tmp_path
+    )
+    store = SqliteStatsStore(tmp_path / "d.db")
+    async with default_service(store, settings) as service:
+        new = await service.new_game(1)
+        saved = await service.save_game(new.game)
+        listed = await service.saves()
+    assert (tmp_path / f"{saved.name}.json").is_file()
+    assert [s.name for s in listed] == [saved.name]

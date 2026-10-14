@@ -1,15 +1,20 @@
 """Builds the real agent service from settings. The only api module that touches the MCP SDK."""
 
+import json
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
+from datetime import UTC, datetime
+from functools import partial
+from pathlib import Path
 
 from mcp.client import Client
 
 from gumshoe.agent import AgentConfig, Deps, GameClient, OllamaLlm
-from gumshoe.api.service import AgentService
+from gumshoe.api.service import AgentService, SaveSummary
 from gumshoe.config import Settings, get_settings
 from gumshoe.decider import make_decider
-from gumshoe.mcp_server import GameHost
+from gumshoe.mcp_server import GameError, GameHost
+from gumshoe.mcp_server.saves import NAME, read_save
 from gumshoe.mcp_server.tools import build_server
 from gumshoe.stats import SqliteStatsStore
 
@@ -26,6 +31,36 @@ def agent_config(settings: Settings) -> AgentConfig:
     )
 
 
+MAX_SAVES_LISTED = 200
+
+
+def save_index(folder: Path) -> list[SaveSummary]:
+    """The readable saves in `folder`, newest first. Reads only the pack and the game's status
+    out of each file: a save holds the whole case, and none of it is passed on. A file that
+    cannot be read is left out (the load would refuse it anyway)."""
+    if not folder.is_dir():
+        return []
+    found: list[SaveSummary] = []
+    for path in folder.glob("*.json"):
+        if NAME.fullmatch(path.stem) is None:
+            continue  # not a name the host makes
+        try:
+            save = read_save(folder, path.stem)
+            made = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+            found.append(
+                SaveSummary(
+                    name=path.stem,
+                    created_at=made.isoformat(timespec="seconds"),
+                    pack=save.pack,
+                    status=json.loads(save.state)["status"],
+                )
+            )
+        except (GameError, OSError, ValueError, KeyError, TypeError):
+            continue
+    found.sort(key=lambda s: (s.created_at, s.name), reverse=True)
+    return found[:MAX_SAVES_LISTED]
+
+
 @asynccontextmanager
 async def default_service(
     store: SqliteStatsStore, settings: Settings | None = None
@@ -40,7 +75,11 @@ async def default_service(
     async with AsyncExitStack() as stack:
         stack.push_async_callback(llm.aclose)
         stack.push_async_callback(decider.aclose)
-        raw = await stack.enter_async_context(Client(build_server(GameHost())))
-        service = AgentService(Deps(GameClient(raw), decider, llm, agent_config(settings)))
+        host = GameHost(saves_dir=settings.saves_dir)
+        raw = await stack.enter_async_context(Client(build_server(host)))
+        service = AgentService(
+            Deps(GameClient(raw), decider, llm, agent_config(settings)),
+            list_saves=partial(save_index, settings.saves_dir),
+        )
         stack.push_async_callback(service.aclose)
         yield service

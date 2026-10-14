@@ -9,11 +9,13 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
-from gumshoe.agent import EVENT_ADAPTER, NewGameView, SaveView, ToolFailure, TurnEvent
+from gumshoe.agent import EVENT_ADAPTER, SaveView, ToolFailure, TurnEvent
 from gumshoe.api.errors import ApiError
-from gumshoe.api.service import AgentService, GameState, TurnRecord
+from gumshoe.api.service import AgentService, GameState, GameSummary, SaveSummary, TurnRecord
+from gumshoe.cases import PlayerCaseView
 
 router = APIRouter(prefix="/api/games")
+saves_router = APIRouter(prefix="/api/saves")
 
 MAX_TURN_CHARS = 1000
 PING_INTERVAL_S = 15.0  # a comment line this often while a turn is quiet, so proxies keep it open
@@ -31,6 +33,16 @@ class LoadBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=64)
+
+
+class GameCreated(BaseModel):
+    """A new or loaded game. No seed (see GameState); the preset only for a new game."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    game: str
+    brief: PlayerCaseView
+    preset: str | None
 
 
 class TurnBody(BaseModel):
@@ -65,13 +77,20 @@ def sse(event: TurnEvent) -> bytes:
 
 
 @router.post("")
-async def create(body: NewGameBody, service: Service) -> NewGameView:
-    return await service.new_game(body.seed, body.preset)
+async def create(body: NewGameBody, service: Service) -> GameCreated:
+    view = await service.new_game(body.seed, body.preset)
+    return GameCreated(game=view.game, brief=view.brief, preset=body.preset)
+
+
+@router.get("")
+async def open_games(service: Service) -> list[GameSummary]:
+    return await service.games()
 
 
 @router.post("/load")
-async def load(body: LoadBody, service: Service) -> NewGameView:
-    return await service.load_game(body.name)
+async def load(body: LoadBody, service: Service) -> GameCreated:
+    view = await service.load_game(body.name)
+    return GameCreated(game=view.game, brief=view.brief, preset=None)
 
 
 @router.get("/{game}")
@@ -174,3 +193,9 @@ async def save(game: str, service: Service) -> SaveView:
 async def delete(game: str, service: Service) -> Response:
     await service.delete_game(game)
     return Response(status_code=204)
+
+
+@saves_router.get("")
+async def saves(service: Service) -> list[SaveSummary]:
+    """The saves on disk, newest first: name, when, pack and how the game stood. Never a case."""
+    return await service.saves()

@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from gumshoe.agent import ToolFailure
 from gumshoe.api.errors import ApiError, error_body, status_for
 from gumshoe.api.games import router as games_router
+from gumshoe.api.games import saves_router
 from gumshoe.api.service import AgentService
 from gumshoe.api.wiring import default_service
 from gumshoe.decider import DeciderConfigError
@@ -58,6 +59,7 @@ def create_app(store: SqliteStatsStore, *, make_service: ServiceFactory | None =
         return JSONResponse(error_body("internal", "something went wrong"), status_code=500)
 
     app.include_router(games_router)
+    app.include_router(saves_router)
 
     # Plain `def` handlers run in FastAPI's thread pool, which suits blocking SQLite calls.
     @app.get("/api/health")

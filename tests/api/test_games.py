@@ -31,7 +31,8 @@ def new_game(client, seed=1):
 def test_create_a_game_returns_its_id_and_brief(store):
     with client_for(store, Script()) as client:
         body = new_game(client)
-    assert set(body) == {"game", "brief"} and body["brief"]["status"] == "playing"
+    assert set(body) == {"game", "brief", "preset"} and body["brief"]["status"] == "playing"
+    assert body["preset"] == "standard" and "seed" not in body
     assert body["brief"]["locations"] and "truth" not in str(body)
 
 
@@ -39,7 +40,8 @@ def test_get_a_game_returns_brief_and_notebook(store):
     with client_for(store, Script()) as client:
         game = new_game(client)["game"]
         body = client.get(f"/api/games/{game}").json()
-    assert set(body) == {"brief", "notebook"}
+    assert set(body) == {"brief", "notebook", "outcome", "pending", "reveal", "preset"}
+    assert (body["outcome"], body["pending"], body["reveal"]) == ("playing", None, None)
 
 
 def test_a_turn_streams_sse_that_parses_back_to_the_events(store):
@@ -106,6 +108,7 @@ def test_save_then_load_makes_a_new_game(store, tmp_path):
         assert saved.status_code == 200
         loaded = client.post("/api/games/load", json={"name": saved.json()["name"]})
         assert loaded.status_code == 200 and loaded.json()["game"] != game
+        assert loaded.json()["preset"] is None  # a save does not say
 
 
 def test_loading_a_missing_save_is_422(store, tmp_path):
@@ -374,3 +377,39 @@ def test_the_transcript_endpoint_returns_every_turn(store):
     assert set(turn) == {"turn_id", "kind", "text", "ts", "events", "complete"}
     assert turn["text"] == "notes" and turn["events"][-1]["kind"] == "done"
     assert missing.status_code == 404
+
+
+# --- the game as a reloaded page sees it ---------------------------------------------------------
+
+
+def test_a_reloaded_page_gets_the_waiting_confirmation_back(store):
+    script = Script().understand(intent="give_up")
+    with client_for(store, script) as client:
+        game = new_game(client)["game"]
+        first = parse_sse(client.post(f"/api/games/{game}/turn", json={"text": "I quit"}).text)
+        [confirm] = [data for name, data in first if name == "confirm"]
+        body = client.get(f"/api/games/{game}").json()
+    assert body["pending"] == {
+        "pending_id": confirm["pending_id"],
+        "kind": "give_up",
+        "text": confirm["text"],
+        "warnings": [],
+    }
+
+
+def test_the_open_games_are_listed(store):
+    with client_for(store, Script()) as client:
+        a = new_game(client)["game"]
+        b = client.post("/api/games", json={"seed": 2, "preset": "short"}).json()["game"]
+        listed = client.get("/api/games").json()
+    assert [(g["game"], g["preset"], g["outcome"]) for g in listed] == [
+        (a, "standard", "playing"),
+        (b, "short", "playing"),
+    ]
+    assert all(g["attempts_left"] == 3 and g["turn_running"] is False for g in listed)
+
+
+def test_saves_answers_a_list(store):
+    with client_for(store, Script()) as client:
+        response = client.get("/api/saves")
+    assert response.status_code == 200 and response.json() == []

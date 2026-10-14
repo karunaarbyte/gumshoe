@@ -8,7 +8,7 @@ import pytest
 from gumshoe.agent import ToolFailure
 from gumshoe.agent.events import Confirm
 from gumshoe.api.errors import ApiError
-from gumshoe.api.service import SHUTTING_DOWN, AgentService
+from gumshoe.api.service import SHUTTING_DOWN, AgentService, SaveSummary
 from gumshoe.mcp_server import GameError
 from tests.agent.fakes import Script
 from tests.api.helpers import GatedDecider, HeldSave, idle, serving
@@ -414,3 +414,63 @@ async def test_a_deleted_games_transcript_is_gone():
         with pytest.raises(ToolFailure) as caught:
             s.service.turns(new.game)
     assert caught.value.code == "unknown_game"
+
+
+# --- the game as a reloaded page sees it ---------------------------------------------------------
+
+
+async def test_state_shows_the_waiting_confirmation_and_no_reveal_while_playing():
+    script = Script().understand(intent="give_up")
+    async with serving(script) as s:
+        new = await s.service.new_game(1, "short")
+        pending_id = await confirm_id(s.service, new.game)
+        state = await s.service.state(new.game)
+    assert state.pending is not None and state.pending.pending_id == pending_id
+    assert (state.pending.kind, state.pending.text) == ("give_up", "Give up and see the answer?")
+    assert (state.outcome, state.reveal, state.preset) == ("playing", None, "short")
+
+
+async def test_a_given_up_game_reads_gave_up_with_its_reveal():
+    script = Script().understand(intent="give_up")
+    async with serving(script) as s:
+        new = await s.service.new_game(1)
+        pending_id = await confirm_id(s.service, new.game)
+        await collect_confirm(s.service, new.game, pending_id, "yes")
+        state = await s.service.state(new.game)
+        [listed] = await s.service.games()
+    assert state.outcome == listed.outcome == "gave_up"
+    assert state.reveal is not None and state.reveal.culprit and state.pending is None
+
+
+async def test_a_loaded_game_has_no_preset(tmp_path):
+    async with serving(Script(), saves_dir=tmp_path) as s:
+        new = await s.service.new_game(1, "long")
+        saved = await s.service.save_game(new.game)
+        loaded = await s.service.load_game(saved.name)
+        state = await s.service.state(loaded.game)
+    assert state.preset is None
+
+
+async def test_the_games_list_says_when_a_turn_is_running():
+    script = Script().understand(intent="notebook")
+    gated = GatedDecider(script)
+    async with serving(script, decider=gated) as s:
+        new = await s.service.new_game(1)
+        running = asyncio.create_task(collect(s.service, new.game, "notes"))
+        await gated.entered.wait()
+        [busy] = await s.service.games()
+        gated.release.set()
+        await running
+        [free] = await s.service.games()
+    assert busy.turn_running is True and free.turn_running is False
+
+
+async def test_saves_come_from_the_injected_lister():
+    summary = SaveSummary(
+        name="0123456789abcdef", created_at="2026-10-13T10:00:00+00:00", pack="castle",
+        status="playing",
+    )  # fmt: skip
+    async with serving(Script()) as s:
+        assert await s.service.saves() == []  # none injected
+        s.service._list_saves = lambda: [summary]
+        assert await s.service.saves() == [summary]
