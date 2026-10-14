@@ -608,7 +608,8 @@ async def test_a_confirmed_give_up_next_to_a_pending_accusation_is_not_a_yes():
         events = await turn(h, "yes, I give up")
         brief = await h.deps.client.case_brief(h.ctx.game)
     assert brief.status == "playing" and brief.attempts_left == 3
-    assert kinds(events) == ["intent", "confirm", "done"]  # asks about giving up instead
+    # the accusation is dropped (and says so), then it asks about giving up instead
+    assert kinds(events) == ["intent", "cancelled", "confirm", "done"]
     assert h.ctx.pending is not None and h.ctx.pending.kind == "give_up"
 
 
@@ -662,3 +663,43 @@ def test_a_total_failure_is_described_backend_by_backend():
     assert describe_failure(error) == (
         "all backends failed (jev: DeciderConnectionError, nimble: DeciderAPIError)"
     )
+
+
+# --- dropped confirmations and the end state ---------------------------------------------------
+
+
+async def test_a_new_request_that_drops_the_pending_action_says_cancelled_first():
+    script = (
+        Script()
+        .understand(intent="give_up")
+        .understand(intent="search", target="place_1", confirm=0.5)
+    )
+    async with playing(script) as h:
+        await turn(h, "I give up")
+        events = await turn(h, "search the first place")
+    assert kinds(events) == ["intent", "cancelled", "tool_call", "tool_result", "done"]
+    assert h.ctx.pending is None
+
+
+async def test_letting_the_pending_action_go_after_the_reask_says_cancelled():
+    script = (
+        Script()
+        .understand(intent="give_up")
+        .understand(intent="other", confirm=0.5)
+        .understand(intent="other", confirm=0.5)
+    )
+    async with playing(script) as h:
+        await turn(h, "I give up")
+        await turn(h, "hmm")
+        last = await turn(h, "hmm?")
+    assert kinds(last) == ["intent", "cancelled", "reply", "done"]
+
+
+async def test_a_given_up_game_stays_given_up_on_later_turns():
+    script = Script().understand(intent="give_up").understand(intent="other", confirm=0.95)
+    async with playing(script) as h:
+        await turn(h, "I give up")
+        await turn(h, "yes")
+        later = await turn(h, "search again")
+    assert kinds(later) == ["game_over", "done"]
+    assert only(later, GameOver).outcome == "gave_up" and h.ctx.outcome == "gave_up"

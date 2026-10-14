@@ -4,7 +4,7 @@ import logging
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -52,6 +52,13 @@ def describe_failure(exc: DeciderError) -> str:
     return f"{type(exc).__name__} from {exc.backend}{status}"
 
 
+def ended(ctx: TurnContext, brief: PlayerCaseView) -> Literal["won", "lost", "gave_up"]:
+    """How a finished game ended: what a turn reported, else the engine's status."""
+    if ctx.outcome is not None:
+        return ctx.outcome
+    return "won" if brief.status == "won" else "lost"
+
+
 def _remember(ctx: TurnContext, text: str, summary: str) -> None:
     ctx.exchanges.append((text, summary))
     del ctx.exchanges[:-MAX_EXCHANGES]
@@ -83,6 +90,8 @@ async def take_turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[Tu
     started = time.perf_counter()
     try:
         async for event in _turn(deps, ctx, text):
+            if isinstance(event, GameOver):
+                ctx.outcome = event.outcome
             yield event
     except ToolFailure as exc:
         if exc.code != "unknown_game":
@@ -99,7 +108,7 @@ async def _turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEv
     brief = await deps.client.case_brief(game)
     if brief.status != "playing":
         reveal = await deps.client.reveal(game)
-        yield GameOver(outcome="won" if brief.status == "won" else "lost", reveal=reveal)
+        yield GameOver(outcome=ended(ctx, brief), reveal=reveal)
         return
     notebook = await deps.client.notebook(game)
     built = build_understand(brief, pending=ctx.pending is not None)
@@ -156,6 +165,7 @@ async def _turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEv
         return
     elif step in (Step.DROP_PROCESS, Step.CLEAR_PROCESS):
         ctx.pending = None
+        yield Cancelled()  # a UI still showing the confirmation must learn it is gone
     elif step is Step.REASK:
         assert pending is not None
         pending.reasked = True

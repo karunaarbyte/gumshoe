@@ -2,6 +2,7 @@
 per-game conversation record that a turn reads and updates."""
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 from gumshoe.agent.config import AgentConfig
 from gumshoe.agent.game import GameClient
@@ -27,3 +28,7 @@ class TurnContext:
     pending: Pending | None = None
     exchanges: list[tuple[str, str]] = field(default_factory=list)  # every turn, for the decider
     talks: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # suspect -> dialogue
+
+    # How the game ended, once a turn has said so. The engine only knows won/lost, so a game that
+    # was given up would read as lost afterwards without this.
+    outcome: Literal["won", "lost", "gave_up"] | None = None
