@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -23,9 +23,11 @@ from gumshoe.config import Settings, get_settings
 from gumshoe.decider import DeciderConfigError
 from gumshoe.stats import (
     DecisionView,
+    Price,
     SqliteStatsStore,
     StatsReport,
     build_report,
+    disagreeing,
     recent_decisions,
 )
 
@@ -42,6 +44,16 @@ def cors_origins(settings: Settings) -> list[str]:
     return [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 
 
+MAX_IDS = 200
+
+
+def prices_of(settings: Settings) -> dict[str, Price]:
+    return {
+        "jev": Price(settings.jev_usd_per_mtok_in, settings.jev_usd_per_mtok_out),
+        "nimble": Price(settings.nimble_usd_per_mtok_in, settings.nimble_usd_per_mtok_out),
+    }
+
+
 def create_app(
     store: SqliteStatsStore,
     *,
@@ -49,6 +61,7 @@ def create_app(
     settings: Settings | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
+    prices = prices_of(settings)
     factory: ServiceFactory = make_service or (lambda s: default_service(s, settings))
 
     @asynccontextmanager
@@ -130,12 +143,38 @@ def create_app(
         node: str | None = None, since: datetime | None = None, include_cold: bool = False
     ) -> StatsReport:
         calls = store.fetch_calls(node=node, since=since)
-        return build_report(calls, include_cold=include_cold, since=since)
+        return build_report(calls, include_cold=include_cold, since=since, prices=prices)
 
     @app.get("/api/decisions")
     def decisions(
-        limit: int = Query(20, ge=1, le=200), node: str | None = None
+        limit: int = Query(20, ge=1, le=200),
+        node: str | None = None,
+        ids: str | None = Query(None, max_length=MAX_IDS * 65),
+        disagree: bool = False,
     ) -> list[DecisionView]:
-        return recent_decisions(store.fetch_recent(limit=limit, node=node))
+        """The latest decisions; or exactly the ones in `ids` (comma-separated, `limit` does
+        not apply); `disagree=true` keeps only head-to-heads where the backends differ."""
+        if ids is not None:
+            wanted = [i for i in ids.split(",") if i]
+            if not 0 < len(wanted) <= MAX_IDS:
+                raise ApiError(422, "bad_request", f"ids takes 1 to {MAX_IDS} decision ids")
+            calls = [c for c in store.fetch_decisions(wanted) if node is None or c.node == node]
+        elif disagree:
+            calls = store.fetch_calls(node=node)  # all of them: the filter needs every pair
+        else:
+            calls = store.fetch_recent(limit=limit, node=node)
+        if disagree:
+            calls = disagreeing(calls)
+        views = recent_decisions(calls, prices=prices)
+        return views if ids is not None else views[:limit]
+
+    @app.get("/api/decisions/{decision_id}")
+    def decision(decision_id: str = Path(max_length=64)) -> DecisionView:
+        """One decision. Until its first row is written (a primary's record lands a moment
+        after the turn's event), 404 `not_recorded_yet`: the UI retries."""
+        views = recent_decisions(store.fetch_decisions([decision_id]), prices=prices)
+        if not views:
+            raise ApiError(404, "not_recorded_yet", "that decision has not been recorded yet")
+        return views[0]
 
     return app

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import pytest
 
 from gumshoe.decider import ScoreAnswer
-from gumshoe.stats.queries import build_report, percentile, recent_decisions
+from gumshoe.stats.queries import Price, build_report, disagreeing, percentile, recent_decisions
 from tests.stats.factories import choice, make_record, noul
 
 
@@ -301,3 +301,103 @@ def test_error_latency_follows_the_cold_rule():
     assert backend(build_report(calls).nodes[0], "nimble").error_latency_ms.p95 is None
     nimble = backend(build_report(calls, include_cold=True).nodes[0], "nimble")
     assert nimble.error_latency_ms.p95 == 30000
+
+
+# --- cost, bands, confusion, disagreement --------------------------------------------------------
+
+PRICES = {"jev": Price(usd_per_mtok_in=2.0, usd_per_mtok_out=10.0)}
+
+
+def test_cost_is_estimated_from_the_prices_and_the_token_totals():
+    [node] = build_report(pair("d1") + pair("d2"), prices=PRICES).nodes
+    jev, nimble = backend(node, "jev"), backend(node, "nimble")
+    assert (jev.total_input_tokens, jev.total_output_tokens) == (800, 160)
+    assert jev.est_cost_usd == 0.0032  # (800 * 2 + 160 * 10) / 1e6
+    assert (nimble.total_input_tokens, nimble.est_cost_usd) == (2000, 0.0)  # no price: free
+
+
+def test_each_call_shows_its_tokens_and_cost():
+    [view] = recent_decisions(pair("d1"), prices=PRICES)
+    jev, nimble = view.calls
+    assert (jev.input_tokens, jev.output_tokens, jev.est_cost_usd) == (400, 80, 0.0016)
+    assert nimble.est_cost_usd == 0.0
+
+
+def test_a_call_that_reported_no_tokens_has_no_cost_estimate():
+    row = make_record(input_tokens=None, output_tokens=None)
+    [view] = recent_decisions([row], prices=PRICES)
+    [jev] = build_report([row], prices=PRICES).nodes[0].backends
+    assert view.calls[0].est_cost_usd is None
+    assert (jev.total_input_tokens, jev.est_cost_usd) == (0, 0.0)
+
+
+@pytest.mark.parametrize(
+    ("jev_p", "nimble_p", "agree"),
+    [
+        (0.55, 0.9, False),  # both "yes" at 0.5, but the game would ask again on one of them
+        (0.1, 0.45, False),  # both "no" at 0.5, but one is a cancel and one is unsure
+        (0.85, 0.95, True),
+        (0.8, 1.0, True),  # the yes band is inclusive
+        (0.4, 0.6, True),  # both unsure
+    ],
+)
+def test_confirms_pending_agrees_by_the_games_bands(jev_p, nimble_p, agree):
+    a = make_record(decision_id="d", answers={"confirms_pending": noul(jev_p)})
+    b = make_record(
+        decision_id="d",
+        backend="nimble",
+        role="shadow",
+        used=False,
+        answers={"confirms_pending": noul(nimble_p)},
+    )
+    [node] = build_report([a, b]).nodes
+    assert node.question_agreement == {"confirms_pending": 1.0 if agree else 0.0}
+
+
+def test_other_yes_no_questions_still_agree_at_one_half():
+    a = make_record(decision_id="d", answers={"needs": noul(0.55)})
+    b = make_record(
+        decision_id="d", backend="nimble", role="shadow", used=False, answers={"needs": noul(0.9)}
+    )
+    assert build_report([a, b]).nodes[0].question_agreement == {"needs": 1.0}
+
+
+def test_the_intent_confusion_matrix_counts_primary_against_shadow():
+    calls = (
+        pair("d1", jev="action", nimble="action")
+        + pair("d2", jev="action", nimble="meta")
+        + pair("d3", jev="meta", nimble="meta")
+        + pair("d4", jev="action", nimble="x", fallback=True)  # not a head-to-head
+    )
+    [node] = build_report(calls).nodes
+    assert node.intent_confusion == {"action": {"action": 1, "meta": 1}, "meta": {"meta": 1}}
+
+
+def test_a_node_without_an_intent_question_has_an_empty_matrix():
+    a = make_record(decision_id="d", answers={"needs": noul(0.9)})
+    b = make_record(
+        decision_id="d", backend="nimble", role="shadow", used=False, answers={"needs": noul(0.9)}
+    )
+    assert build_report([a, b]).nodes[0].intent_confusion == {}
+
+
+def test_the_per_question_agreement_comes_before_the_pooled_rate():
+    [node] = build_report(pair("d1")).nodes
+    keys = list(node.model_dump())
+    assert keys.index("question_agreement") < keys.index("agreement_rate")
+
+
+def test_disagreeing_keeps_only_head_to_heads_that_differ():
+    calls = (
+        pair("same", jev="a", nimble="a")
+        + pair("differ", jev="a", nimble="b")
+        + pair("fell_back", jev="a", nimble="b", fallback=True)
+    )
+    assert {c.decision_id for c in disagreeing(calls)} == {"differ"}
+    assert len(disagreeing(calls)) == 2  # both rows of that decision
+
+
+def test_a_failed_call_that_reported_tokens_still_counts_toward_the_cost():
+    failed = make_record(error="[jev] could not parse response", answers=None, output_tokens=0)
+    [jev] = build_report([failed], prices=PRICES).nodes[0].backends
+    assert (jev.total_input_tokens, jev.est_cost_usd) == (400, 0.0008)

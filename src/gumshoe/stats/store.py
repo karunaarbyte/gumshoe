@@ -131,6 +131,17 @@ class SqliteStatsStore:
             f"SELECT * FROM decision_calls WHERE decision_id IN ({marks}) ORDER BY ts, id", ids
         )
 
+    def fetch_decisions(self, decision_ids: Sequence[str]) -> list[CallRecord]:
+        """Every call of the given decisions, in time order. An id with no row yet (a primary's
+        record is written in the background) simply has no calls."""
+        if not decision_ids:
+            return []
+        marks = ", ".join("?" for _ in decision_ids)
+        return self._query(
+            f"SELECT * FROM decision_calls WHERE decision_id IN ({marks}) ORDER BY ts, id",
+            list(decision_ids),
+        )
+
     # -- row <-> record --------------------------------------------------------------------
 
     def _query(self, sql: str, params: Sequence[Any]) -> list[CallRecord]:

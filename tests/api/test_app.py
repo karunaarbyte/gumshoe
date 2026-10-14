@@ -2,6 +2,7 @@ import httpx
 import pytest
 
 from gumshoe.api.app import create_app
+from gumshoe.config import Settings
 from gumshoe.stats.store import SqliteStatsStore
 from tests.stats.factories import choice, make_record
 
@@ -154,3 +155,49 @@ async def test_unknown_routes_are_404_and_wrong_methods_405(client):
     wrong = await client.post("/api/decisions")
     assert missing.status_code == 404 and missing.json()["code"] == "not_found"
     assert wrong.status_code == 405 and wrong.json()["code"] == "method_not_allowed"
+
+
+async def test_one_decision_by_id_and_404_until_it_is_recorded(client, store):
+    seed(store, "d1")
+    found = await client.get("/api/decisions/d1")
+    missing = await client.get("/api/decisions/not-yet")
+    assert found.status_code == 200 and found.json()["decision_id"] == "d1"
+    assert missing.status_code == 404
+    assert missing.json() == {
+        "code": "not_recorded_yet",
+        "message": "that decision has not been recorded yet",
+    }
+
+
+async def test_decisions_by_ids_ignore_the_limit(client, store):
+    for i in range(5):
+        seed(store, f"d{i}", minute=f"0{i}")
+    body = (await client.get("/api/decisions", params={"ids": "d0,d3,nope", "limit": 1})).json()
+    assert [d["decision_id"] for d in body] == ["d3", "d0"]
+
+
+@pytest.mark.parametrize("ids", ["", ",", ",".join(f"d{i}" for i in range(201))])
+async def test_ids_must_name_1_to_200_decisions(client, ids):
+    response = await client.get("/api/decisions", params={"ids": ids})
+    assert response.status_code == 422 and response.json()["code"] == "bad_request"
+
+
+async def test_disagree_keeps_only_decisions_where_the_backends_differ(client, store):
+    seed(store, "same", minute="01")
+    seed(store, "differ", minute="02", nimble="meta")
+    body = (await client.get("/api/decisions", params={"disagree": "true"})).json()
+    assert [d["decision_id"] for d in body] == ["differ"]
+
+
+async def test_costs_use_the_configured_prices(store):
+    settings = Settings(_env_file=None, jev_usd_per_mtok_in=1.0, jev_usd_per_mtok_out=1.0)
+    seed(store, "d1")
+    transport = httpx.ASGITransport(app=create_app(store, settings=settings))
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        [decision] = (await c.get("/api/decisions")).json()
+        report = (await c.get("/api/stats/decisions")).json()
+    jev = decision["calls"][0]
+    assert (jev["input_tokens"], jev["output_tokens"], jev["est_cost_usd"]) == (400, 80, 0.00048)
+    [node] = report["nodes"]
+    costs = {b["backend"]: b["est_cost_usd"] for b in node["backends"]}
+    assert costs == {"jev": 0.00048, "nimble": 0.0}

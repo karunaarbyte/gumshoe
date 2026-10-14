@@ -278,3 +278,18 @@ def test_an_unreadable_row_keeps_the_error_it_already_had(store, db_path):
         conn.execute("UPDATE decision_calls SET answers_json = 'not json'")
     [back] = store.fetch_calls()
     assert back.error == "[jev] timed out" and back.answers is None
+
+
+def test_fetch_decisions_returns_every_call_of_the_asked_decisions_only(store):
+    store.insert(
+        [
+            make_record(decision_id="a"),
+            make_record(decision_id="a", backend="nimble", role="shadow", used=False),
+            make_record(decision_id="b"),
+        ]
+    )
+    assert [(r.decision_id, r.backend) for r in store.fetch_decisions(["a", "zzz"])] == [
+        ("a", "jev"),
+        ("a", "nimble"),
+    ]
+    assert store.fetch_decisions([]) == []
