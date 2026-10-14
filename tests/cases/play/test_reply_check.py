@@ -1,3 +1,5 @@
+import pytest
+
 from gumshoe.cases.model.index import CaseIndex
 from gumshoe.cases.play.reply_check import reply_check
 from gumshoe.cases.play.session import GameSession
@@ -68,3 +70,28 @@ def test_the_session_flags_an_unknown_suspect_handle():
     assert not result.ok and violations(result) == {"unknown_suspect": 1}
     anna = next(x.handle for x in s.brief().suspects if x.name == "Anna")
     assert s.check_reply(anna, "Hi.", "Hello.").ok
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "It was the \uff50\uff4f\uff49\uff53\uff4f\uff4e.",
+        "It was p-o-i-s-o-n.",
+        "It was P O I S O N.",
+        "It was poi\u200bson.",
+        "It was p\u043eison.",
+        "A poisoner, surely.",
+        "Something poisonous.",
+        "Knives, everywhere.",
+    ],
+)
+def test_a_disguised_or_inflected_method_word_is_still_flagged(reply):
+    assert violations(reply_check(IX, state(), "s_anna", "Tell me.", reply)) == {"how": 1}
+
+
+def test_a_disguised_word_the_player_said_first_is_allowed():
+    assert reply_check(IX, state(), "s_anna", "Was it P-O-I-S-O-N?", "Poison? Never.").ok
+
+
+def test_an_ordinary_castle_word_that_merely_starts_like_a_method_is_fine():
+    assert reply_check(IX, state(), "s_anna", "Where?", "I was in the stable.").ok

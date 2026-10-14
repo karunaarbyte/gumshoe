@@ -5,11 +5,14 @@ candidate (any axis) that the reply uses but that appears in none of: the player
 the case brief, the held fact texts, the statements this suspect can speak right now, or the
 small-talk words.
 
+Words are compared with `gate_tokens` (compatibility forms, zero-width characters, look-alike
+letters, hyphenated and spelled-out words and a few more endings are all seen through).
+
 Note: WHO-axis violations cannot fire in practice, because suspect names and roles are always
 part of the brief and so always allowed.
 """
 
-from gumshoe.cases.core.text import tokens
+from gumshoe.cases.core.text import gate_tokens
 from gumshoe.cases.model.entities import SourceRef
 from gumshoe.cases.model.enums import Axis, SourceKind
 from gumshoe.cases.model.index import CaseIndex
@@ -22,7 +25,7 @@ from gumshoe.cases.play.views import ReplyCheck, ReplyViolation
 def _distinctive(ix: CaseIndex) -> dict[tuple[Axis, str], frozenset[str]]:
     """Per candidate: its label/alias tokens minus any token another candidate also has."""
     own = {
-        (axis, c): frozenset(t for form in typed_forms(ix, axis, c) for t in tokens(form))
+        (axis, c): frozenset(t for form in typed_forms(ix, axis, c) for t in gate_tokens(form))
         for axis in Axis
         for c in ix.candidates[axis]
     }
@@ -44,14 +47,14 @@ def _allowed_tokens(
     texts += [f.text for f in case.facts if f.id in held]
     source = SourceRef(kind=SourceKind.INTERROGATE, target=suspect_id)
     texts += [f.text for f in available_facts(ix, held, source)]
-    return frozenset(t for text in texts for t in tokens(text))
+    return frozenset(t for text in texts for t in gate_tokens(text))
 
 
 def reply_check(
     ix: CaseIndex, state: PlayState, suspect_id: str, player_text: str, reply: str
 ) -> ReplyCheck:
     allowed = _allowed_tokens(ix, state, suspect_id, player_text)
-    used = frozenset(tokens(reply))
+    used = gate_tokens(reply)
     counts: dict[str, int] = {}
     for (axis, _candidate), toks in _distinctive(ix).items():
         if (toks & used) - allowed:
