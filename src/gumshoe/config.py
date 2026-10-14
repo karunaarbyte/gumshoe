@@ -1,19 +1,58 @@
-"""Application settings, loaded from environment variables and `.env`."""
+"""Application settings, loaded from environment variables and the project's `.env`.
+
+Paths: `.env` is read from the project root (the folder holding `pyproject.toml`), never from the
+working directory, and a relative `STATS_DB_PATH` or `SAVES_DIR` is resolved against that root.
+So the app finds its key, its stats database and its saves wherever it is started from. An
+absolute path is used as given.
+
+Unknown keys in `.env` or the environment are ignored on purpose (`extra="ignore"`): the file is
+shared with other tools. The flip side is that a misspelled variable is silently ignored too, so
+check the spelling against `.env.example`.
+"""
 
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, Self
+from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Backend = Literal["jev", "nimble"]
 
+# src/gumshoe/config.py -> the repository root (run from a source checkout, as `uv run` does)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def _under_root(path: Path) -> Path:
+    path = path.expanduser()
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+def _origin(text: str) -> str:
+    """One CORS origin: scheme://host[:port], nothing else (and never a wildcard)."""
+    parts = urlsplit(text)
+    if (
+        "*" in text
+        or parts.scheme not in ("http", "https")
+        or not parts.hostname
+        or parts.path
+        or parts.query
+        or parts.fragment
+    ):
+        raise ValueError(
+            f"CORS_ORIGINS entry {text!r} must be an explicit origin like http://localhost:5173 "
+            "(no path, no trailing slash, no wildcard)"
+        )
+    return text
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=PROJECT_ROOT / ".env", extra="ignore")
 
-    # The backend the game trusts, and an optional one that runs alongside it.
+    # The backend the game trusts, and an optional one that runs alongside it. When the primary
+    # is nimble and DECIDER_SHADOW is not set at all, shadowing is off (not nimble twice).
     decider_primary: Backend = "jev"
     decider_shadow: Backend | None = "nimble"
 
@@ -41,19 +80,73 @@ class Settings(BaseSettings):
     max_redrafts: int = Field(3, ge=0, le=10)
     llm_timeout_s: float = Field(60.0, gt=0, allow_inf_nan=False)
 
+    # Saves (SAVES_DIR; the older GUMSHOE_SAVES still works, SAVES_DIR wins when both are set).
+    saves_dir: Path = Field(
+        Path("saves"), validation_alias=AliasChoices("saves_dir", "gumshoe_saves")
+    )
+
+    # Prices in US dollars per million tokens, for the cost columns of the stats (0 = free).
+    jev_usd_per_mtok_in: float = Field(0.0, ge=0, allow_inf_nan=False)
+    jev_usd_per_mtok_out: float = Field(0.0, ge=0, allow_inf_nan=False)
+    nimble_usd_per_mtok_in: float = Field(0.0, ge=0, allow_inf_nan=False)
+    nimble_usd_per_mtok_out: float = Field(0.0, ge=0, allow_inf_nan=False)
+
+    # The HTTP API: comma-separated browser origins allowed by CORS (empty = none, never "*").
+    cors_origins: str = ""
+    api_host: str = "127.0.0.1"
+    api_port: int = Field(8000, ge=1, le=65535)
+    turn_timeout_s: float = Field(120.0, gt=0, allow_inf_nan=False)
+    max_body_bytes: int = Field(16384, ge=1024)
+
     @field_validator("decider_shadow", mode="before")
     @classmethod
     def _blank_shadow_means_off(cls, value: Any) -> Any:
         return None if value == "" else value
 
+    @field_validator("saves_dir", mode="before")
+    @classmethod
+    def _blank_saves_means_default(cls, value: Any) -> Any:
+        return "saves" if value == "" else value
+
+    @field_validator("stats_db_path", "saves_dir", mode="after")
+    @classmethod
+    def _resolve_against_the_project_root(cls, value: Path) -> Path:
+        return _under_root(value)
+
+    @field_validator("jev_base_url", mode="after")
+    @classmethod
+    def _jev_needs_https(cls, value: str) -> str:
+        """The Jev key travels in a header, so plain http is allowed only to this machine."""
+        parts = urlsplit(value)
+        local = parts.scheme == "http" and parts.hostname in LOCAL_HOSTS
+        if not parts.hostname or not (parts.scheme == "https" or local):
+            raise ValueError("JEV_BASE_URL must be an https URL (http only for localhost)")
+        return value
+
+    @field_validator("cors_origins", mode="after")
+    @classmethod
+    def _explicit_origins(cls, value: str) -> str:
+        for item in value.split(","):
+            if item.strip():
+                _origin(item.strip())
+        return value
+
     @model_validator(mode="after")
     def _roles_must_differ(self) -> Self:
         if self.decider_shadow == self.decider_primary:
+            if "decider_shadow" not in self.model_fields_set:
+                self.decider_shadow = None  # the default shadow would just repeat the primary
+                return self
             raise ValueError(
                 "DECIDER_SHADOW must differ from DECIDER_PRIMARY "
                 "(leave it blank to disable shadowing)"
             )
         return self
+
+    @property
+    def cors_origin_list(self) -> tuple[str, ...]:
+        """The CORS origins as a tuple, blanks dropped (empty: no cross-origin access)."""
+        return tuple(item.strip() for item in self.cors_origins.split(",") if item.strip())
 
 
 @lru_cache

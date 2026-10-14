@@ -15,7 +15,7 @@ pytestmark = pytest.mark.live
 
 @pytest.fixture
 def live_settings(monkeypatch) -> Settings:
-    # Settings() reads the real .env from the working directory. The autouse fixture in
+    # Settings() reads the real .env from the project root. The autouse fixture in
     # conftest cleared the process environment, so only .env values apply here.
     return Settings()
 

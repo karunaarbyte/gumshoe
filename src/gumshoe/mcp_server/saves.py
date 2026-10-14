@@ -18,7 +18,11 @@ from gumshoe.mcp_server.errors import GameError
 
 SAVE_FORMAT = 1
 NAME = re.compile(r"[0-9a-f]{16}")
-ENV_VAR = "GUMSHOE_SAVES"
+# The same variables, in the same order, as `gumshoe.config.Settings.saves_dir` (which also reads
+# them from `.env`; this module cannot, so the API passes its settings' folder explicitly).
+ENV_VARS = ("SAVES_DIR", "GUMSHOE_SAVES")
+# src/gumshoe/mcp_server/saves.py -> the repository root, as `gumshoe.config.PROJECT_ROOT`
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class SaveRef(View):
@@ -35,7 +39,10 @@ class SaveFile(BaseModel):
 
 
 def default_saves_dir() -> Path:
-    return Path(os.environ.get(ENV_VAR) or "saves")
+    """$SAVES_DIR, else $GUMSHOE_SAVES, else `saves`; relative to the project root."""
+    raw = next((os.environ[var] for var in ENV_VARS if var in os.environ), "") or "saves"
+    path = Path(raw).expanduser()
+    return path if path.is_absolute() else PROJECT_ROOT / path
 
 
 def path_for(folder: Path, name: str) -> Path:

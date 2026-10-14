@@ -3,13 +3,28 @@ import os
 from pathlib import Path
 
 import pytest
+from pydantic import AliasChoices
 
 from gumshoe.config import Settings
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
-# Every environment variable Settings reads (field names are matched case-insensitively).
-SETTINGS_ENV_VARS = {name.upper() for name in Settings.model_fields}
+
+def settings_env_vars() -> set[str]:
+    """Every environment variable Settings reads: field names and their aliases (such as
+    GUMSHOE_SAVES for saves_dir), upper-cased; they are matched case-insensitively."""
+    names: set[str] = set()
+    for name, field in Settings.model_fields.items():
+        names.add(name.upper())
+        alias = field.validation_alias
+        if isinstance(alias, AliasChoices):
+            names.update(str(choice).upper() for choice in alias.choices)
+        elif isinstance(alias, str):
+            names.add(alias.upper())
+    return names
+
+
+SETTINGS_ENV_VARS = settings_env_vars()
 
 
 @pytest.fixture(autouse=True)

@@ -3,6 +3,7 @@ import json
 import pytest
 
 import gumshoe.cases.play.session as session_module
+import gumshoe.mcp_server.saves as saves_module
 from gumshoe.mcp_server import GameError, GameHost
 from tests.mcp_server.helpers import SeqIds, castle_case, explore_all, true_triple
 
@@ -238,14 +239,20 @@ def test_a_salt_collision_while_loading_draws_the_next_salt(tmp_path, monkeypatc
 
 def test_the_saves_directory_comes_from_the_environment_or_defaults_to_saves(tmp_path, monkeypatch):
     monkeypatch.delenv("GUMSHOE_SAVES", raising=False)
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SAVES_DIR", raising=False)
+    monkeypatch.setattr(saves_module, "PROJECT_ROOT", tmp_path / "root")
+    monkeypatch.chdir(tmp_path)  # the working directory no longer matters
     host = GameHost(ids=SeqIds())
     game, _ = played(host)
-    assert (tmp_path / "saves" / f"{host.save_game(game).name}.json").exists()
+    assert (tmp_path / "root" / "saves" / f"{host.save_game(game).name}.json").exists()
     monkeypatch.setenv("GUMSHOE_SAVES", str(tmp_path / "elsewhere"))
     host2 = GameHost(ids=SeqIds(50))
     game2, _ = played(host2)
     assert (tmp_path / "elsewhere" / f"{host2.save_game(game2).name}.json").exists()
+    monkeypatch.setenv("SAVES_DIR", "relative")
+    host3 = GameHost(ids=SeqIds(90))
+    game3, _ = played(host3)
+    assert (tmp_path / "root" / "relative" / f"{host3.save_game(game3).name}.json").exists()
 
 
 def test_saving_an_unknown_game_is_unknown_game(tmp_path):

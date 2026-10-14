@@ -16,9 +16,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--saves",
         type=Path,
-        help="saves directory (default: $GUMSHOE_SAVES, else ./saves, relative to the server's "
-        "working directory; pass an absolute path when a client launches the server from "
-        "elsewhere)",
+        help="saves directory (default: $SAVES_DIR, else $GUMSHOE_SAVES, else saves; a relative "
+        "default is resolved against the project root, a relative --saves against the working "
+        "directory)",
     )
     args = parser.parse_args(argv)
     build_server(GameHost(saves_dir=args.saves)).run("stdio")

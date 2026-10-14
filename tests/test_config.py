@@ -1,7 +1,12 @@
 import pytest
 from pydantic import ValidationError
 
-from gumshoe.config import Settings, get_settings
+import gumshoe.mcp_server.saves as saves_module
+from gumshoe.agent import AgentConfig
+from gumshoe.config import PROJECT_ROOT, Settings, get_settings
+from gumshoe.mcp_server.host import MAX_TEXT
+from gumshoe.mcp_server.saves import default_saves_dir
+from tests.conftest import SETTINGS_ENV_VARS
 
 
 def test_defaults():
@@ -30,10 +35,21 @@ def test_blank_shadow_turns_shadowing_off(monkeypatch):
     assert Settings(_env_file=None).decider_shadow is None
 
 
-def test_primary_and_shadow_must_differ(monkeypatch):
-    monkeypatch.setenv("DECIDER_PRIMARY", "nimble")  # shadow defaults to nimble too
+def test_primary_and_shadow_must_differ_when_both_are_set(monkeypatch):
+    monkeypatch.setenv("DECIDER_PRIMARY", "nimble")
+    monkeypatch.setenv("DECIDER_SHADOW", "nimble")
     with pytest.raises(ValidationError, match="DECIDER_SHADOW"):
         Settings(_env_file=None)
+
+
+def test_a_nimble_primary_alone_turns_the_default_shadow_off(monkeypatch):
+    monkeypatch.setenv("DECIDER_PRIMARY", "nimble")  # the default shadow is nimble too
+    s = Settings(_env_file=None)
+    assert (s.decider_primary, s.decider_shadow) == ("nimble", None)
+
+
+def test_a_nimble_primary_given_in_code_also_turns_the_default_shadow_off():
+    assert Settings(_env_file=None, decider_primary="nimble").decider_shadow is None
 
 
 def test_invalid_backend_is_rejected(monkeypatch):
@@ -58,8 +74,9 @@ def test_reads_values_from_env_file(tmp_path):
     assert s.decider_shadow is None
 
 
-def test_get_settings_is_cached(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)  # no .env here, so the developer's real .env is not read
+def test_get_settings_is_cached(monkeypatch):
+    # the developer's real .env must not be read (it lives at the project root, not the cwd)
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
     get_settings.cache_clear()
     assert get_settings() is get_settings()
     get_settings.cache_clear()
@@ -74,7 +91,7 @@ def test_timeout_must_be_a_positive_number(monkeypatch, bad):
 
 def test_stats_defaults():
     s = Settings(_env_file=None)
-    assert s.stats_db_path.as_posix() == "data/decisions.db"
+    assert s.stats_db_path == PROJECT_ROOT / "data" / "decisions.db"
     assert s.cold_after_s == 300.0
 
 
@@ -122,3 +139,133 @@ def test_agent_settings_reject_values_out_of_range(monkeypatch, name, value):
     monkeypatch.setenv(name, value)
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_the_project_root_holds_the_pyproject_and_the_env_file_is_read_from_there():
+    assert (PROJECT_ROOT / "pyproject.toml").is_file()
+    assert Settings.model_config["env_file"] == PROJECT_ROOT / ".env"
+
+
+def test_relative_paths_resolve_against_the_project_root_not_the_cwd(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("STATS_DB_PATH", "elsewhere/d.db")
+    monkeypatch.setenv("SAVES_DIR", "my_saves")
+    s = Settings(_env_file=None)
+    assert s.stats_db_path == PROJECT_ROOT / "elsewhere" / "d.db"
+    assert s.saves_dir == PROJECT_ROOT / "my_saves"
+
+
+def test_absolute_paths_are_kept(tmp_path):
+    s = Settings(_env_file=None, stats_db_path=tmp_path / "d.db", saves_dir=tmp_path / "s")
+    assert (s.stats_db_path, s.saves_dir) == (tmp_path / "d.db", tmp_path / "s")
+
+
+def test_new_settings_defaults():
+    s = Settings(_env_file=None)
+    assert s.saves_dir == PROJECT_ROOT / "saves"
+    assert (s.jev_usd_per_mtok_in, s.jev_usd_per_mtok_out) == (0.0, 0.0)
+    assert (s.nimble_usd_per_mtok_in, s.nimble_usd_per_mtok_out) == (0.0, 0.0)
+    assert (s.cors_origins, s.cors_origin_list) == ("", ())
+    assert (s.api_host, s.api_port) == ("127.0.0.1", 8000)
+    assert (s.turn_timeout_s, s.max_body_bytes) == (120.0, 16384)
+
+
+def test_new_settings_come_from_the_environment(monkeypatch):
+    monkeypatch.setenv("JEV_USD_PER_MTOK_IN", "0.5")
+    monkeypatch.setenv("JEV_USD_PER_MTOK_OUT", "2")
+    monkeypatch.setenv("NIMBLE_USD_PER_MTOK_OUT", "0.1")
+    monkeypatch.setenv("CORS_ORIGINS", "http://localhost:5173, https://ui.example.com")
+    monkeypatch.setenv("API_HOST", "0.0.0.0")
+    monkeypatch.setenv("API_PORT", "9000")
+    monkeypatch.setenv("TURN_TIMEOUT_S", "45")
+    monkeypatch.setenv("MAX_BODY_BYTES", "4096")
+    s = Settings(_env_file=None)
+    assert (s.jev_usd_per_mtok_in, s.jev_usd_per_mtok_out, s.nimble_usd_per_mtok_out) == (
+        0.5,
+        2.0,
+        0.1,
+    )
+    assert s.cors_origin_list == ("http://localhost:5173", "https://ui.example.com")
+    assert (s.api_host, s.api_port, s.turn_timeout_s, s.max_body_bytes) == (
+        "0.0.0.0",
+        9000,
+        45.0,
+        4096,
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("JEV_USD_PER_MTOK_IN", "-1"),
+        ("JEV_USD_PER_MTOK_OUT", "nan"),
+        ("NIMBLE_USD_PER_MTOK_IN", "inf"),
+        ("NIMBLE_USD_PER_MTOK_OUT", "-0.01"),
+        ("API_PORT", "0"),
+        ("API_PORT", "65536"),
+        ("TURN_TIMEOUT_S", "0"),
+        ("TURN_TIMEOUT_S", "inf"),
+        ("MAX_BODY_BYTES", "1023"),
+        ("CORS_ORIGINS", "*"),
+        ("CORS_ORIGINS", "http://localhost:5173,*"),
+        ("CORS_ORIGINS", "http://*.example.com"),
+        ("CORS_ORIGINS", "http://localhost:5173/"),
+        ("CORS_ORIGINS", "localhost:5173"),
+        ("CORS_ORIGINS", "ftp://example.com"),
+        ("JEV_BASE_URL", "http://api.typesafe.ai/v1"),
+        ("JEV_BASE_URL", "ftp://api.typesafe.ai/v1"),
+        ("JEV_BASE_URL", "api.typesafe.ai/v1"),
+    ],
+)
+def test_out_of_range_or_unsafe_values_are_refused(monkeypatch, name, value):
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+@pytest.mark.parametrize(
+    "url", ["https://api.typesafe.ai/v1", "http://localhost:8080/v1", "http://127.0.0.1:9/v1"]
+)
+def test_jev_may_use_plain_http_only_on_this_machine(monkeypatch, url):
+    monkeypatch.setenv("JEV_BASE_URL", url)
+    assert Settings(_env_file=None).jev_base_url == url
+
+
+def test_the_legacy_saves_variable_still_works_and_saves_dir_wins(monkeypatch, tmp_path):
+    monkeypatch.setenv("GUMSHOE_SAVES", str(tmp_path / "old"))
+    assert Settings(_env_file=None).saves_dir == tmp_path / "old"
+    monkeypatch.setenv("SAVES_DIR", str(tmp_path / "new"))
+    assert Settings(_env_file=None).saves_dir == tmp_path / "new"
+
+
+def test_both_saves_variables_are_cleared_for_every_test():
+    assert {"SAVES_DIR", "GUMSHOE_SAVES"} <= SETTINGS_ENV_VARS
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        {},
+        {"GUMSHOE_SAVES": "rel/old"},
+        {"SAVES_DIR": "/abs/new"},
+        {"SAVES_DIR": "a", "GUMSHOE_SAVES": "b"},
+        {"SAVES_DIR": "", "GUMSHOE_SAVES": "b"},
+        {"GUMSHOE_SAVES": "~/s"},
+    ],
+)
+def test_the_mcp_server_default_saves_folder_agrees_with_the_settings(monkeypatch, env):
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    assert saves_module.PROJECT_ROOT == PROJECT_ROOT
+    assert default_saves_dir() == Settings(_env_file=None).saves_dir
+
+
+def test_extra_keys_in_the_env_file_are_ignored(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("SOME_OTHER_TOOL_KEY=1\nDECIDER_PRIMARY=nimble\n")
+    assert Settings(_env_file=env).decider_primary == "nimble"
+
+
+def test_the_agent_text_limit_fits_the_host_limit():
+    """The agent truncates drafts to max_text; check_reply refuses anything over MAX_TEXT."""
+    assert AgentConfig().max_text <= MAX_TEXT
