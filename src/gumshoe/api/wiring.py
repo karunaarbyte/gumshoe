@@ -55,7 +55,7 @@ def save_index(folder: Path) -> list[SaveSummary]:
                     status=json.loads(save.state)["status"],
                 )
             )
-        except (GameError, OSError, ValueError, KeyError, TypeError):
+        except (GameError, OSError, ValueError, KeyError, TypeError, RecursionError):
             continue
     found.sort(key=lambda s: (s.created_at, s.name), reverse=True)
     return found[:MAX_SAVES_LISTED]

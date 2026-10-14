@@ -1,3 +1,4 @@
+import json
 import os
 
 import pytest
@@ -163,3 +164,14 @@ async def test_default_service_saves_into_the_configured_folder(tmp_path):
         listed = await service.saves()
     assert (tmp_path / f"{saved.name}.json").is_file()
     assert [s.name for s in listed] == [saved.name]
+
+
+def test_the_save_index_skips_a_save_whose_state_nests_too_deeply_to_parse(tmp_path):
+    host = GameHost(ids=SeqIds(), saves_dir=tmp_path)
+    good = host.save_game(host.new_game(1).game).name
+    bad = host.save_game(host.new_game(2).game).name
+    path = tmp_path / f"{bad}.json"
+    data = json.loads(path.read_text())
+    data["state"] = "[" * 100_000
+    path.write_text(json.dumps(data))
+    assert [s.name for s in save_index(tmp_path)] == [good]
