@@ -401,3 +401,24 @@ def test_a_failed_call_that_reported_tokens_still_counts_toward_the_cost():
     failed = make_record(error="[jev] could not parse response", answers=None, output_tokens=0)
     [jev] = build_report([failed], prices=PRICES).nodes[0].backends
     assert (jev.total_input_tokens, jev.est_cost_usd) == (400, 0.0008)
+
+
+def _gate_pair():
+    a = make_record(decision_id="d", answers={"confirms_pending": noul(0.85)})
+    b = make_record(
+        decision_id="d",
+        backend="nimble",
+        role="shadow",
+        used=False,
+        answers={"confirms_pending": noul(0.5)},
+    )
+    return [a, b]
+
+
+def test_the_confirmation_bands_follow_the_configured_gate():
+    calls = _gate_pair()
+    assert build_report(calls).nodes[0].question_agreement == {"confirms_pending": 0.0}
+    strict = build_report(calls, confirm_gate=0.9).nodes[0]
+    assert strict.question_agreement == {"confirms_pending": 1.0}  # 0.85 is unsure at 0.9
+    assert len(disagreeing(calls)) == 2
+    assert disagreeing(calls, confirm_gate=0.9) == []

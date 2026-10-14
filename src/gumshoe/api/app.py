@@ -143,7 +143,13 @@ def create_app(
         node: str | None = None, since: datetime | None = None, include_cold: bool = False
     ) -> StatsReport:
         calls = store.fetch_calls(node=node, since=since)
-        return build_report(calls, include_cold=include_cold, since=since, prices=prices)
+        return build_report(
+            calls,
+            include_cold=include_cold,
+            since=since,
+            prices=prices,
+            confirm_gate=settings.confirm_gate,
+        )
 
     @app.get("/api/decisions")
     def decisions(
@@ -164,7 +170,7 @@ def create_app(
         else:
             calls = store.fetch_recent(limit=limit, node=node)
         if disagree:
-            calls = disagreeing(calls)
+            calls = disagreeing(calls, settings.confirm_gate)
         views = recent_decisions(calls, prices=prices)
         return views if ids is not None else views[:limit]
 

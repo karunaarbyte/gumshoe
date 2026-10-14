@@ -21,7 +21,7 @@ from gumshoe.stats.timeutil import to_utc_iso
 
 # The game acts on confirms_pending in bands (yes at or above the gate, no at or below 1 minus
 # it), not at 0.5, so two backends agree on it when they land in the same band. This is the
-# agent's default gate (AgentConfig.confirm_gate).
+# agent's default gate; the API passes Settings.confirm_gate.
 CONFIRM_GATE = 0.8
 BANDED = frozenset({"confirms_pending"})
 _EPSILON = 1e-9
@@ -138,17 +138,19 @@ class DecisionView(BaseModel):
     calls: list[CallView]
 
 
-def _band(p: float) -> str:
-    if p >= CONFIRM_GATE - _EPSILON:
+def _band(p: float, gate: float) -> str:
+    if p >= gate - _EPSILON:
         return "yes"
-    if p <= 1 - CONFIRM_GATE + _EPSILON:
+    if p <= 1 - gate + _EPSILON:
         return "no"
     return "unsure"
 
 
-def pair_agrees(question: str, primary: Answer, shadow: Answer) -> bool:
+def pair_agrees(
+    question: str, primary: Answer, shadow: Answer, confirm_gate: float = CONFIRM_GATE
+) -> bool:
     if question in BANDED and isinstance(primary, NoulAnswer) and isinstance(shadow, NoulAnswer):
-        return _band(primary.noul) == _band(shadow.noul)
+        return _band(primary.noul, confirm_gate) == _band(shadow.noul, confirm_gate)
     return answers_agree([primary, shadow])
 
 
@@ -177,12 +179,16 @@ def _by_decision(calls: Iterable[CallRecord]) -> dict[str, list[CallRecord]]:
     return groups
 
 
-def disagreeing(calls: Iterable[CallRecord]) -> list[CallRecord]:
+def disagreeing(
+    calls: Iterable[CallRecord], confirm_gate: float = CONFIRM_GATE
+) -> list[CallRecord]:
     """The calls of the decisions where both backends answered and differ on some question."""
     kept: list[CallRecord] = []
     for group in _by_decision(calls).values():
         pair = head_to_head(group)
-        if pair is not None and not all(pair_agrees(q, pair[0][q], pair[1][q]) for q in pair[0]):
+        if pair is not None and not all(
+            pair_agrees(q, pair[0][q], pair[1][q], confirm_gate) for q in pair[0]
+        ):
             kept.extend(group)
     return kept
 
@@ -193,6 +199,7 @@ def build_report(
     include_cold: bool = False,
     since: datetime | None = None,
     prices: Mapping[str, Price] | None = None,
+    confirm_gate: float = CONFIRM_GATE,
 ) -> StatsReport:
     by_node: dict[str, list[CallRecord]] = defaultdict(list)
     for call in calls:
@@ -202,14 +209,18 @@ def build_report(
         since=to_utc_iso(since) if since else None,
         include_cold=include_cold,
         nodes=[
-            _node_stats(node, rows, include_cold, prices or {})
+            _node_stats(node, rows, include_cold, prices or {}, confirm_gate)
             for node, rows in sorted(by_node.items())
         ],
     )
 
 
 def _node_stats(
-    node: str, rows: list[CallRecord], include_cold: bool, prices: Mapping[str, Price]
+    node: str,
+    rows: list[CallRecord],
+    include_cold: bool,
+    prices: Mapping[str, Price],
+    confirm_gate: float,
 ) -> NodeStats:
     decisions = _by_decision(rows)
     compared = 0
@@ -224,7 +235,9 @@ def _node_stats(
         compared += 1
         for question in primary:
             totals[question] += 1
-            agreeing[question] += pair_agrees(question, primary[question], shadow[question])
+            agreeing[question] += pair_agrees(
+                question, primary[question], shadow[question], confirm_gate
+            )
         said, heard = primary.get("intent"), shadow.get("intent")
         if isinstance(said, ChoiceAnswer) and isinstance(heard, ChoiceAnswer):
             confusion[said.choice][heard.choice] += 1
