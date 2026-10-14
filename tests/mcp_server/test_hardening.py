@@ -131,3 +131,16 @@ def test_a_full_host_refuses_a_new_game_before_generating_it(monkeypatch):
     monkeypatch.setattr(host_module, "generate_case", counting)
     assert code_of(lambda: host.new_game(2)) == "too_many_games"
     assert made == []
+
+
+def test_a_full_host_refuses_a_load_before_rebuilding_the_case(tmp_path, monkeypatch):
+    host = host_in(tmp_path)
+    game, _ = played(host)
+    name = host.save_game(game).name
+    monkeypatch.setattr(host_module, "MAX_GAMES", 1)
+
+    def rebuilding(*args, **kwargs):
+        raise AssertionError("must not rebuild")
+
+    monkeypatch.setattr(host_module, "regenerate_case", rebuilding)
+    assert code_of(lambda: host.load_game(name)) == "too_many_games"

@@ -375,6 +375,7 @@ class GameHost:
 
     def load_game(self, name: str) -> NewGame:
         with self._lock:
+            self._check_capacity()  # before the rebuild, which is the costly part
             save = read_save(self._folder(), name)
             case_bytes = save.case.encode("utf-8")
             try:
