@@ -71,7 +71,8 @@ def test_turn_text_must_be_1_to_1000_characters(store, text):
     with client_for(store, Script()) as client:
         game = new_game(client)["game"]
         response = client.post(f"/api/games/{game}/turn", json={"text": text})
-    assert response.status_code == 422 and "detail" in response.json()
+    assert response.status_code == 422 and set(response.json()) == {"code", "message"}
+    assert response.json()["code"] == "bad_request"
 
 
 def test_a_1000_character_turn_is_accepted(store):
@@ -149,7 +150,8 @@ def test_the_open_game_cap_answers_429_and_delete_lifts_it(store, monkeypatch):
 
 def test_the_stats_endpoints_still_work_beside_the_games(store):
     with client_for(store, Script()) as client:
-        assert client.get("/api/health").json() == {"status": "ok"}
+        health = client.get("/api/health").json()
+        assert (health["status"], health["game"]) == ("ok", "on")
         assert client.get("/api/decisions").json() == []
 
 

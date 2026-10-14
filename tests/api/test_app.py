@@ -42,7 +42,10 @@ def seed(
 
 async def test_health(client):
     response = await client.get("/api/health")
-    assert response.status_code == 200 and response.json() == {"status": "ok"}
+    assert response.status_code == 200
+    body = response.json()
+    # httpx.ASGITransport runs no lifespan, so the game never started
+    assert (body["status"], body["game"]) == ("ok", "off")
 
 
 async def test_stats_on_an_empty_database(client):
@@ -147,5 +150,7 @@ async def test_recent_decisions_rejects_bad_limits(client, limit):
 
 
 async def test_unknown_routes_are_404_and_wrong_methods_405(client):
-    assert (await client.get("/api/nope")).status_code == 404
-    assert (await client.post("/api/decisions")).status_code == 405
+    missing = await client.get("/api/nope")
+    wrong = await client.post("/api/decisions")
+    assert missing.status_code == 404 and missing.json()["code"] == "not_found"
+    assert wrong.status_code == 405 and wrong.json()["code"] == "method_not_allowed"

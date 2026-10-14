@@ -62,24 +62,20 @@ async def test_default_service_builds_a_working_service_with_nimble_only(tmp_pat
         await service.delete_game(new.game)
 
 
-def test_the_default_app_without_a_key_serves_stats_and_503s_games(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "gumshoe.api.wiring.get_settings",
-        lambda: Settings(_env_file=None, jev_api_key=SecretStr("")),
-    )
-    app = create_app(SqliteStatsStore(tmp_path / "d.db"))
+def test_the_default_app_without_a_key_serves_stats_and_503s_games(tmp_path):
+    settings = Settings(_env_file=None, jev_api_key=SecretStr(""))
+    app = create_app(SqliteStatsStore(tmp_path / "d.db"), settings=settings)
     with TestClient(app) as client:
         assert client.get("/api/health").status_code == 200
         response = client.post("/api/games", json={"seed": 1})
     assert response.status_code == 503 and response.json()["code"] == "unavailable"
 
 
-def test_the_default_app_with_nimble_only_creates_a_game(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "gumshoe.api.wiring.get_settings",
-        lambda: Settings(_env_file=None, decider_primary="nimble", decider_shadow=None),
+def test_the_default_app_with_nimble_only_creates_a_game(tmp_path):
+    settings = Settings(
+        _env_file=None, decider_primary="nimble", decider_shadow=None, saves_dir=tmp_path
     )
-    app = create_app(SqliteStatsStore(tmp_path / "d.db"))
+    app = create_app(SqliteStatsStore(tmp_path / "d.db"), settings=settings)
     with TestClient(app) as client:
         response = client.post("/api/games", json={"seed": 1})
         assert response.status_code == 200
