@@ -112,7 +112,7 @@ def _require_regenerated(case: Case, case_bytes: bytes, pack: Pack) -> None:
     The stored skin hash is no protection on its own (anyone can recompute it), so this is what
     keeps hand-written text out of the agent's context. The host only ever saves generated
     cases. A case this code or pack version cannot rebuild gets its own message."""
-    if case.origin.value != "generated":
+    if case.origin.value != "generated":  # an early refusal, not the sole gate
         raise GameError("bad_save", "that save does not hold a sound case")
     try:
         rebuilt = regenerate_case(case, pack)
@@ -121,6 +121,8 @@ def _require_regenerated(case: Case, case_bytes: bytes, pack: Pack) -> None:
             "bad_save", "that save was made by another version of the game and cannot be loaded"
         ) from exc
     except ValueError as exc:  # a preset or a stage counter no generator could have stored
+        raise GameError("bad_save", "that save does not hold a sound case") from exc
+    except Exception as exc:  # a crafted save is a trust boundary: nothing may escape raw
         raise GameError("bad_save", "that save does not hold a sound case") from exc
     if dump_case(rebuilt.model_copy(update={"attempt": case.attempt})) != case_bytes:
         raise GameError("bad_save", "that save does not hold a sound case")

@@ -328,3 +328,19 @@ def test_the_saves_directory_comes_from_the_environment_or_defaults_to_saves(tmp
 
 def test_saving_an_unknown_game_is_unknown_game(tmp_path):
     assert code_of(lambda: host_in(tmp_path).save_game("0000000000000099")) == "unknown_game"
+
+
+@pytest.mark.parametrize("error", [KeyError("x"), ZeroDivisionError("y"), IndexError("z")])
+def test_any_crash_while_rebuilding_a_save_is_a_bad_save(tmp_path, monkeypatch, error):
+    import gumshoe.mcp_server.host as host_module
+
+    name = write(tmp_path / "saves", "b" * 16, good_document(tmp_path))
+
+    def boom(case, pack):
+        raise error
+
+    monkeypatch.setattr(host_module, "regenerate_case", boom)
+    assert message_of(lambda: host_in(tmp_path / "saves").load_game(name)) == (
+        "bad_save",
+        "that save does not hold a sound case",
+    )
