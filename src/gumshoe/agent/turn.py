@@ -1,6 +1,7 @@
 """take_turn: the only place the stages meet. One call of `take_turn` is one player message."""
 
 import logging
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -24,7 +25,7 @@ from gumshoe.agent.events import (
     TurnEvent,
 )
 from gumshoe.agent.game import INTERNAL, ToolFailure
-from gumshoe.agent.pending import Pending, Step, resolve_pending
+from gumshoe.agent.pending import Pending, Step, is_actionable, resolve_pending
 from gumshoe.agent.state import build_state
 from gumshoe.agent.understand import Intent, build_understand, read_intent
 from gumshoe.cases import NotebookView, ParsedAccusation, PlayerCaseView
@@ -39,6 +40,9 @@ HELP = (
 )
 UNREACHABLE = "You cannot get to them yet."
 NOTHING_PENDING = "There is nothing waiting for your confirmation right now."
+YES_WORDS = frozenset(
+    {"yes", "y", "yeah", "yep", "yup", "sure", "ok", "okay", "confirm", "go ahead", "do it"}
+)
 MAX_EXCHANGES = 20
 NEEDS_TARGET = frozenset({"search", "interrogate", "talk", "records"})
 
@@ -58,6 +62,11 @@ def ended(ctx: TurnContext, brief: PlayerCaseView) -> Literal["won", "lost", "ga
     if ctx.outcome is not None:
         return ctx.outcome
     return "won" if brief.status == "won" else "lost"
+
+
+def is_bare_yes(text: str) -> bool:
+    """A message that is only a yes ("Yes!", "ok", "go ahead"), whatever the case or marks."""
+    return " ".join(re.findall(r"[a-z]+", text.lower())) in YES_WORDS
 
 
 def _remember(ctx: TurnContext, text: str, summary: str) -> None:
@@ -208,7 +217,9 @@ async def _turn(
         pending.reasked = True
         yield Clarify(reason="pending", text=f"Still want to go ahead? {pending.line}")
         return
-    async for event in _process(deps, ctx, text, brief, intent):
+    # a yes with nothing to answer: the confirmation it meant is gone (or never existed)
+    stale_yes = pending is None and (pending_id is not None or is_bare_yes(text))
+    async for event in _process(deps, ctx, text, brief, intent, stale_yes=stale_yes):
         yield event
 
 
@@ -229,10 +240,20 @@ async def _confirm(
 
 
 async def _process(
-    deps: Deps, ctx: TurnContext, text: str, brief: PlayerCaseView, intent: Intent
+    deps: Deps,
+    ctx: TurnContext,
+    text: str,
+    brief: PlayerCaseView,
+    intent: Intent,
+    *,
+    stale_yes: bool = False,
 ) -> AsyncIterator[TurnEvent]:
     config = deps.config
     game = ctx.game
+    if stale_yes and not is_actionable(intent, config):
+        yield Reply(speaker=None, text=f"{NOTHING_PENDING} {HELP}", source="help")
+        _remember(ctx, text, "there was nothing to confirm")
+        return
     if intent.intent_confidence < config.confidence_gate:
         yield Clarify(
             reason="low_confidence",
@@ -428,7 +449,10 @@ async def _plan_accusation(
         _remember(ctx, text, "asked to confirm an accusation")
     elif plan.problems:
         yield Clarify(
-            reason="accusation", text=accusation.missing_text(plan), decision_id=decision_id
+            reason="accusation",
+            text=accusation.missing_text(plan),
+            decision_id=decision_id,
+            problems=accusation.problems_of(plan),
         )
     else:
         yield Clarify(

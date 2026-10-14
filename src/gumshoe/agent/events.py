@@ -19,11 +19,29 @@ class IntentEvent(_Event):
     confidence: float
 
 
+class ProblemOption(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    handle: str
+    name: str
+
+
+class AccusationProblem(BaseModel):
+    """One part of an accusation that could not be used, and what may be named for it now."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    axis: Literal["who", "how", "why"]
+    reason: Literal["unclear", "not_permitted"]
+    options: tuple[ProblemOption, ...]
+
+
 class Clarify(_Event):
     kind: Literal["clarify"] = "clarify"
     reason: Literal["low_confidence", "bad_target", "mismatch", "accusation", "pending", "error"]
     text: str
     decision_id: str | None = None  # the parse_accusation decision, on accusation clarifies
+    problems: tuple[AccusationProblem, ...] = ()  # accusation clarifies: pickers for a UI
 
 
 class ToolCall(_Event):

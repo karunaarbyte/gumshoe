@@ -17,7 +17,13 @@ from gumshoe.agent.events import (
 from gumshoe.agent.game import ToolFailure
 from gumshoe.agent.llm import LlmError
 from gumshoe.agent.pending import Pending
-from gumshoe.agent.turn import APOLOGY, HELP, UNREACHABLE, describe_failure
+from gumshoe.agent.turn import (
+    APOLOGY,
+    HELP,
+    NOTHING_PENDING,
+    UNREACHABLE,
+    describe_failure,
+)
 from gumshoe.cases import AccusationResult, SourceResult
 from gumshoe.decider import DeciderAllFailedError, DeciderAPIError, DeciderConnectionError
 from tests.agent.fakes import Script, ScriptedLlm
@@ -386,7 +392,8 @@ async def test_yes_runs_the_accusation_exactly_once():
         second_yes = await answer(h, "yes")
         brief = await h.deps.client.case_brief(h.ctx.game)
     assert only(first_yes, ToolCall).tool == "accuse"
-    assert kinds(second_yes) == ["intent", "reply", "done"]  # the help line, no second accuse
+    assert kinds(second_yes) == ["intent", "reply", "done"]  # no second accuse
+    assert only(second_yes, Reply).text.startswith(NOTHING_PENDING)
     assert brief.attempts_left == 2
 
 
@@ -837,3 +844,47 @@ async def test_a_button_for_another_confirmation_does_nothing(answer):
         events = await press(h, "0" * 32, answer)
     assert kinds(events) == ["clarify", "done"]
     assert only(events, Clarify).reason == "pending" and h.ctx.pending is kept
+
+
+# --- copy and the structured accusation clarify ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "intent_p", "pending_id"),
+    [("Yes!", 0.9, None), ("  OK  ", 0.3, None), ("sure, go on", 0.9, "0" * 32)],
+    ids=["bare yes", "unsure ok", "stale id"],
+)
+async def test_a_yes_with_nothing_pending_says_there_is_nothing_to_confirm(
+    text, intent_p, pending_id
+):
+    script = Script().understand(intent="other", intent_p=intent_p)
+    async with playing(script) as h:
+        events = await turn(h, text, pending_id=pending_id)
+    assert kinds(events) == ["intent", "reply", "done"]
+    assert only(events, Reply).text == f"{NOTHING_PENDING} {HELP}"
+
+
+async def test_an_ordinary_question_still_gets_the_plain_help_line():
+    script = Script().understand(intent="other")
+    async with playing(script) as h:
+        events = await turn(h, "yes or no, who knows")
+    assert only(events, Reply).text == HELP
+
+
+async def test_an_unclear_accusation_lists_each_problem_with_the_names_that_may_be_used():
+    async with playing(Script()) as h:
+        explore_all(h.host, h.ctx.game)
+        who, how, why = names_of_truth(h)
+        h.script.understand(intent="accuse").parse(who=None, how=how, why=why)
+        events = await turn(h, "it was someone, with that, for this")
+    [problem] = only(events, Clarify).problems
+    nameable = h.host.nameable(h.ctx.game, "who").options
+    assert (problem.axis, problem.reason) == ("who", "unclear")
+    assert [(o.handle, o.name) for o in problem.options] == [(c.handle, c.name) for c in nameable]
+
+
+async def test_other_clarifies_carry_no_problems():
+    script = Script().understand(intent="search", target="none")
+    async with playing(script) as h:
+        events = await turn(h, "search")
+    assert only(events, Clarify).problems == ()

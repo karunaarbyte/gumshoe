@@ -263,3 +263,13 @@ def test_the_accusation_prompt_never_lists_a_hidden_candidate():
     assert "poison" in text  # the permitted method is still offered
     assert "rope" not in text and "strangl" not in text and "jealous" not in text
     assert "why" not in prompt.questions  # no motive is nameable yet: nothing to ask
+
+
+def test_the_last_attempt_is_called_the_last_attempt():
+    s = s_all()
+    s.accuse(handles(s, who="Anna"), confirmed=True)
+    s.accuse(handles(s, who="Clara"), confirmed=True)
+    plan = s.describe_accusation(handles(s))
+    assert plan.can_confirm
+    assert plan.confirmation.endswith("This uses your last attempt. Confirm?")
+    assert "remaining" not in plan.confirmation

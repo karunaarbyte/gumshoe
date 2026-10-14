@@ -3,6 +3,7 @@ from pydantic import ValidationError
 
 from gumshoe.agent.events import (
     EVENT_ADAPTER,
+    AccusationProblem,
     Cancelled,
     Clarify,
     Confirm,
@@ -10,6 +11,7 @@ from gumshoe.agent.events import (
     GameOver,
     IntentEvent,
     PostCheck,
+    ProblemOption,
     Reply,
     ToolCall,
     ToolResult,
@@ -20,6 +22,15 @@ from gumshoe.cases import RevealView
 EVENTS: list[TurnEvent] = [
     IntentEvent(decision_id="d1", intent="search", target="h_x", confidence=0.9),
     Clarify(reason="low_confidence", text="Which place?"),
+    Clarify(
+        reason="accusation",
+        text="I could not tell what you meant for the who.",
+        problems=(
+            AccusationProblem(
+                axis="who", reason="unclear", options=(ProblemOption(handle="h_1", name="A"),)
+            ),
+        ),
+    ),
     ToolCall(tool="search", args={"game": "g", "location": "h_x"}),
     ToolResult(tool="search", ok=True, data={"status": "ok"}),
     ToolResult(tool="search", ok=False, code="game_over", message="the game has ended"),

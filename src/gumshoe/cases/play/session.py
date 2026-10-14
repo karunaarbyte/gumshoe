@@ -567,9 +567,13 @@ class GameSession:
             triple = Triple(who=ids[Axis.WHO], how=ids[Axis.HOW], why=ids[Axis.WHY])
             repeat = any(r.triple == triple for r in self._state.accusations)
         can_confirm = not problems and not repeat and self._state.status is Status.PLAYING
+        cost = (
+            "This uses your last attempt."
+            if self.attempts_left == 1
+            else f"This uses one of your {self.attempts_left} remaining attempts."
+        )
         confirmation = (
-            f"Your accusation: {' / '.join(p.name for p in resolved)}. "
-            f"This uses one of your {self.attempts_left} remaining attempts. Confirm?"
+            f"Your accusation: {' / '.join(p.name for p in resolved)}. {cost} Confirm?"
             if can_confirm
             else ""
         )
