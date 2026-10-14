@@ -326,3 +326,51 @@ async def test_closing_before_the_first_read_still_closes_the_events():
     stream = with_pings(events, 1.0)
     await stream.aclose()
     assert events.closed
+
+
+# --- the confirm button and the transcript -------------------------------------------------------
+
+
+def test_the_confirm_endpoint_streams_the_same_events_as_a_turn(store):
+    script = Script().understand(intent="give_up")
+    with client_for(store, script) as client:
+        game = new_game(client)["game"]
+        first = parse_sse(client.post(f"/api/games/{game}/turn", json={"text": "I quit"}).text)
+        [confirm] = [data for name, data in first if name == "confirm"]
+        body = {"pending_id": confirm["pending_id"], "answer": "yes"}
+        with client.stream("POST", f"/api/games/{game}/confirm", json=body) as r:
+            assert r.headers["content-type"].startswith("text/event-stream")
+            pairs = parse_sse("".join(r.iter_text()))
+    assert [name for name, _ in pairs] == ["tool_call", "tool_result", "game_over", "done"]
+
+
+def test_a_confirm_for_nothing_waiting_is_409_and_an_unknown_game_404(store):
+    with client_for(store, Script()) as client:
+        game = new_game(client)["game"]
+        body = {"pending_id": "0" * 32, "answer": "yes"}
+        stale = client.post(f"/api/games/{game}/confirm", json=body)
+        unknown = client.post("/api/games/nope/confirm", json=body)
+    assert stale.status_code == 409 and stale.json()["code"] == "no_such_pending"
+    assert unknown.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "body", [{"pending_id": "p", "answer": "maybe"}, {"answer": "yes"}, {"pending_id": "p"}]
+)
+def test_a_confirm_body_is_validated(store, body):
+    with client_for(store, Script()) as client:
+        game = new_game(client)["game"]
+        assert client.post(f"/api/games/{game}/confirm", json=body).status_code == 422
+
+
+def test_the_transcript_endpoint_returns_every_turn(store):
+    script = Script().understand(intent="notebook")
+    with client_for(store, script) as client:
+        game = new_game(client)["game"]
+        client.post(f"/api/games/{game}/turn", json={"text": "notes"})
+        turns = client.get(f"/api/games/{game}/turns").json()
+        missing = client.get("/api/games/nope/turns")
+    [turn] = turns
+    assert set(turn) == {"turn_id", "kind", "text", "ts", "events", "complete"}
+    assert turn["text"] == "notes" and turn["events"][-1]["kind"] == "done"
+    assert missing.status_code == 404

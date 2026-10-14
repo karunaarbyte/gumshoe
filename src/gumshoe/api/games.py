@@ -3,7 +3,7 @@
 import asyncio
 import contextlib
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from gumshoe.agent import EVENT_ADAPTER, NewGameView, SaveView, ToolFailure, TurnEvent
 from gumshoe.api.errors import ApiError
-from gumshoe.api.service import AgentService, GameState
+from gumshoe.api.service import AgentService, GameState, TurnRecord
 
 router = APIRouter(prefix="/api/games")
 
@@ -40,6 +40,13 @@ class TurnBody(BaseModel):
     # the id of the confirmation on screen, if any (from the `confirm` event): only a yes that
     # carries it can run the pending action
     pending_id: str | None = Field(None, min_length=1, max_length=64)
+
+
+class ConfirmBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pending_id: str = Field(min_length=1, max_length=64)
+    answer: Literal["yes", "no"]
 
 
 def service_of(request: Request) -> AgentService:
@@ -140,6 +147,17 @@ def event_stream(events: AsyncIterator[TurnEvent]) -> StreamingResponse:
 async def play(game: str, body: TurnBody, service: Service) -> StreamingResponse:
     # an unknown game (404) or a turn in progress (409) raises here, before streaming starts
     return event_stream(service.start_turn(game, body.text, pending_id=body.pending_id))
+
+
+@router.post("/{game}/confirm")
+async def confirm(game: str, body: ConfirmBody, service: Service) -> StreamingResponse:
+    """The confirm and cancel buttons: no decision, the same events as a turn."""
+    return event_stream(service.start_confirm(game, body.pending_id, body.answer))
+
+
+@router.get("/{game}/turns")
+async def transcript(game: str, service: Service) -> list[TurnRecord]:
+    return service.turns(game)
 
 
 @router.post("/{game}/save")

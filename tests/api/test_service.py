@@ -1,8 +1,12 @@
 import asyncio
+from dataclasses import replace
+from datetime import datetime
+from typing import Literal
 
 import pytest
 
 from gumshoe.agent import ToolFailure
+from gumshoe.agent.events import Confirm
 from gumshoe.api.errors import ApiError
 from gumshoe.api.service import SHUTTING_DOWN, AgentService
 from gumshoe.mcp_server import GameError
@@ -287,3 +291,126 @@ async def test_aclose_right_after_start_turn_still_ends_the_stream():
 
 async def _collect_stream(stream):
     return [event async for event in stream]
+
+
+# --- the confirm button and the transcript ------------------------------------------------------
+
+
+async def confirm_id(service: AgentService, game: str, text: str = "I give up") -> str:
+    events = await collect(service, game, text)
+    [confirm] = [e for e in events if isinstance(e, Confirm)]
+    return confirm.pending_id
+
+
+async def collect_confirm(
+    service: AgentService, game: str, pending_id: str, answer: Literal["yes", "no"]
+):
+    async with asyncio.timeout(10):
+        return [e async for e in service.start_confirm(game, pending_id, answer)]
+
+
+async def test_the_confirm_button_runs_the_pending_action_without_a_decision():
+    script = Script().understand(intent="give_up")
+    async with serving(script) as s:
+        new = await s.service.new_game(1)
+        pending_id = await confirm_id(s.service, new.game)
+        events = await collect_confirm(s.service, new.game, pending_id, "yes")
+    assert kinds(events) == ["tool_call", "tool_result", "game_over", "done"]
+    assert len(s.decider.calls) == 1  # only the turn that asked
+
+
+@pytest.mark.parametrize("answer", ["yes", "no"])
+async def test_a_confirm_that_is_not_the_one_waiting_is_refused_before_anything_runs(answer):
+    script = Script().understand(intent="give_up")
+    async with serving(script) as s:
+        new = await s.service.new_game(1)
+        with pytest.raises(ApiError) as nothing_waiting:
+            s.service.start_confirm(new.game, "0" * 32, answer)
+        await confirm_id(s.service, new.game)
+        with pytest.raises(ApiError) as another:
+            s.service.start_confirm(new.game, "0" * 32, answer)
+        assert len(s.service.turns(new.game)) == 1  # the refused ones left no trace
+    for caught in (nothing_waiting, another):
+        assert (caught.value.status, caught.value.code) == (409, "no_such_pending")
+
+
+async def test_a_confirm_while_a_turn_runs_is_turn_in_progress():
+    script = Script().understand(intent="give_up").understand(intent="notebook")
+    async with serving(script) as s:
+        new = await s.service.new_game(1)
+        pending_id = await confirm_id(s.service, new.game)
+        gated = GatedDecider(script)
+        s.service._deps = replace(s.service._deps, decider=gated)
+        running = asyncio.create_task(collect(s.service, new.game, "notes"))
+        await gated.entered.wait()
+        with pytest.raises(ApiError) as caught:
+            s.service.start_confirm(new.game, pending_id, "yes")
+        gated.release.set()
+        await running
+    assert caught.value.code == "turn_in_progress"
+
+
+async def test_the_transcript_keeps_each_turn_with_its_events_in_order():
+    script = Script().understand(intent="give_up")
+    async with serving(script) as s:
+        new = await s.service.new_game(1)
+        pending_id = await confirm_id(s.service, new.game, "I quit")
+        await collect_confirm(s.service, new.game, pending_id, "no")
+        turns = s.service.turns(new.game)
+    assert [(t.kind, t.text) for t in turns] == [("turn", "I quit"), ("confirm", "no")]
+    assert [e.kind for e in turns[0].events] == ["intent", "confirm", "done"]
+    assert [e.kind for e in turns[1].events] == ["cancelled", "done"]
+    assert all(t.complete for t in turns) and turns[0].turn_id != turns[1].turn_id
+    assert datetime.fromisoformat(turns[0].ts).tzinfo is not None
+
+
+async def test_a_running_turn_shows_in_the_transcript_as_incomplete():
+    script = Script().understand(intent="notebook")
+    gated = GatedDecider(script)
+    async with serving(script, decider=gated) as s:
+        new = await s.service.new_game(1)
+        running = asyncio.create_task(collect(s.service, new.game, "notes"))
+        await gated.entered.wait()
+        [live] = s.service.turns(new.game)
+        assert (live.text, live.complete, live.events) == ("notes", False, [])
+        gated.release.set()
+        await running
+        [done] = s.service.turns(new.game)
+    assert done.complete and done.events[-1].kind == "done"
+
+
+async def test_the_transcript_keeps_only_the_latest_turns(monkeypatch):
+    monkeypatch.setattr("gumshoe.api.service.MAX_TURNS_KEPT", 2)
+    script = Script()
+    for _ in range(3):
+        script.understand(intent="notebook")
+    async with serving(script) as s:
+        new = await s.service.new_game(1)
+        for text in ("one", "two", "three"):
+            await collect(s.service, new.game, text)
+        kept = [t.text for t in s.service.turns(new.game)]
+    assert kept == ["two", "three"]
+
+
+async def test_a_cancelled_turn_is_kept_with_its_closing_events():
+    script = Script().understand(intent="notebook")
+    gated = GatedDecider(script)
+    async with serving(script, decider=gated, grace_s=2.0) as s:
+        new = await s.service.new_game(1)
+        task = asyncio.create_task(collect(s.service, new.game, "one"))
+        await gated.entered.wait()
+        await s.service.aclose()
+        await task
+        [record] = s.service.turns(new.game)
+    assert record.complete and [e.kind for e in record.events] == ["clarify", "done"]
+
+
+async def test_a_deleted_games_transcript_is_gone():
+    script = Script().understand(intent="notebook")
+    async with serving(script) as s:
+        new = await s.service.new_game(1)
+        await collect(s.service, new.game, "notes")
+        await s.service.delete_game(new.game)
+        with pytest.raises(ToolFailure) as caught:
+            s.service.turns(new.game)
+    assert caught.value.code == "unknown_game"
