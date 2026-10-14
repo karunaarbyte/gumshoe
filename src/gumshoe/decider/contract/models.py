@@ -4,6 +4,11 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+# A backend's numbers are checked at the contract: a NaN, an infinity or a probability outside
+# 0..1 is a DeciderParseError (a recorded failure, and the shadow is used), never a value the
+# game acts on or the stats store keeps.
+Probability = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+
 
 class ChoiceQuestion(BaseModel):
     type: Literal["choice"] = "choice"
@@ -46,13 +51,13 @@ class DecisionRequest(BaseModel):
 class ChoiceAnswer(BaseModel):
     type: Literal["choice"]
     choice: str
-    probabilities: dict[str, float]
-    confidence: float
+    probabilities: dict[str, Probability]
+    confidence: Probability
 
 
 class NoulAnswer(BaseModel):
     type: Literal["noul"]
-    noul: float  # probability of "yes", 0..1
+    noul: Probability  # probability of "yes"
 
     @property
     def yes(self) -> bool:
@@ -61,10 +66,10 @@ class NoulAnswer(BaseModel):
 
 class ScoreAnswer(BaseModel):
     type: Literal["score"]
-    score: float  # probability-weighted level index (0-based)
+    score: float = Field(ge=0, allow_inf_nan=False)  # probability-weighted level index (0-based)
     legend: dict[str, str]
-    probabilities: dict[str, float]
-    confidence: float
+    probabilities: dict[str, Probability]
+    confidence: Probability
 
 
 Answer = Annotated[

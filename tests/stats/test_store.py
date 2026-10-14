@@ -1,12 +1,15 @@
 import asyncio
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
 from gumshoe.decider import Recorder
-from gumshoe.stats.store import SqliteStatsStore
+from gumshoe.stats.store import UNREADABLE_ANSWERS, SqliteStatsStore
 from tests.stats.factories import choice, make_record, noul
+
+LATER = "2026-10-01T10:00:01.000000+00:00"
 
 
 @pytest.fixture
@@ -254,3 +257,24 @@ def test_fetch_recent_orders_decisions_by_when_they_started(store):
         ]
     )
     assert {r.decision_id for r in store.fetch_recent(limit=1)} == {"B"}
+
+
+def test_a_row_whose_answers_no_longer_parse_still_loads_as_an_error(store, db_path):
+    store.insert([make_record(decision_id="bad"), make_record(decision_id="good", ts=LATER)])
+    with closing(sqlite3.connect(db_path)) as conn, conn:
+        conn.execute(
+            "UPDATE decision_calls SET answers_json = ? WHERE decision_id = 'bad'",
+            ['{"intent": {"type": "noul", "noul": null}}'],  # what pydantic wrote for a NaN
+        )
+    by_id = {r.decision_id: r for r in store.fetch_calls()}
+    assert by_id["bad"].answers is None and by_id["bad"].error == UNREADABLE_ANSWERS
+    assert by_id["good"].answers is not None and by_id["good"].error is None
+    assert {r.decision_id for r in store.fetch_recent(limit=5)} == {"bad", "good"}
+
+
+def test_an_unreadable_row_keeps_the_error_it_already_had(store, db_path):
+    store.insert([make_record(error="[jev] timed out")])
+    with closing(sqlite3.connect(db_path)) as conn, conn:
+        conn.execute("UPDATE decision_calls SET answers_json = 'not json'")
+    [back] = store.fetch_calls()
+    assert back.error == "[jev] timed out" and back.answers is None

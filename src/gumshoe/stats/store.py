@@ -1,6 +1,7 @@
 """SQLite persistence for decision call records."""
 
 import asyncio
+import logging
 import sqlite3
 from collections.abc import Sequence
 from contextlib import closing
@@ -8,12 +9,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from gumshoe.decider import Answer, CallRecord
 from gumshoe.stats.timeutil import to_utc_iso
 
+logger = logging.getLogger(__name__)
+
 ANSWERS = TypeAdapter(dict[str, Answer])
+# The error a row gets when its stored answers no longer parse (say a NaN written before the
+# contract refused it): the row still loads, so one bad row never takes the stats down.
+UNREADABLE_ANSWERS = "the stored answers could not be read"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS decision_calls (
@@ -157,6 +163,14 @@ class SqliteStatsStore:
 
     @staticmethod
     def _from_row(row: sqlite3.Row) -> CallRecord:
+        answers: dict[str, Answer] | None = None
+        error: str | None = row["error"]
+        if row["answers_json"]:
+            try:
+                answers = ANSWERS.validate_json(row["answers_json"])
+            except ValidationError:
+                logger.warning("decision_calls row %s holds answers that do not parse", row["id"])
+                error = error or UNREADABLE_ANSWERS
         return CallRecord(
             decision_id=row["decision_id"],
             node=row["node"],
@@ -171,7 +185,7 @@ class SqliteStatsStore:
             output_tokens=row["output_tokens"],
             mean_confidence=row["mean_confidence"],
             min_confidence=row["min_confidence"],
-            error=row["error"],
+            error=error,
             state_preview=row["state_preview"],
-            answers=ANSWERS.validate_json(row["answers_json"]) if row["answers_json"] else None,
+            answers=answers,
         )

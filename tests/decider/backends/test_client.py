@@ -168,3 +168,10 @@ async def test_decide_accepts_a_decision_id_and_does_not_send_it(load_fixture):
     await client.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent", decision_id="abc123")
     assert "abc123" not in json.dumps(seen["body"])
     await client.aclose()
+
+
+async def test_a_nan_in_a_200_body_is_a_parse_error_not_an_answer():
+    body = '{"model": "m", "answers": {"q": {"type": "noul", "noul": NaN}}}'
+    async with make_client(lambda request: httpx.Response(200, text=body)) as client:
+        with pytest.raises(DeciderParseError):
+            await client.decide(DEMO_STATE, DEMO_QUESTIONS)

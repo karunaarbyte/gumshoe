@@ -136,3 +136,55 @@ def test_accessor_with_unknown_name_raises_key_error(load_fixture):
     result = DecisionResult.model_validate(load_fixture("nimble_all_types.response.json"))
     with pytest.raises(KeyError):
         result.choice("does_not_exist")
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        {"type": "noul", "noul": 1.7},
+        {"type": "noul", "noul": -3},
+        {"type": "noul", "noul": float("nan")},
+        {"type": "noul", "noul": float("inf")},
+        {"type": "choice", "choice": "a", "probabilities": {"a": 0.9}, "confidence": 42},
+        {"type": "choice", "choice": "a", "probabilities": {"a": 1.5}, "confidence": 0.9},
+        {"type": "choice", "choice": "a", "probabilities": {"a": float("nan")}, "confidence": 0.9},
+        {"type": "score", "score": -1, "legend": {}, "probabilities": {}, "confidence": 0.5},
+        {
+            "type": "score",
+            "score": float("inf"),
+            "legend": {},
+            "probabilities": {},
+            "confidence": 1,
+        },
+        {"type": "score", "score": 1, "legend": {}, "probabilities": {"0": 2}, "confidence": 1},
+    ],
+)
+def test_out_of_range_or_non_finite_numbers_are_refused(answer):
+    with pytest.raises(ValidationError):
+        DecisionResult.model_validate({"model": "m", "answers": {"q": answer}})
+
+
+def test_the_edges_of_every_range_are_accepted():
+    result = DecisionResult.model_validate(
+        {
+            "model": "m",
+            "answers": {
+                "a": {"type": "noul", "noul": 0},
+                "b": {"type": "noul", "noul": 1},
+                "c": {
+                    "type": "choice",
+                    "choice": "x",
+                    "probabilities": {"x": 1.0, "y": 0.0},
+                    "confidence": 1.0,
+                },
+                "d": {
+                    "type": "score",
+                    "score": 3.5,
+                    "legend": {},
+                    "probabilities": {"0": 0.0},
+                    "confidence": 0.0,
+                },
+            },
+        }
+    )
+    assert result.noul("b").yes and result.score("d").score == 3.5
