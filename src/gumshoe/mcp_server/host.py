@@ -22,6 +22,7 @@ from gumshoe.cases import (
     AxisOptions,
     BadAnswers,
     BuiltinPackError,
+    Case,
     CaseGenerationError,
     GameNotOver,
     GameOver,
@@ -39,14 +40,14 @@ from gumshoe.cases import (
     StateMismatch,
     UnknownHandle,
     UnsupportedPreset,
+    VersionMismatch,
     View,
     dump_case,
     generate_case,
     load_builtin_pack,
     load_case,
     load_session,
-    skin_hash,
-    validate_case,
+    regenerate_case,
 )
 from gumshoe.mcp_server.errors import GameError
 from gumshoe.mcp_server.saves import (
@@ -103,6 +104,26 @@ def _ended[T](call: Callable[[], T]) -> T:
         raise GameError("game_over", "the game has ended") from exc
     except GameNotOver as exc:
         raise GameError("not_over", "the game is still being played") from exc
+
+
+def _require_regenerated(case: Case, case_bytes: bytes, pack: Pack) -> None:
+    """A save's case must be exactly what its seed and stage counters rebuild, byte for byte.
+
+    The stored skin hash is no protection on its own (anyone can recompute it), so this is what
+    keeps hand-written text out of the agent's context. The host only ever saves generated
+    cases. A case this code or pack version cannot rebuild gets its own message."""
+    if case.origin.value != "generated":
+        raise GameError("bad_save", "that save does not hold a sound case")
+    try:
+        rebuilt = regenerate_case(case, pack)
+    except (VersionMismatch, CaseGenerationError) as exc:
+        raise GameError(
+            "bad_save", "that save was made by another version of the game and cannot be loaded"
+        ) from exc
+    except ValueError as exc:  # a preset or a stage counter no generator could have stored
+        raise GameError("bad_save", "that save does not hold a sound case") from exc
+    if dump_case(rebuilt.model_copy(update={"attempt": case.attempt})) != case_bytes:
+        raise GameError("bad_save", "that save does not hold a sound case")
 
 
 def _check_length(name: str, text: str) -> None:
@@ -300,8 +321,7 @@ class GameHost:
             try:
                 case = load_case(case_bytes)
                 pack = self._pack(save.pack)
-                if skin_hash(case) != case.skin_hash or not validate_case(case, pack).ok:
-                    raise GameError("bad_save", "that save does not hold a sound case")
+                _require_regenerated(case, case_bytes, pack)
                 session = self._open(case_bytes, pack, save.state)
             except ValidationError as exc:
                 raise GameError("bad_save", "that save cannot be read") from exc

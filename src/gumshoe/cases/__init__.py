@@ -5,8 +5,9 @@ Layers (imports point one way): core < model < rules < {validate, play, packs}
 the names below; tests/test_architecture.py enforces the rules.
 """
 
-from gumshoe.cases.generate.api import CaseGenerationError
+from gumshoe.cases.generate.api import CaseGenerationError, VersionMismatch
 from gumshoe.cases.generate.api import generate as generate_case
+from gumshoe.cases.generate.api import regenerate as regenerate_case
 from gumshoe.cases.model.case import Case
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.serialize import dump_case, load_case, skeleton_digest, skin_hash
@@ -73,12 +74,14 @@ __all__ = [
     "StateMismatch",
     "UnknownHandle",
     "UnsupportedPreset",
+    "VersionMismatch",
     "View",
     "dump_case",
     "generate_case",
     "load_builtin_pack",
     "load_case",
     "load_session",
+    "regenerate_case",
     "skeleton_digest",
     "skin_hash",
     "supported_presets",
