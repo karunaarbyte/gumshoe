@@ -39,11 +39,6 @@ ServiceFactory = Callable[[SqliteStatsStore], AbstractAsyncContextManager[AgentS
 NOT_STARTED = "the server has not finished starting"
 
 
-def cors_origins(settings: Settings) -> list[str]:
-    """CORS_ORIGINS is a comma-separated list of exact origins; empty means no CORS at all."""
-    return [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
-
-
 MAX_IDS = 200
 
 
@@ -79,10 +74,10 @@ def create_app(
     app = FastAPI(title="Gumshoe API", lifespan=lifespan)
     app.state.game_off = NOT_STARTED  # until the lifespan has run
     app.add_middleware(BodyLimit, max_bytes=settings.max_body_bytes)
-    if origins := cors_origins(settings):  # added last, so it is outermost: 413s carry it too
+    if origins := settings.cors_origin_list:  # added last, so it is outermost: 413s carry it too
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=origins,
+            allow_origins=list(origins),
             allow_methods=["GET", "POST", "DELETE"],
             allow_headers=["content-type"],
         )
