@@ -55,5 +55,11 @@ async def playing(
         yield Harness(host, deps, TurnContext(game=new.game), new.brief, script, decider, the_llm)
 
 
-async def turn(h: Harness, text: str) -> list[TurnEvent]:
-    return [event async for event in take_turn(h.deps, h.ctx, text)]
+async def turn(h: Harness, text: str, *, pending_id: str | None = None) -> list[TurnEvent]:
+    return [event async for event in take_turn(h.deps, h.ctx, text, pending_id=pending_id)]
+
+
+async def answer(h: Harness, text: str) -> list[TurnEvent]:
+    """A turn sent the way the UI sends it while a confirmation is on screen: with its id."""
+    pending_id = h.ctx.pending.id if h.ctx.pending is not None else None
+    return await turn(h, text, pending_id=pending_id)

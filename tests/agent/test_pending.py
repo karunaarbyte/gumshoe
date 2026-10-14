@@ -36,9 +36,18 @@ def test_the_yes_threshold_is_inclusive():
     assert resolve_pending(pending(), intent(confirm=0.79), CONFIG) is Step.REASK
 
 
-def test_yes_together_with_a_confident_new_accusation_is_ambiguous_and_never_runs():
+def test_yes_together_with_a_confident_accusation_is_parsed_before_anything_runs():
     step = resolve_pending(pending(), intent("accuse", confirm=0.95), CONFIG)
-    assert step is Step.DROP_PROCESS  # the new accusation is processed instead of the old one
+    assert step is Step.REPARSE  # the turn parses it and compares it with the stored one
+
+
+def test_yes_together_with_a_confident_accusation_while_giving_up_drops_the_give_up():
+    step = resolve_pending(pending(kind="give_up"), intent("accuse", confirm=0.95), CONFIG)
+    assert step is Step.DROP_PROCESS
+
+
+def test_every_pending_action_gets_its_own_id():
+    assert pending().id != pending().id and len(pending().id) == 32
 
 
 def test_yes_together_with_a_confident_give_up_never_runs_a_pending_accusation():

@@ -27,7 +27,7 @@ from gumshoe.agent.game import INTERNAL, ToolFailure
 from gumshoe.agent.pending import Pending, Step, resolve_pending
 from gumshoe.agent.state import build_state
 from gumshoe.agent.understand import Intent, build_understand, read_intent
-from gumshoe.cases import NotebookView, PlayerCaseView
+from gumshoe.cases import NotebookView, ParsedAccusation, PlayerCaseView
 from gumshoe.decider import DeciderAllFailedError, DeciderAPIError, DeciderError
 
 logger = logging.getLogger(__name__)
@@ -84,12 +84,25 @@ async def _tool[T: BaseModel](
     return events, result, None
 
 
-async def take_turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEvent]:
+def confirm_event(pending: Pending, decision_id: str | None = None) -> Confirm:
+    return Confirm(
+        pending=pending.kind,
+        pending_id=pending.id,
+        text=pending.line,
+        warnings=pending.warnings,
+        decision_id=decision_id,
+    )
+
+
+async def take_turn(
+    deps: Deps, ctx: TurnContext, text: str, *, pending_id: str | None = None
+) -> AsyncIterator[TurnEvent]:
     """Yield the events of one turn, always ending with `Done`. No Exception raises out of here
-    (CancelledError and other BaseExceptions propagate by design)."""
+    (CancelledError and other BaseExceptions propagate by design). `pending_id` is the id of the
+    confirmation the player had in front of them, if any: only then can a yes run it."""
     started = time.perf_counter()
     try:
-        async for event in _turn(deps, ctx, text):
+        async for event in _turn(deps, ctx, text, pending_id):
             if isinstance(event, GameOver):
                 ctx.outcome = event.outcome
             yield event
@@ -103,7 +116,9 @@ async def take_turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[Tu
     yield Done(turn_ms=round((time.perf_counter() - started) * 1000, 1))
 
 
-async def _turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEvent]:
+async def _turn(
+    deps: Deps, ctx: TurnContext, text: str, pending_id: str | None
+) -> AsyncIterator[TurnEvent]:
     game = ctx.game
     brief = await deps.client.case_brief(game)
     if brief.status != "playing":
@@ -144,8 +159,12 @@ async def _turn(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEv
     step = resolve_pending(pending, intent, deps.config)
     if step is Step.RUN:
         assert pending is not None
-        ctx.pending = None  # cleared first: a replay can only come back as `repeat`
-        async for event in _run_pending(deps, ctx, text, pending):
+        async for event in _answer_yes(deps, ctx, text, pending, pending_id):
+            yield event
+        return
+    if step is Step.REPARSE:
+        assert pending is not None
+        async for event in _reparse(deps, ctx, text, pending, pending_id):
             yield event
         return
     if step in (Step.CANCEL, Step.CANCEL_PROCESS):
@@ -270,9 +289,8 @@ async def _process(
             async for event in _converse(deps, ctx, text, handle, intent.weight):
                 yield event
     elif name == "give_up":
-        line = "Give up and see the answer?"
-        ctx.pending = Pending(kind="give_up", line=line)
-        yield Confirm(pending="give_up", text=line)
+        ctx.pending = Pending(kind="give_up", line="Give up and see the answer?")
+        yield confirm_event(ctx.pending)
         _remember(ctx, text, "asked to confirm giving up")
     elif name == "accuse":
         async for event in _start_accusation(deps, ctx, text):
@@ -318,10 +336,14 @@ async def _converse(
     yield await post_check(deps, reply=draft.text, persona=persona, evidence=evidence)
 
 
-async def _start_accusation(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEvent]:
-    game = ctx.game
+async def _parse_accusation(
+    deps: Deps, game: str, text: str
+) -> tuple[Clarify | None, ParsedAccusation | None, str]:
+    """One parse_accusation decision read through the engine. Returns (the apology, None, id) when
+    the decision or its reading failed, else (None, the parsed handles, id)."""
     questions = await deps.client.accusation_questions(game, text)
     decision_id = uuid.uuid4().hex
+    apology = Clarify(reason="error", text=APOLOGY, decision_id=decision_id)
     try:
         result = await deps.decider.decide(
             questions.state,
@@ -331,16 +353,30 @@ async def _start_accusation(deps: Deps, ctx: TurnContext, text: str) -> AsyncIte
         )
     except DeciderError as exc:
         logger.warning("the parse_accusation decision failed: %s", describe_failure(exc))
-        yield Clarify(reason="error", text=APOLOGY, decision_id=decision_id)
-        return
+        return apology, None, decision_id
     try:
         parsed = await deps.client.interpret_accusation(game, accusation.probabilities_of(result))
     except ToolFailure as exc:
         if exc.code != "bad_argument":
             raise
-        yield Clarify(reason="error", text=APOLOGY, decision_id=decision_id)
+        return apology, None, decision_id
+    return None, parsed, decision_id
+
+
+async def _start_accusation(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEvent]:
+    apology, parsed, decision_id = await _parse_accusation(deps, ctx.game, text)
+    if parsed is None:
+        assert apology is not None
+        yield apology
         return
-    plan = await deps.client.describe_accusation(game, parsed.who, parsed.how, parsed.why)
+    async for event in _plan_accusation(deps, ctx, text, parsed, decision_id):
+        yield event
+
+
+async def _plan_accusation(
+    deps: Deps, ctx: TurnContext, text: str, parsed: ParsedAccusation, decision_id: str
+) -> AsyncIterator[TurnEvent]:
+    plan = await deps.client.describe_accusation(ctx.game, parsed.who, parsed.how, parsed.why)
     if plan.repeat:
         yield Clarify(
             reason="accusation",
@@ -349,14 +385,12 @@ async def _start_accusation(deps: Deps, ctx: TurnContext, text: str) -> AsyncIte
         )
     elif plan.can_confirm and parsed.who and parsed.how and parsed.why:
         ctx.pending = Pending(
-            kind="accuse", line=plan.confirmation, handles=(parsed.who, parsed.how, parsed.why)
-        )
-        yield Confirm(
-            pending="accuse",
-            text=plan.confirmation,
+            kind="accuse",
+            line=plan.confirmation,
+            handles=(parsed.who, parsed.how, parsed.why),
             warnings=plan.warnings,
-            decision_id=decision_id,
         )
+        yield confirm_event(ctx.pending, decision_id)
         _remember(ctx, text, "asked to confirm an accusation")
     elif plan.problems:
         yield Clarify(
@@ -368,6 +402,50 @@ async def _start_accusation(deps: Deps, ctx: TurnContext, text: str) -> AsyncIte
             text="That accusation cannot be made right now.",
             decision_id=decision_id,
         )
+
+
+def names_the_same(parsed: ParsedAccusation, handles: tuple[str, str, str]) -> bool:
+    """True when every part the player named is the stored one (naming nothing counts)."""
+    return all(
+        part is None or part == stored
+        for part, stored in zip((parsed.who, parsed.how, parsed.why), handles, strict=True)
+    )
+
+
+async def _answer_yes(
+    deps: Deps, ctx: TurnContext, text: str, pending: Pending, pending_id: str | None
+) -> AsyncIterator[TurnEvent]:
+    """A yes runs the pending action only when it answers that very confirmation. Otherwise (a
+    yes sent before the confirmation was shown, from another tab, or after it changed) the
+    confirmation is shown again and nothing is spent."""
+    if pending_id != pending.id:
+        yield confirm_event(pending)
+        return
+    ctx.pending = None  # cleared first: a replay can only come back as `repeat`
+    async for event in _run_pending(deps, ctx, text, pending):
+        yield event
+
+
+async def _reparse(
+    deps: Deps, ctx: TurnContext, text: str, pending: Pending, pending_id: str | None
+) -> AsyncIterator[TurnEvent]:
+    """A yes next to a confident accuse while an accusation is pending. If the parse names
+    nothing beyond the stored accusation it is the yes; if it names another, that one replaces
+    the stored one; if the parse fails, the stored one is left as it was."""
+    assert pending.handles is not None
+    apology, parsed, decision_id = await _parse_accusation(deps, ctx.game, text)
+    if parsed is None:
+        assert apology is not None
+        yield apology
+        return
+    if names_the_same(parsed, pending.handles):
+        async for event in _answer_yes(deps, ctx, text, pending, pending_id):
+            yield event
+        return
+    ctx.pending = None
+    yield Cancelled()
+    async for event in _plan_accusation(deps, ctx, text, parsed, decision_id):
+        yield event
 
 
 async def _run_pending(

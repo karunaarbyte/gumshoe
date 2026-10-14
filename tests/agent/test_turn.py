@@ -21,7 +21,7 @@ from gumshoe.agent.turn import APOLOGY, HELP, UNREACHABLE, describe_failure
 from gumshoe.cases import AccusationResult, SourceResult
 from gumshoe.decider import DeciderAllFailedError, DeciderAPIError, DeciderConnectionError
 from tests.agent.fakes import Script, ScriptedLlm
-from tests.agent.harness import playing, turn
+from tests.agent.harness import answer, playing, turn
 from tests.mcp_server.helpers import castle_case, explore_all, true_triple
 
 
@@ -288,7 +288,7 @@ async def test_give_up_asks_first_and_only_a_yes_gives_up():
         assert only(first, Confirm).pending == "give_up" and h.ctx.pending is not None
         brief = await h.deps.client.case_brief(h.ctx.game)
         assert brief.status == "playing"
-        second = await turn(h, "yes")
+        second = await answer(h, "yes")
     assert "Waiting for the player to confirm: Give up and see the answer?" in h.decider.calls[1][1]
     assert kinds(second) == ["intent", "tool_call", "tool_result", "game_over", "done"]
     over = only(second, GameOver)
@@ -366,7 +366,7 @@ async def test_a_true_accusation_is_confirmed_then_won_and_revealed():
         assert kinds(first) == ["intent", "confirm", "done"]
         assert "Your accusation" in only(first, Confirm).text
         assert h.ctx.pending is not None and h.ctx.pending.kind == "accuse"
-        second = await turn(h, "yes")
+        second = await answer(h, "yes")
         brief = await h.deps.client.case_brief(h.ctx.game)
     assert kinds(second) == ["intent", "tool_call", "tool_result", "game_over", "done"]
     assert only(second, GameOver).outcome == "won" and brief.status == "won"
@@ -382,27 +382,31 @@ async def test_yes_runs_the_accusation_exactly_once():
         h.script.understand(intent="other", confirm=0.95)
         h.script.understand(intent="other", confirm=0.95)  # a second yes, nothing pending now
         await turn(h, "accuse")
-        first_yes = await turn(h, "yes")
-        second_yes = await turn(h, "yes")
+        first_yes = await answer(h, "yes")
+        second_yes = await answer(h, "yes")
         brief = await h.deps.client.case_brief(h.ctx.game)
     assert only(first_yes, ToolCall).tool == "accuse"
     assert kinds(second_yes) == ["intent", "reply", "done"]  # the help line, no second accuse
     assert brief.attempts_left == 2
 
 
-async def test_yes_together_with_a_new_accusation_never_spends_the_old_one():
+async def test_yes_together_with_a_different_accusation_never_spends_the_old_one():
     async with playing(Script()) as h:
         explore_all(h.host, h.ctx.game)
         who, how, why = names_of_truth(h)
+        other = next(c.name for c in h.host.nameable(h.ctx.game, "who").options if c.name != who)
         s = h.script
         s.understand(intent="accuse").parse(who=who, how=how, why=why)
         s.understand(intent="accuse", confirm=0.95)  # "yes, but ..."
-        s.parse(who=None, how=None, why=None)
+        s.parse(who=other, how=how, why=why)
         await turn(h, "accuse")
-        events = await turn(h, "yes, but actually the cook")
+        old_id = h.ctx.pending.id if h.ctx.pending else None
+        events = await answer(h, "yes, but actually the other one")
         brief = await h.deps.client.case_brief(h.ctx.game)
     assert brief.attempts_left == 3 and "game_over" not in kinds(events)
-    assert only(events, Clarify).reason == "accusation"
+    assert kinds(events) == ["intent", "cancelled", "confirm", "done"]
+    assert h.ctx.pending is not None and h.ctx.pending.id != old_id
+    assert only(events, Confirm).pending_id == h.ctx.pending.id
 
 
 async def test_an_unclear_accusation_names_what_is_missing_and_sets_nothing_pending():
@@ -426,7 +430,7 @@ async def test_a_repeated_accusation_is_refused_before_confirming():
         s.understand(intent="other", confirm=0.95)
         s.understand(intent="accuse").parse(who=other, how=how, why=why)
         await turn(h, "accuse the other one")
-        miss = await turn(h, "yes")
+        miss = await answer(h, "yes")
         assert only(miss, ToolResult).data["correct"] == 2 and "game_over" not in kinds(miss)
         again = await turn(h, "accuse the other one again")
     clarify = only(again, Clarify)
@@ -529,7 +533,7 @@ async def test_a_not_permitted_accusation_clears_the_pending_one_and_spends_noth
             )
 
         monkeypatch.setattr(h.deps.client, "accuse", refused)
-        events = await turn(h, "yes")
+        events = await answer(h, "yes")
         brief = await h.deps.client.case_brief(h.ctx.game)
     assert kinds(events) == ["intent", "tool_call", "tool_result", "clarify", "done"]
     clarify = only(events, Clarify)
@@ -542,7 +546,7 @@ async def test_a_give_up_refused_with_game_over_is_a_failed_result_and_no_game_o
     async with playing(script) as h:
         await turn(h, "I give up")
         monkeypatch.setattr(h.deps.client, "give_up", failing("game_over", "it is over"))
-        events = await turn(h, "yes")
+        events = await answer(h, "yes")
     assert kinds(events) == ["intent", "tool_call", "tool_result", "done"]
     assert only(events, ToolResult).ok is False and h.ctx.pending is None
     assert h.ctx.exchanges[-1][1] == "could not give up"
@@ -699,7 +703,91 @@ async def test_a_given_up_game_stays_given_up_on_later_turns():
     script = Script().understand(intent="give_up").understand(intent="other", confirm=0.95)
     async with playing(script) as h:
         await turn(h, "I give up")
-        await turn(h, "yes")
+        await answer(h, "yes")
         later = await turn(h, "search again")
     assert kinds(later) == ["game_over", "done"]
     assert only(later, GameOver).outcome == "gave_up" and h.ctx.outcome == "gave_up"
+
+
+# --- a yes answers one confirmation ------------------------------------------------------------
+
+
+async def test_the_confirm_event_carries_the_id_of_the_pending_action():
+    script = Script().understand(intent="give_up")
+    async with playing(script) as h:
+        events = await turn(h, "I give up")
+    assert h.ctx.pending is not None and only(events, Confirm).pending_id == h.ctx.pending.id
+
+
+@pytest.mark.parametrize("sent", [None, "0" * 32], ids=["no id", "stale id"])
+async def test_a_yes_without_the_confirmations_id_shows_it_again_and_spends_nothing(sent):
+    script = Script().understand(intent="give_up").understand(intent="other", confirm=0.95)
+    async with playing(script) as h:
+        first = only(await turn(h, "I give up"), Confirm)
+        events = await turn(h, "yes", pending_id=sent)
+        brief = await h.deps.client.case_brief(h.ctx.game)
+    assert kinds(events) == ["intent", "confirm", "done"]
+    assert only(events, Confirm) == first  # the same confirmation, the same id
+    assert brief.status == "playing" and h.ctx.pending is not None
+    assert h.ctx.pending.id == first.pending_id
+
+
+async def test_a_reshown_accusation_keeps_its_warnings():
+    async with playing(Script()) as h:
+        explore_all(h.host, h.ctx.game)
+        who, how, why = names_of_truth(h)
+        warned = next(c for c in h.host.nameable(h.ctx.game, "who").options if c.warned)
+        h.script.understand(intent="accuse").parse(who=warned.name, how=how, why=why)
+        h.script.understand(intent="other", confirm=0.95)
+        first = only(await turn(h, "accuse"), Confirm)
+        again = only(await turn(h, "yes"), Confirm)
+    assert first.warnings and again.warnings == first.warnings and again.text == first.text
+
+
+@pytest.mark.parametrize("named", ["nothing", "the same suspect"])
+async def test_yes_with_an_accusation_naming_nothing_new_is_the_yes(named):
+    async with playing(Script()) as h:
+        explore_all(h.host, h.ctx.game)
+        who, how, why = names_of_truth(h)
+        s = h.script
+        s.understand(intent="accuse").parse(who=who, how=how, why=why)
+        s.understand(intent="accuse", confirm=0.95)  # "yes, accuse him"
+        s.parse(who=None if named == "nothing" else who, how=None, why=None)
+        await turn(h, "accuse")
+        events = await answer(h, "yes, accuse him")
+    assert kinds(events) == ["intent", "tool_call", "tool_result", "game_over", "done"]
+    assert only(events, GameOver).outcome == "won"
+    assert [d[0] for d in h.decider.calls] == [
+        "understand",
+        "parse_accusation",
+        "understand",
+        "parse_accusation",
+    ]
+
+
+async def test_yes_with_an_accusation_still_needs_the_confirmations_id():
+    async with playing(Script()) as h:
+        explore_all(h.host, h.ctx.game)
+        who, how, why = names_of_truth(h)
+        s = h.script
+        s.understand(intent="accuse").parse(who=who, how=how, why=why)
+        s.understand(intent="accuse", confirm=0.95).parse(who=None, how=None, why=None)
+        await turn(h, "accuse")
+        events = await turn(h, "yes, accuse him")  # no id
+        brief = await h.deps.client.case_brief(h.ctx.game)
+    assert kinds(events) == ["intent", "confirm", "done"] and brief.attempts_left == 3
+
+
+async def test_a_failed_reparse_leaves_the_pending_accusation_alone():
+    async with playing(Script()) as h:
+        explore_all(h.host, h.ctx.game)
+        who, how, why = names_of_truth(h)
+        s = h.script
+        s.understand(intent="accuse").parse(who=who, how=how, why=why)
+        s.understand(intent="accuse", confirm=0.95)
+        s.fail("parse_accusation", DeciderConnectionError("jev", "down"))
+        await turn(h, "accuse")
+        kept = h.ctx.pending
+        events = await answer(h, "yes, accuse him")
+    assert kinds(events) == ["intent", "clarify", "done"]
+    assert only(events, Clarify).text == APOLOGY and h.ctx.pending is kept

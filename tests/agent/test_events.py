@@ -30,7 +30,12 @@ EVENTS: list[TurnEvent] = [
     PostCheck(
         decision_id="d3", contradicts_says=None, claims_guilt_or_blames_other=None, failed=True
     ),
-    Confirm(pending="accuse", text="Your accusation: A / B / C. Confirm?", warnings=("w",)),
+    Confirm(
+        pending="accuse",
+        pending_id="p1",
+        text="Your accusation: A / B / C. Confirm?",
+        warnings=("w",),
+    ),
     Cancelled(),
     GameOver(outcome="won", reveal=RevealView(culprit="A", method="m", motive="v", secret="s")),
     Done(),

@@ -64,6 +64,7 @@ class PostCheck(_Event):
 class Confirm(_Event):
     kind: Literal["confirm"] = "confirm"
     pending: Literal["accuse", "give_up"]
+    pending_id: str  # send it back with the yes (turn body or the confirm endpoint)
     text: str
     warnings: tuple[str, ...] = ()
     decision_id: str | None = None  # the parse_accusation decision (accuse only)

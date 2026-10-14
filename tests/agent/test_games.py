@@ -3,7 +3,7 @@ from dataclasses import replace
 from gumshoe.agent.events import Clarify, Confirm, GameOver, IntentEvent, PostCheck, ToolResult
 from gumshoe.decider import ShadowDecider
 from tests.agent.fakes import Script, ScriptedLlm
-from tests.agent.harness import playing, turn
+from tests.agent.harness import answer, playing, turn
 from tests.agent.test_turn import names_of_truth, only
 from tests.decider.fakes import FakeRecorder
 from tests.mcp_server.helpers import castle_case
@@ -29,7 +29,7 @@ async def test_a_game_won_from_free_text_turns_only():
         script.understand(intent="accuse").parse(who=who, how=how, why=why)
         script.understand(intent="other", confirm=0.95)
         first = await turn(h, "I accuse them")
-        second = await turn(h, "yes")
+        second = await answer(h, "yes")
     assert only(first, Confirm).pending == "accuse"
     over = only(second, GameOver)
     case = castle_case(3)
@@ -52,7 +52,7 @@ async def test_a_game_lost_after_three_wrong_accusations():
             script.understand(intent="accuse").parse(who=wrong, how=how, why=why)
             script.understand(intent="other", confirm=0.95)
             await turn(h, f"it was {wrong}")
-            events = await turn(h, "yes")
+            events = await answer(h, "yes")
             result = only(events, ToolResult)
             assert result.ok and result.data["correct"] == 2
             overs = [e for e in events if isinstance(e, GameOver)]
