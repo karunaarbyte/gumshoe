@@ -126,11 +126,11 @@ class GameHost:
                 raise GameError("bad_argument", f"no pack named {name!r}") from exc
         return self._packs[name]
 
-    def _open(self, case_bytes: bytes, state_json: str | None = None) -> GameSession:
+    def _open(self, case_bytes: bytes, pack: Pack, state_json: str | None = None) -> GameSession:
         """A session under a fresh salt (a rare handle collision draws the next salt)."""
         for _ in range(SALT_TRIES):
             try:
-                return load_session(case_bytes, self._ids.next(), state_json)
+                return load_session(case_bytes, self._ids.next(), state_json, pack=pack)
             except HandleCollision:
                 continue
         raise RuntimeError("no salt gave collision-free handles")
@@ -173,7 +173,7 @@ class GameHost:
             except CaseGenerationError as exc:
                 raise GameError("bad_argument", "no case could be made from this seed") from exc
             case_bytes = dump_case(case)
-            session = self._open(case_bytes)
+            session = self._open(case_bytes, the_pack)
             game_id = self._fresh_game_id()
             self._games[game_id] = _Game(session, case_bytes, pack)
             return NewGame(game=game_id, brief=session.brief())
@@ -302,7 +302,7 @@ class GameHost:
                 pack = self._pack(save.pack)
                 if skin_hash(case) != case.skin_hash or not validate_case(case, pack).ok:
                     raise GameError("bad_save", "that save does not hold a sound case")
-                session = self._open(case_bytes, save.state)
+                session = self._open(case_bytes, pack, save.state)
             except ValidationError as exc:
                 raise GameError("bad_save", "that save cannot be read") from exc
             except StateMismatch as exc:

@@ -9,6 +9,7 @@ from gumshoe.cases.model.case import Case
 from gumshoe.cases.model.entities import Fact, SourceRef
 from gumshoe.cases.model.enums import Axis, SourceKind
 from gumshoe.cases.model.index import CaseIndex
+from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.serialize import load_case, skeleton_digest
 from gumshoe.cases.play.accuse import AccuseKind, GameNotOver, give_up
 from gumshoe.cases.play.accuse import accuse as engine_accuse
@@ -103,6 +104,10 @@ def _humanise(key: str) -> str:
     return key.replace("_", " ")
 
 
+def _capital(text: str) -> str:
+    return text[:1].upper() + text[1:]
+
+
 def _make_handles(case: Case, salt: str) -> dict[str, str]:
     ids = [
         *(x.id for x in case.suspects),
@@ -118,7 +123,14 @@ def _make_handles(case: Case, salt: str) -> dict[str, str]:
 
 
 class GameSession:
-    def __init__(self, case: Case, salt: str, state: PlayState | None = None) -> None:
+    """With the pack the case was made from, record kinds carry the pack's display names and
+    `check_reply` checks the pack's whole method and motive vocabulary. Without it (a fixture or
+    an imported case), kinds are named after their keys and only the case's own candidates are
+    checked."""
+
+    def __init__(
+        self, case: Case, salt: str, state: PlayState | None = None, *, pack: Pack | None = None
+    ) -> None:
         if state is None:
             state = new_state(case)
         elif state.case_digest != skeleton_digest(case):
@@ -133,6 +145,10 @@ class GameSession:
         self._handles = _make_handles(case, salt)
         self._ids = {handle: entity for entity, handle in self._handles.items()}
         self._prompt: AccusationPrompt | None = None
+        self._pack = pack
+        self._record_names = (
+            {d.key: d.names[0].text for d in pack.record_defs if d.names} if pack else {}
+        )
 
     # -- state ------------------------------------------------------------------------------
 
@@ -167,6 +183,9 @@ class GameSession:
         loc = self._ix.locations[location_id]
         return loc.name or loc.kind
 
+    def _record_name(self, kind: str) -> str:
+        return self._record_names.get(kind) or _humanise(kind)
+
     def _subject_name(self, subject: str) -> str:
         if subject in self._ix.suspects:
             return self._suspect_name(subject)
@@ -180,7 +199,7 @@ class GameSession:
         if source.kind is SourceKind.INTERROGATE:
             return self._suspect_name(source.target)
         subject = self._subject_name(source.subject or "")
-        return f"{_humanise(source.target).capitalize()}: {subject}"
+        return f"{_capital(self._record_name(source.target))}: {subject}"
 
     # -- views ------------------------------------------------------------------------------
 
@@ -234,7 +253,7 @@ class GameSession:
                 for n, sus in enumerate(suspects, start=1)
             ),
             record_kinds=tuple(
-                RecordKindView(key=k, label=_humanise(k)) for k in record_kinds(self._ix)
+                RecordKindView(key=k, label=self._record_name(k)) for k in record_kinds(self._ix)
             ),
             attempts_left=self.attempts_left,
             status=self.status,
@@ -300,7 +319,7 @@ class GameSession:
             )
         )
         name = self._subject_name(subject)
-        label = f"{_humanise(kind).capitalize()}: {name}" if kind else f"Records: {name}"
+        label = f"{_capital(self._record_name(kind))}: {name}" if kind else f"Records: {name}"
         statuses: list[SourceStatus] = []
         new_ids: list[str] = []
         contradictions: list[Contradiction] = []
@@ -314,7 +333,7 @@ class GameSession:
             contradictions += out.contradictions
             opened |= set(out.opened)
             if out.status is SourceStatus.OK:
-                contributed.append(_humanise(k))
+                contributed.append(self._record_name(k))
         # a kind read later in this call may have exhausted a source an earlier kind opened
         still_open = {s for s in opened if available_facts(self._ix, self._state.held, s)}
         if SourceStatus.OK in statuses:
@@ -591,7 +610,7 @@ class GameSession:
             return ReplyCheck(
                 ok=False, violations=(ReplyViolation(category="unknown_suspect", count=1),)
             )
-        return reply_check(self._ix, self._state, suspect, player_text, reply)
+        return reply_check(self._ix, self._state, suspect, player_text, reply, self._pack)
 
     def persona_brief(self, suspect_handle: str) -> PersonaBrief:
         suspect = self._ids.get(suspect_handle, "")
@@ -610,7 +629,10 @@ class GameSession:
         )
 
 
-def load_session(data: bytes, salt: str, state_json: str | None = None) -> GameSession:
-    """Build a session from case JSON bytes (and optionally a saved PlayState JSON)."""
+def load_session(
+    data: bytes, salt: str, state_json: str | None = None, *, pack: Pack | None = None
+) -> GameSession:
+    """Build a session from case JSON bytes (and optionally a saved PlayState JSON and the pack
+    the case was made from)."""
     state = PlayState.model_validate_json(state_json) if state_json is not None else None
-    return GameSession(load_case(data), salt, state)
+    return GameSession(load_case(data), salt, state, pack=pack)

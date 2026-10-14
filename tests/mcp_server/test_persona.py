@@ -1,5 +1,6 @@
 import pytest
 
+from gumshoe.cases import load_builtin_pack
 from gumshoe.mcp_server import GameError
 from tests.mcp_server.helpers import castle_case, explore_all, make_host
 
@@ -61,6 +62,34 @@ def test_a_reply_naming_a_method_the_player_has_not_met_is_flagged_by_axis_only(
     assert not check.ok
     assert {v.category for v in check.violations} == {"how"}
     assert label not in check.model_dump_json()
+
+
+def test_a_method_the_case_left_out_is_flagged_exactly_like_one_it_holds():
+    host, game, brief = started()
+    case = castle_case(SEED)
+    held_types = {m.type for m in case.methods}
+    pack = load_builtin_pack("castle")
+    inside = next(d.label for d in pack.method_defs if d.key in held_types)
+    outside = next(d.label for d in pack.method_defs if d.key not in held_types)
+    suspect = brief.suspects[0].handle
+    verdicts = [host.check_reply(game, suspect, "", f"It was {w}.") for w in (inside, outside)]
+    assert verdicts[0] == verdicts[1]
+    assert not verdicts[0].ok
+
+
+@pytest.mark.parametrize(("seed", "preset"), [(7, "standard"), (2, "short"), (3, "long")])
+def test_check_reply_cannot_tell_which_methods_and_motives_are_in_play(seed, preset):
+    """Every form of every pack method and motive gets the same verdict on a fresh game: its
+    own axis, once. So probing the check reveals nothing about the hidden candidate set."""
+    host = make_host()
+    new = host.new_game(seed, preset)
+    pack = load_builtin_pack("castle")
+    suspect = new.brief.suspects[0].handle
+    for axis, defs in (("how", pack.method_defs), ("why", pack.motive_defs)):
+        for d in defs:
+            for form in (d.label, *d.aliases):
+                check = host.check_reply(new.game, suspect, "", f"It was {form}.")
+                assert [(v.category, v.count) for v in check.violations] == [(axis, 1)], form
 
 
 def test_the_flagged_word_is_allowed_once_the_player_says_it_first():
