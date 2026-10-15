@@ -13,6 +13,7 @@ from gumshoe.decider import (
     CallRecord,
     ChoiceAnswer,
     NoulAnswer,
+    ScoreAnswer,
     answer_confidence,
     answer_verdict,
     answers_agree,
@@ -24,6 +25,12 @@ from gumshoe.stats.timeutil import to_utc_iso
 # agent's default gate; the API passes Settings.confirm_gate.
 CONFIRM_GATE = 0.8
 BANDED = frozenset({"confirms_pending"})
+# The game acts on `weight` only as a band too: from this score on, the dramatic persona model
+# speaks. Two scores that sit on the same side agree, however far apart they are (the agent's
+# default; the API passes Settings.dramatic_from).
+DRAMATIC_FROM = 2.5
+WEIGHT = "weight"
+ERROR = "(error)"  # the confusion matrix's column for decisions the shadow failed to answer
 _EPSILON = 1e-9
 
 
@@ -84,6 +91,7 @@ class BackendStats(BaseModel):
     total_output_tokens: int
     est_cost_usd: float  # from the configured prices; 0 when none are set
     mean_confidence: float | None
+    role: str  # the role this backend mostly played on the node: primary or shadow
 
 
 class NodeStats(BaseModel):
@@ -94,9 +102,14 @@ class NodeStats(BaseModel):
     decisions: int
     fallbacks: int
     compared: int  # decisions where both backends answered and no fallback happened
+    shadow_errors: int  # decisions (no fallback) whose shadow call failed: left out of `compared`
     question_agreement: dict[str, float]
-    # primary's intent -> shadow's intent -> compared decisions (nodes asking "intent" only)
+    # primary's intent -> shadow's intent -> compared decisions (nodes asking "intent" only); the
+    # shadow's "(error)" column counts the decisions it failed to answer
     intent_confusion: dict[str, dict[str, int]]
+    # mean of (shadow score - primary score) per score question over the compared decisions: a
+    # constant offset between the backends shows here, not as disagreement
+    score_offset: dict[str, float]
     agreement_rate: float | None  # agreeing (decision, question) pairs / all such pairs
     backends: list[BackendStats]
 
@@ -136,6 +149,9 @@ class DecisionView(BaseModel):
     fallback: bool
     state_preview: str
     calls: list[CallView]
+    # per question both backends answered: do they agree by the server's own rule? Empty when the
+    # decision is not a fair head-to-head (a fallback, or the shadow did not answer)
+    agrees: dict[str, bool]
 
 
 def _band(p: float, gate: float) -> str:
@@ -147,10 +163,18 @@ def _band(p: float, gate: float) -> str:
 
 
 def pair_agrees(
-    question: str, primary: Answer, shadow: Answer, confirm_gate: float = CONFIRM_GATE
+    question: str,
+    primary: Answer,
+    shadow: Answer,
+    confirm_gate: float = CONFIRM_GATE,
+    dramatic_from: float = DRAMATIC_FROM,
 ) -> bool:
     if question in BANDED and isinstance(primary, NoulAnswer) and isinstance(shadow, NoulAnswer):
         return _band(primary.noul, confirm_gate) == _band(shadow.noul, confirm_gate)
+    if question == WEIGHT and isinstance(primary, ScoreAnswer) and isinstance(shadow, ScoreAnswer):
+        return (primary.score >= dramatic_from - _EPSILON) == (
+            shadow.score >= dramatic_from - _EPSILON
+        )
     return answers_agree([primary, shadow])
 
 
@@ -180,14 +204,22 @@ def _by_decision(calls: Iterable[CallRecord]) -> dict[str, list[CallRecord]]:
 
 
 def disagreeing(
-    calls: Iterable[CallRecord], confirm_gate: float = CONFIRM_GATE
+    calls: Iterable[CallRecord],
+    confirm_gate: float = CONFIRM_GATE,
+    dramatic_from: float = DRAMATIC_FROM,
+    question: str | None = None,
 ) -> list[CallRecord]:
-    """The calls of the decisions where both backends answered and differ on some question."""
+    """The calls of the decisions where both backends answered and differ on some question (or,
+    with `question`, on that one)."""
     kept: list[CallRecord] = []
     for group in _by_decision(calls).values():
         pair = head_to_head(group)
-        if pair is not None and not all(
-            pair_agrees(q, pair[0][q], pair[1][q], confirm_gate) for q in pair[0]
+        if pair is None:
+            continue
+        asked = [question] if question is not None else list(pair[0])
+        if any(
+            q in pair[0] and not pair_agrees(q, pair[0][q], pair[1][q], confirm_gate, dramatic_from)
+            for q in asked
         ):
             kept.extend(group)
     return kept
@@ -200,6 +232,7 @@ def build_report(
     since: datetime | None = None,
     prices: Mapping[str, Price] | None = None,
     confirm_gate: float = CONFIRM_GATE,
+    dramatic_from: float = DRAMATIC_FROM,
 ) -> StatsReport:
     by_node: dict[str, list[CallRecord]] = defaultdict(list)
     for call in calls:
@@ -209,7 +242,7 @@ def build_report(
         since=to_utc_iso(since) if since else None,
         include_cold=include_cold,
         nodes=[
-            _node_stats(node, rows, include_cold, prices or {}, confirm_gate)
+            _node_stats(node, rows, include_cold, prices or {}, confirm_gate, dramatic_from)
             for node, rows in sorted(by_node.items())
         ],
     )
@@ -221,23 +254,34 @@ def _node_stats(
     include_cold: bool,
     prices: Mapping[str, Price],
     confirm_gate: float,
+    dramatic_from: float,
 ) -> NodeStats:
     decisions = _by_decision(rows)
     compared = 0
+    shadow_errors = 0
     agreeing: dict[str, int] = defaultdict(int)
     totals: dict[str, int] = defaultdict(int)
+    offsets: dict[str, list[float]] = defaultdict(list)
     confusion: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for group in decisions.values():
         pair = head_to_head(group)
         if pair is None:
+            if _shadow_failed(group):
+                shadow_errors += 1
+                missed = _primary_intent(group)
+                if missed is not None:
+                    confusion[missed][ERROR] += 1
             continue
         primary, shadow = pair
         compared += 1
         for question in primary:
             totals[question] += 1
             agreeing[question] += pair_agrees(
-                question, primary[question], shadow[question], confirm_gate
+                question, primary[question], shadow[question], confirm_gate, dramatic_from
             )
+            a, b = primary[question], shadow[question]
+            if isinstance(a, ScoreAnswer) and isinstance(b, ScoreAnswer):
+                offsets[question].append(b.score - a.score)
         said, heard = primary.get("intent"), shadow.get("intent")
         if isinstance(said, ChoiceAnswer) and isinstance(heard, ChoiceAnswer):
             confusion[said.choice][heard.choice] += 1
@@ -248,8 +292,10 @@ def _node_stats(
         decisions=len(decisions),
         fallbacks=sum(any(c.fallback for c in group) for group in decisions.values()),
         compared=compared,
+        shadow_errors=shadow_errors,
         question_agreement={q: agreeing[q] / totals[q] for q in sorted(totals)},
         intent_confusion={a: dict(sorted(b.items())) for a, b in sorted(confusion.items())},
+        score_offset={q: round(sum(v) / len(v), 4) for q, v in sorted(offsets.items())},
         agreement_rate=sum(agreeing.values()) / all_pairs if all_pairs else None,
         backends=[
             _backend_stats(
@@ -258,6 +304,19 @@ def _node_stats(
             for name in sorted({r.backend for r in rows})
         ],
     )
+
+
+def _shadow_failed(group: Sequence[CallRecord]) -> bool:
+    """A decision with no fallback whose shadow call failed (so it never reached `compared`)."""
+    if any(c.fallback for c in group):
+        return False
+    return any(c.role == "shadow" and c.error is not None for c in group)
+
+
+def _primary_intent(group: Sequence[CallRecord]) -> str | None:
+    primary = next((c for c in group if c.role == "primary" and c.answers is not None), None)
+    said = primary.answers.get("intent") if primary is not None and primary.answers else None
+    return said.choice if isinstance(said, ChoiceAnswer) else None
 
 
 def _latency(rows: list[CallRecord], include_cold: bool) -> LatencyStats:
@@ -288,11 +347,16 @@ def _backend_stats(
         total_output_tokens=total_out,
         est_cost_usd=estimated_cost(price or Price(), total_in, total_out) or 0.0,
         mean_confidence=_mean([r.mean_confidence for r in ok if r.mean_confidence is not None]),
+        role="shadow" if sum(r.role == "shadow" for r in rows) * 2 > len(rows) else "primary",
     )
 
 
 def recent_decisions(
-    calls: Iterable[CallRecord], *, prices: Mapping[str, Price] | None = None
+    calls: Iterable[CallRecord],
+    *,
+    prices: Mapping[str, Price] | None = None,
+    confirm_gate: float = CONFIRM_GATE,
+    dramatic_from: float = DRAMATIC_FROM,
 ) -> list[DecisionView]:
     """Group calls by decision, newest decision first."""
     groups = _by_decision(calls)
@@ -308,10 +372,24 @@ def recent_decisions(
                 _call_view(c, priced.get(c.backend))
                 for c in sorted(group, key=lambda c: c.role != "primary")
             ],
+            agrees=_agrees(group, confirm_gate, dramatic_from),
         )
         for decision_id, group in groups.items()
     ]
     return sorted(views, key=lambda v: v.ts, reverse=True)
+
+
+def _agrees(
+    group: Sequence[CallRecord], confirm_gate: float, dramatic_from: float
+) -> dict[str, bool]:
+    pair = head_to_head(group)
+    if pair is None:
+        return {}
+    primary, shadow = pair
+    return {
+        q: pair_agrees(q, primary[q], shadow[q], confirm_gate, dramatic_from)
+        for q in sorted(primary)
+    }
 
 
 def _call_view(call: CallRecord, price: Price | None) -> CallView:

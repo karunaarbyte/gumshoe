@@ -155,6 +155,7 @@ def create_app(
             since=since,
             prices=prices,
             confirm_gate=settings.confirm_gate,
+            dramatic_from=settings.dramatic_from,
         )
 
     @app.get("/api/decisions")
@@ -163,28 +164,43 @@ def create_app(
         node: str | None = None,
         ids: str | None = Query(None, max_length=MAX_IDS * 65),
         disagree: bool = False,
+        since: datetime | None = None,
+        question: str | None = Query(None, max_length=64),
     ) -> list[DecisionView]:
         """The latest decisions; or exactly the ones in `ids` (comma-separated, `limit` does
-        not apply); `disagree=true` keeps only head-to-heads where the backends differ."""
+        not apply); `disagree=true` keeps only head-to-heads where the backends differ, on
+        `question` alone when that is given; `since` keeps decisions that started at or after it."""
+        if question is not None and not disagree:
+            raise ApiError(422, "bad_request", "question narrows disagree=true; set that too")
         if ids is not None:
             wanted = [i for i in ids.split(",") if i]
             if not 0 < len(wanted) <= MAX_IDS:
                 raise ApiError(422, "bad_request", f"ids takes 1 to {MAX_IDS} decision ids")
             calls = [c for c in store.fetch_decisions(wanted) if node is None or c.node == node]
-        elif disagree:
-            calls = store.fetch_calls(node=node)  # all of them: the filter needs every pair
+        elif disagree or since is not None:
+            calls = store.fetch_calls(node=node, since=since)  # all of them: the filter needs them
         else:
             calls = store.fetch_recent(limit=limit, node=node)
         if disagree:
-            calls = disagreeing(calls, settings.confirm_gate)
-        views = recent_decisions(calls, prices=prices)
+            calls = disagreeing(calls, settings.confirm_gate, settings.dramatic_from, question)
+        views = recent_decisions(
+            calls,
+            prices=prices,
+            confirm_gate=settings.confirm_gate,
+            dramatic_from=settings.dramatic_from,
+        )
         return views if ids is not None else views[:limit]
 
     @app.get("/api/decisions/{decision_id}")
     def decision(decision_id: str = Path(max_length=64)) -> DecisionView:
         """One decision. Until its first row is written (a primary's record lands a moment
         after the turn's event), 404 `not_recorded_yet`: the UI retries."""
-        views = recent_decisions(store.fetch_decisions([decision_id]), prices=prices)
+        views = recent_decisions(
+            store.fetch_decisions([decision_id]),
+            prices=prices,
+            confirm_gate=settings.confirm_gate,
+            dramatic_from=settings.dramatic_from,
+        )
         if not views:
             raise ApiError(404, "not_recorded_yet", "that decision has not been recorded yet")
         return views[0]

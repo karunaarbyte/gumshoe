@@ -218,3 +218,99 @@ async def test_a_backend_failure_reaches_the_decisions_api_without_its_response_
     for text in (raw, one):
         assert "sk-secret" not in text
         assert "DeciderAPIError (nimble, HTTP 502)" in text
+
+
+# --- the stats page: since, question, agrees, shadow errors, roles --------------------------------
+
+
+def seed_weighed(store, decision_id, *, minute, intent_b="dialogue", weight=(1.0, 1.0)):
+    from gumshoe.decider import ScoreAnswer
+
+    def score(v):
+        return ScoreAnswer(type="score", score=v, legend={}, probabilities={}, confidence=0.5)
+
+    ts = f"2026-10-01T10:{minute}:00.000000+00:00"
+    store.insert(
+        [
+            make_record(
+                decision_id=decision_id,
+                ts=ts,
+                answers={"intent": choice("dialogue"), "weight": score(weight[0])},
+            ),
+            make_record(
+                decision_id=decision_id,
+                ts=ts,
+                backend="nimble",
+                role="shadow",
+                used=False,
+                answers={"intent": choice(intent_b), "weight": score(weight[1])},
+            ),
+        ]
+    )
+
+
+async def test_decisions_can_start_from_a_date(client, store):
+    seed(store, "old", minute="01", nimble="meta")
+    seed(store, "new", minute="30", nimble="meta")
+    since = "2026-10-01T10:15:00Z"
+    plain = (await client.get("/api/decisions", params={"since": since})).json()
+    assert [d["decision_id"] for d in plain] == ["new"]
+    differing = (
+        await client.get("/api/decisions", params={"since": since, "disagree": "true"})
+    ).json()
+    assert [d["decision_id"] for d in differing] == ["new"]
+
+
+async def test_disagree_can_be_narrowed_to_one_question(client, store):
+    seed_weighed(store, "weight_only", minute="01", weight=(2.4, 2.6))
+    seed_weighed(store, "intent_only", minute="02", intent_b="meta")
+    params = {"disagree": "true", "question": "weight"}
+    body = (await client.get("/api/decisions", params=params)).json()
+    assert [d["decision_id"] for d in body] == ["weight_only"]
+
+
+async def test_a_question_filter_without_disagree_is_refused(client):
+    response = await client.get("/api/decisions", params={"question": "weight"})
+    assert response.status_code == 422 and response.json()["code"] == "bad_request"
+
+
+async def test_each_decision_says_which_questions_agree(client, store):
+    seed_weighed(store, "d", minute="01", weight=(1.0, 1.9))
+    [view] = (await client.get("/api/decisions")).json()
+    assert view["agrees"] == {"intent": True, "weight": True}
+
+
+async def test_the_weight_threshold_comes_from_the_settings(store):
+    settings = Settings(_env_file=None, dramatic_from=3.0)
+    seed_weighed(store, "d", minute="01", weight=(2.8, 3.2))  # one band under the default 2.5
+    transport = httpx.ASGITransport(app=create_app(store, settings=settings))
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        [view] = (await c.get("/api/decisions")).json()
+        [node] = (await c.get("/api/stats/decisions")).json()["nodes"]
+    assert view["agrees"]["weight"] is False and node["question_agreement"]["weight"] == 0.0
+
+
+async def test_stats_report_shadow_errors_roles_and_the_score_offset(client, store):
+    seed_weighed(store, "ok", minute="01", weight=(1.0, 2.0))
+    store.insert(
+        [
+            make_record(decision_id="bad", ts="2026-10-01T10:05:00.000000+00:00"),
+            make_record(
+                decision_id="bad",
+                ts="2026-10-01T10:05:00.000000+00:00",
+                backend="nimble",
+                role="shadow",
+                used=False,
+                error="DeciderConnectionError (nimble)",
+                answers=None,
+            ),
+        ]
+    )
+    [node] = (await client.get("/api/stats/decisions")).json()["nodes"]
+    assert (node["decisions"], node["compared"], node["shadow_errors"]) == (2, 1, 1)
+    assert node["score_offset"] == {"weight": 1.0}
+    assert node["intent_confusion"]["dialogue"] == {"(error)": 1, "dialogue": 1}
+    assert {b["backend"]: b["role"] for b in node["backends"]} == {
+        "jev": "primary",
+        "nimble": "shadow",
+    }

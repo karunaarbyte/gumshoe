@@ -422,3 +422,141 @@ def test_the_confirmation_bands_follow_the_configured_gate():
     assert strict.question_agreement == {"confirms_pending": 1.0}  # 0.85 is unsure at 0.9
     assert len(disagreeing(calls)) == 2
     assert disagreeing(calls, confirm_gate=0.9) == []
+
+
+# --- the stats page's honesty: weight bands, shadow errors, roles, per-question agreement --------
+
+
+def score(value):
+    return ScoreAnswer(type="score", score=value, legend={}, probabilities={}, confidence=0.5)
+
+
+def weighed(decision_id, a, b, *, intent="search", ts="2026-10-01T10:00:00.000000+00:00"):
+    """A understand-like decision with an intent and a weight on each side."""
+    return [
+        make_record(
+            decision_id=decision_id,
+            ts=ts,
+            backend="jev",
+            answers={"intent": choice(intent), "weight": score(a)},
+        ),
+        make_record(
+            decision_id=decision_id,
+            ts=ts,
+            backend="nimble",
+            role="shadow",
+            used=False,
+            answers={"intent": choice(intent), "weight": score(b)},
+        ),
+    ]
+
+
+def shadow_failed(decision_id, intent="search"):
+    return [
+        make_record(decision_id=decision_id, answers={"intent": choice(intent)}),
+        make_record(
+            decision_id=decision_id,
+            backend="nimble",
+            role="shadow",
+            used=False,
+            error="DeciderConnectionError (nimble)",
+            answers=None,
+            latency_ms=30000.0,
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "agree"),
+    [(2.4, 2.6, False), (1.0, 1.9, True), (3.0, 3.9, True), (2.5, 2.5, True), (2.49, 2.5, False)],
+)
+def test_weight_agrees_when_both_sit_on_the_same_side_of_the_dramatic_threshold(a, b, agree):
+    # the game only acts on weight as a band (the dramatic persona from 2.5), so that is the
+    # agreement that matters; two scores a constant offset apart are not a different judgment
+    [node] = build_report(weighed("d", a, b)).nodes
+    assert node.question_agreement["weight"] == (1.0 if agree else 0.0)
+
+
+def test_the_weight_threshold_follows_the_configured_dramatic_from():
+    [node] = build_report(weighed("d", 2.6, 2.9), dramatic_from=3.0).nodes
+    assert node.question_agreement["weight"] == 1.0
+    [node] = build_report(weighed("d", 2.6, 3.1), dramatic_from=3.0).nodes
+    assert node.question_agreement["weight"] == 0.0
+
+
+def test_other_score_questions_keep_the_half_level_tolerance():
+    [node] = build_report(weighed("d", 1.0, 1.4)).nodes
+    # only `weight` is banded; the generic score rule is covered by the urgency test above
+    assert node.question_agreement["weight"] == 1.0
+
+
+def test_the_mean_signed_score_offset_shows_a_constant_bias():
+    calls = weighed("d1", 1.0, 2.0) + weighed("d2", 2.0, 2.6)
+    [node] = build_report(calls).nodes
+    assert node.score_offset == {"weight": pytest.approx(0.8)}  # shadow minus primary
+
+
+def test_a_shadow_error_is_counted_and_the_decision_is_not_compared():
+    calls = shadow_failed("e1") + shadow_failed("e2") + weighed("ok", 1.0, 1.0)
+    [node] = build_report(calls).nodes
+    assert (node.decisions, node.compared, node.shadow_errors) == (3, 1, 2)
+
+
+def test_a_fallback_is_not_a_shadow_error():
+    calls = pair("f", jev="a", nimble="b", fallback=True)
+    [node] = build_report(calls).nodes
+    assert node.shadow_errors == 0 and node.fallbacks == 1
+
+
+def test_the_confusion_matrix_has_an_error_column_for_decisions_the_shadow_missed():
+    calls = (
+        shadow_failed("e1", "search")
+        + shadow_failed("e2", "search")
+        + pair("ok", jev="search", nimble="records")
+    )
+    [node] = build_report(calls).nodes
+    assert node.intent_confusion == {"search": {"(error)": 2, "records": 1}}
+
+
+def test_each_backend_reports_the_role_it_played():
+    [node] = build_report(pair("d")).nodes
+    assert backend(node, "jev").role == "primary" and backend(node, "nimble").role == "shadow"
+
+
+def test_a_decision_view_says_which_questions_agree_by_the_servers_own_rule():
+    [view] = recent_decisions(weighed("d", 2.4, 2.6))  # differ by a band: weight disagrees
+    assert view.agrees == {"intent": True, "weight": False}
+    [view] = recent_decisions(weighed("d", 1.0, 1.9))  # 0.9 apart but the same band: agrees
+    assert view.agrees == {"intent": True, "weight": True}
+
+
+def test_a_decision_that_is_not_a_head_to_head_has_no_agreement_flags():
+    [view] = recent_decisions(shadow_failed("e"))
+    assert view.agrees == {}
+    [view] = recent_decisions(pair("f", jev="a", nimble="b", fallback=True))
+    assert view.agrees == {}
+
+
+def test_disagreeing_can_be_narrowed_to_one_question():
+    def two(decision_id, intent_a, intent_b, weight_a, weight_b):
+        ts = "2026-10-01T10:00:00.000000+00:00"
+        return [
+            make_record(
+                decision_id=decision_id,
+                ts=ts,
+                answers={"intent": choice(intent_a), "weight": score(weight_a)},
+            ),
+            make_record(
+                decision_id=decision_id,
+                ts=ts,
+                backend="nimble",
+                role="shadow",
+                used=False,
+                answers={"intent": choice(intent_b), "weight": score(weight_b)},
+            ),
+        ]
+
+    calls = two("weight_only", "a", "a", 2.4, 2.6) + two("intent_only", "a", "b", 1.0, 1.0)
+    assert {c.decision_id for c in disagreeing(calls, question="weight")} == {"weight_only"}
+    assert {c.decision_id for c in disagreeing(calls, question="intent")} == {"intent_only"}
+    assert {c.decision_id for c in disagreeing(calls)} == {"weight_only", "intent_only"}

@@ -270,13 +270,19 @@ it changes latency samples only). Answer:
 {"generated_at": "...", "since": null, "include_cold": false, "nodes": [NodeStats]}
 ```
 
-`NodeStats`: `{node, decisions, fallbacks, compared, question_agreement: {question: rate},
+`NodeStats`: `{node, decisions, fallbacks, compared, shadow_errors, question_agreement: {question: rate},
 intent_confusion: {primary_intent: {shadow_intent: count}}, agreement_rate | null, backends:
 [BackendStats]}`. Lead a comparison view with `question_agreement` (per question): the pooled
 `agreement_rate` is dominated by the questions asked most. `intent_confusion` is filled for nodes that
-ask for an intent. Yes/no questions agree by band (yes / unsure / no at the confirm gate).
+ask for an intent; its shadow-side key `"(error)"` counts decisions the shadow failed to answer.
+`shadow_errors` counts those decisions (a fallback is not one); they are not in `compared`, so
+agreement covers only the decisions both answered in time. `score_offset: {question: mean(shadow -
+primary)}` shows a constant bias between the backends. Yes/no questions agree by band (yes / unsure /
+no at the confirm gate); `weight` agrees when both scores sit on the same side of `dramatic_from`
+(2.5), the one threshold the game acts on. `role` is `primary` or `shadow`, the role the backend
+mostly played on that node.
 
-`BackendStats`: `{backend, calls, errors, cold_calls, used_calls, latency_ms: {p50, p95, mean},
+`BackendStats`: `{backend, role, calls, errors, cold_calls, used_calls, latency_ms: {p50, p95, mean},
 error_latency_ms: {p50, p95, mean}, mean_input_tokens, mean_output_tokens, total_input_tokens,
 total_output_tokens, est_cost_usd, mean_confidence}`. Latency figures and means may be null. Failed
 calls (timeouts) are in `error_latency_ms`, so a slow failing backend does not look fast.
@@ -292,7 +298,8 @@ head-to-heads where the backends differ). Newest first.
 
 404 `not_recorded_yet` until the decision is written: retry after a moment.
 
-`DecisionView`: `{decision_id, node, ts, fallback, state_preview, calls: [CallView]}`;
+`DecisionView`: `{decision_id, node, ts, fallback, state_preview, calls: [CallView],
+agrees: {question: bool}}` (`agrees` is empty unless the decision is a fair head-to-head);
 `CallView`: `{backend, role, used, cold, latency_ms, error | null, input_tokens | null,
 output_tokens | null, est_cost_usd | null, answers: {question: {verdict, confidence}}}`.
 
