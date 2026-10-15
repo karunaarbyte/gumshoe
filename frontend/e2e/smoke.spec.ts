@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
 
+// the fake API holds one global game, so the tests must not run in parallel
+test.describe.configure({ mode: 'serial' });
+
 test('new case, a turn, an accusation, confirm, game over and the reveal', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');

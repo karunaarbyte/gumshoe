@@ -314,4 +314,39 @@ describe('App follow-up fixes', () => {
     await waitFor(() => expect(client.save).toHaveBeenCalled());
     expect(client.save).toHaveBeenCalledTimes(1);
   });
+
+  test('a sent message leaves the box empty once the turn completes', async () => {
+    window.location.hash = '#/game/g1';
+    const client = fakeApi();
+    // the post-turn state fetch takes a real tick, as it does over the network, so the player message renders mid-send
+    const first = client.state.getMockImplementation()!;
+    client.state.mockImplementation(async (id) => {
+      await new Promise((r) => setTimeout(r, 20));
+      return first(id);
+    });
+    renderApp(client);
+    const box = await screen.findByRole('textbox', { name: 'Message' });
+    await userEvent.type(box, 'search the gallery{Enter}');
+    await waitFor(() => expect(client.turn).toHaveBeenCalled());
+    await waitFor(() => expect(client.state.mock.calls.length).toBeGreaterThan(1));
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Message' })).toBeEnabled());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50)); // let the send settle: a wrongly restored draft lands after it
+    });
+    expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('');
+  });
+
+  test.each([
+    ['turn_in_progress', 409],
+    ['bad_request', 400],
+  ])('a send refused with %s before a turn starts puts the text back', async (code, status) => {
+    window.location.hash = '#/game/g1';
+    const client = fakeApi();
+    client.turn.mockRejectedValueOnce(apiError(code, status));
+    renderApp(client);
+    const box = await screen.findByRole('textbox', { name: 'Message' });
+    await userEvent.type(box, 'search the gallery{Enter}');
+    await waitFor(() => expect(client.turn).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('search the gallery'));
+  });
 });
