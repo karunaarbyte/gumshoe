@@ -39,7 +39,11 @@ export function summariseTool(
         : [];
     return { heading: `Your accusation: ${data.message}`, lines: left };
   }
-  if (data !== null && Array.isArray(data.sections)) {
+  if (
+    data !== null &&
+    Array.isArray(data.sections) &&
+    Array.isArray(data.contradictions)
+  ) {
     // the notebook panel already lists the facts: say how many, and give the contradictions
     const facts = data.sections.reduce<number>((n, sec) => {
       const list = (sec as { facts?: unknown }).facts;
@@ -55,14 +59,10 @@ export function summariseTool(
     return { heading, lines: contradictions.map((c) => `Contradiction: ${c}`) };
   }
   if (
-    data === null ||
-    typeof data.kind !== "string" ||
-    typeof data.label !== "string"
-  )
-    return null;
-  const verb = VERB[data.kind];
-  if (verb === undefined) return null;
-  if (data.status === "locked") {
+    data !== null &&
+    data.status === "locked" &&
+    typeof data.kind === "string"
+  ) {
     // the name of a locked suspect or place is a secret; the engine sends it empty
     return {
       heading: "That is not open to you yet.",
@@ -71,6 +71,14 @@ export function summariseTool(
       ],
     };
   }
+  if (
+    data === null ||
+    typeof data.kind !== "string" ||
+    typeof data.label !== "string"
+  )
+    return null;
+  const verb = VERB[data.kind];
+  if (verb === undefined) return null;
   const heading = `${verb} ${data.label}.`;
   const facts = texts(data.new_facts);
   const lines: string[] = [];

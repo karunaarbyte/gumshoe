@@ -33,14 +33,17 @@ def missing_text(plan: AccusationPlan, who_name: str | None = None) -> str:
     blocked = next(
         (p for p in plan.problems if p.axis == "who" and p.reason == "not_permitted"), None
     )
+    if who_name is None:
+        # the name is not the player's to know (a locked suspect, or nobody): explain nothing, so a
+        # guessed name cannot tell a hidden suspect from a made-up one
+        blocked = None
     if blocked is not None and not blocked.options:
         return NO_LEAD
     parts = []
     for problem in plan.problems:
         names = ", ".join(c.name for c in problem.options)
         if problem is blocked:
-            target = who_name if who_name is not None else "that suspect"
-            parts.append(f"You have nothing on {target} yet. You can name: {names}.")
+            parts.append(f"You have nothing on {who_name} yet. You can name: {names}.")
             continue
         hint = f" (you can name: {names})" if names else ""
         parts.append(f"I could not tell what you meant for the {problem.axis}{hint}.")

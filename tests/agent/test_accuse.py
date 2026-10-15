@@ -76,17 +76,15 @@ def test_a_who_with_others_nameable_names_who_the_player_can_pick_instead():
     assert text == "You have nothing on Maud the clerk yet. You can name: Gilbert, Hugh."
 
 
-def test_a_who_the_player_may_not_know_by_name_is_never_named():
-    plan = plan_with(AxisProblem(axis="who", reason="not_permitted", options=()))
-    assert "Maud" not in missing_text(plan, None)
-    plan = plan_with(
-        AxisProblem(
-            axis="who", reason="not_permitted", options=(Candidate(handle="h1", name="Gilbert"),)
-        )
-    )
-    assert (
-        missing_text(plan, None) == "You have nothing on that suspect yet. You can name: Gilbert."
-    )
+def test_a_who_the_player_may_not_know_by_name_reads_like_one_nobody_has():
+    # a locked suspect's name is a secret: guessing names must not reveal who is hidden
+    gated = plan_with(AxisProblem(axis="who", reason="not_permitted", options=()))
+    unknown = plan_with(AxisProblem(axis="who", reason="unclear", options=()))
+    assert missing_text(gated, None) == missing_text(unknown, None)
+    options = (Candidate(handle="h1", name="Gilbert"),)
+    gated_with = plan_with(AxisProblem(axis="who", reason="not_permitted", options=options))
+    unknown_with = plan_with(AxisProblem(axis="who", reason="unclear", options=options))
+    assert missing_text(gated_with, None) == missing_text(unknown_with, None)
 
 
 def test_a_gated_how_reads_exactly_like_an_unknown_one():

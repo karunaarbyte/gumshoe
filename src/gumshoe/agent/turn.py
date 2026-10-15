@@ -170,8 +170,9 @@ async def _turn(
         async for event in _answer_yes(deps, ctx, text, ctx.pending, pending_id):
             yield event
         return
-    if ctx.pending is None and guidance.is_help_request(text):
-        # "help" is a request the game can answer itself: no model is asked, nothing is billed
+    if guidance.is_help_request(text):
+        # "help" is a request the game can answer itself: no model is asked, nothing is billed. A
+        # waiting confirmation stays waiting: help is neither its yes nor its no
         yield Reply(speaker=None, text=guidance.full_help(brief), source="help")
         _remember(ctx, text, "asked for help")
         return
@@ -305,6 +306,7 @@ async def _process(
             "records": places | suspects,
         }[name]
         if handle not in allowed:
+            ctx.unclear += 1
             yield Clarify(reason="mismatch", text=guidance.mismatch_text(brief, name, handle))
             return
     if name == "search" and handle is not None:
@@ -317,6 +319,8 @@ async def _process(
             raise fatal
         if searched is None:
             _remember(ctx, text, "could not search there")
+        elif searched.status == "locked":  # its name is withheld, so there is nothing to quote
+            _remember(ctx, text, "tried a place that is not open yet")
         else:
             _remember(ctx, text, f"searched {searched.label}: {len(searched.new_facts)} new facts")
     elif name == "records" and handle is not None:

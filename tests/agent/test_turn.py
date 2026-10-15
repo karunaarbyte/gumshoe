@@ -102,12 +102,35 @@ async def test_a_bare_help_is_answered_without_asking_any_model():
     assert h.decider.calls == []
 
 
-async def test_a_help_typed_while_a_confirmation_waits_still_goes_to_the_model():
-    script = Script().understand(intent="give_up").understand(intent="other", confirm=0.5)
+async def test_a_help_typed_while_a_confirmation_waits_answers_and_leaves_it_waiting():
+    script = Script().understand(intent="give_up")
     async with playing(script) as h:
         await turn(h, "I give up")
+        waiting = h.ctx.pending
         events = await turn(h, "help")
-    assert "intent" in kinds(events)  # not short-circuited: the pending flow decides
+        expected = guidance.full_help(h.brief)
+    assert kinds(events) == ["reply", "done"] and only(events, Reply).text == expected
+    assert h.ctx.pending is waiting and waiting is not None  # help is not a yes or a no
+
+
+async def test_a_locked_place_is_remembered_without_a_blank_name(monkeypatch):
+    script = Script().understand(intent="search", target="place_1")
+    async with playing(script) as h:
+
+        async def locked(*args, **kwargs):
+            return SourceResult(kind="search", label="", status="locked")
+
+        monkeypatch.setattr(h.deps.client, "search", locked)
+        await turn(h, "search there")
+    summary = h.ctx.exchanges[-1][1]
+    assert "not open" in summary and "searched :" not in summary
+
+
+async def test_a_mismatch_counts_toward_a_run_of_unclear_messages():
+    script = Script().understand(intent="search", target="suspect_1")
+    async with playing(script) as h:
+        await turn(h, "search Maud")
+    assert h.ctx.unclear == 1
 
 
 async def test_low_intent_confidence_asks_to_clarify_and_calls_nothing():
@@ -659,14 +682,31 @@ async def test_a_later_stage_failing_keeps_the_tool_result_and_remembers_the_exc
     assert said == "where were you" and summary.startswith("questioned ") and "new facts" in summary
 
 
-async def test_naming_a_suspect_the_gate_has_not_opened_says_so():
+async def test_naming_a_locked_suspect_reads_like_naming_nobody_and_never_says_the_name():
     async with playing(Script(), preset="long") as h:
         locked = h.brief.suspects[0]
         assert locked.locked
         h.script.understand(intent="accuse").parse(who=locked.name)
         events = await turn(h, f"it was {locked.name}")
     clarify = only(events, Clarify)
-    assert clarify.reason == "accusation" and "You don't hold a lead" in clarify.text
+    assert (
+        clarify.reason == "accusation"
+        and "I could not tell what you meant for the who" in clarify.text
+    )
+    assert locked.name not in clarify.text and "lead" not in clarify.text
+    assert h.ctx.pending is None
+
+
+async def test_naming_a_visible_suspect_with_no_lead_says_there_is_no_lead_yet():
+    async with playing(Script()) as h:
+        named = next(s for s in h.brief.suspects if not s.locked)
+        h.script.understand(intent="accuse").parse(who=named.name)
+        events = await turn(h, f"it was {named.name}")
+    clarify = only(events, Clarify)
+    assert (
+        clarify.text
+        == "You don't hold a lead on anyone yet. Keep searching, questioning and reading records."
+    )
     assert h.ctx.pending is None
 
 

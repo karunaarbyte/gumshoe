@@ -32,6 +32,8 @@ def _open(items: Sequence[_Card]) -> list[str]:
 
 def _names(names: list[str]) -> str:
     shown = names[:NAME_CAP]
+    if len(names) > NAME_CAP:  # say so: three names must not read as the whole board
+        return ", ".join(shown) + ", …"
     return shown[0] if len(shown) == 1 else ", ".join(shown[:-1]) + " or " + shown[-1]
 
 

@@ -56,6 +56,12 @@ def test_the_full_help_lists_every_kind_of_move_with_capped_names():
     assert "3 attempts" in text
 
 
+def test_a_capped_list_shows_that_names_were_left_out():
+    many = tuple((f"Person {i}", False) for i in range(9))
+    assert "Person 2, …" in guidance.full_help(brief(places=PLACES, suspects=many))
+    assert "…" not in guidance.which_text(brief(places=PLACES, suspects=PEOPLE), "interrogate")
+
+
 def test_the_full_help_says_when_it_is_the_last_attempt():
     assert "last attempt" in guidance.full_help(brief(places=PLACES, suspects=PEOPLE, attempts=1))
 

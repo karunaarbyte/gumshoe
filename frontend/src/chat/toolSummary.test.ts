@@ -44,6 +44,14 @@ describe('summariseTool', () => {
     });
   });
 
+  test('a locked result is redacted even when the label is missing altogether', () => {
+    expect(summariseTool({ kind: 'search', status: 'locked' })?.heading).toBe('That is not open to you yet.');
+  });
+
+  test('only a real notebook is summarised as one', () => {
+    expect(summariseTool({ sections: [], other: 1 })).toBeNull();
+  });
+
   test('an unknown result has no summary', () => {
     expect(summariseTool(null)).toBeNull();
     expect(summariseTool({ kind: 'mystery', label: 'x' })).toBeNull();
