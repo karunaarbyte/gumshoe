@@ -57,7 +57,7 @@ def test_failed_call_has_no_numbers_but_keeps_the_error():
         used=False,
         fallback=True,
     )
-    assert record.error is not None and "cannot reach" in record.error
+    assert record.error == "DeciderConnectionError (jev)"
     assert record.answers is None
     assert record.input_tokens is None and record.output_tokens is None
     assert record.mean_confidence is None and record.min_confidence is None

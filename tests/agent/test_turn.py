@@ -24,10 +24,14 @@ from gumshoe.agent.turn import (
     HELP,
     NOTHING_PENDING,
     UNREACHABLE,
-    describe_failure,
 )
 from gumshoe.cases import AccusationResult, SourceResult
-from gumshoe.decider import DeciderAllFailedError, DeciderAPIError, DeciderConnectionError
+from gumshoe.decider import (
+    DeciderAllFailedError,
+    DeciderAPIError,
+    DeciderConnectionError,
+    describe_failure,
+)
 from tests.agent.fakes import Script, ScriptedDecider, ScriptedLlm
 from tests.agent.harness import answer, playing, press, turn
 from tests.mcp_server.helpers import castle_case, explore_all, true_triple
@@ -662,7 +666,7 @@ async def test_a_failed_understand_is_logged_by_class_and_backend_never_the_play
     async with playing(script) as h:
         with caplog.at_level(logging.WARNING, logger="gumshoe.agent.turn"):
             await turn(h, "my private words")
-    assert "DeciderAPIError from jev HTTP 500" in caplog.text
+    assert "DeciderAPIError (jev, HTTP 500)" in caplog.text
     assert "private" not in caplog.text
 
 
@@ -674,7 +678,7 @@ def test_a_total_failure_is_described_backend_by_backend():
         }
     )
     assert describe_failure(error) == (
-        "all backends failed (jev: DeciderConnectionError, nimble: DeciderAPIError)"
+        "DeciderAllFailedError (jev: DeciderConnectionError, nimble: DeciderAPIError)"
     )
 
 

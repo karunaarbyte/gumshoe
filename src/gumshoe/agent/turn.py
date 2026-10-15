@@ -30,7 +30,7 @@ from gumshoe.agent.pending import Pending, Step, is_actionable, resolve_pending
 from gumshoe.agent.state import build_state
 from gumshoe.agent.understand import Intent, build_understand, read_intent
 from gumshoe.cases import NotebookView, ParsedAccusation, PlayerCaseView
-from gumshoe.decider import DeciderAllFailedError, DeciderAPIError, DeciderError
+from gumshoe.decider import DeciderError, describe_failure
 
 logger = logging.getLogger(__name__)
 
@@ -46,16 +46,6 @@ YES_WORDS = frozenset(
 )
 MAX_EXCHANGES = 20
 NEEDS_TARGET = frozenset({"search", "interrogate", "talk", "records"})
-
-
-def describe_failure(exc: DeciderError) -> str:
-    """The class and backend of a failed decision, for the log. Never the message: an API error
-    quotes the response body, which may echo the state and so the player's text."""
-    if isinstance(exc, DeciderAllFailedError):
-        parts = ", ".join(f"{name}: {type(e).__name__}" for name, e in exc.failures.items())
-        return f"all backends failed ({parts})"
-    status = f" HTTP {exc.status_code}" if isinstance(exc, DeciderAPIError) else ""
-    return f"{type(exc).__name__} from {exc.backend}{status}"
 
 
 def ended(ctx: TurnContext, brief: PlayerCaseView) -> Literal["won", "lost", "gave_up"]:

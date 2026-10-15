@@ -3,7 +3,10 @@ import pytest
 
 from gumshoe.api.app import create_app
 from gumshoe.config import Settings
+from gumshoe.decider import DeciderAPIError, ShadowDecider
+from gumshoe.decider.contract.samples import DEMO_QUESTIONS, DEMO_STATE
 from gumshoe.stats.store import SqliteStatsStore
+from tests.decider.fakes import FakeDecider
 from tests.stats.factories import choice, make_record
 
 
@@ -201,3 +204,17 @@ async def test_costs_use_the_configured_prices(store):
     [node] = report["nodes"]
     costs = {b["backend"]: b["est_cost_usd"] for b in node["backends"]}
     assert costs == {"jev": 0.00048, "nimble": 0.0}
+
+
+async def test_a_backend_failure_reaches_the_decisions_api_without_its_response_body(client, store):
+    body = '{"echo": "sk-secret-123"}'
+    primary = FakeDecider("nimble", error=DeciderAPIError("nimble", 502, body))
+    decider = ShadowDecider(primary, None, store)
+    with pytest.raises(DeciderAPIError):
+        await decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent", decision_id="d1")
+    await decider.drain()
+    raw = (await client.get("/api/decisions")).text
+    one = (await client.get("/api/decisions/d1")).text
+    for text in (raw, one):
+        assert "sk-secret" not in text
+        assert "DeciderAPIError (nimble, HTTP 502)" in text

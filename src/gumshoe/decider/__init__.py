@@ -29,6 +29,7 @@ from gumshoe.decider.contract.errors import (
     DeciderConnectionError,
     DeciderError,
     DeciderParseError,
+    describe_failure,
 )
 from gumshoe.decider.contract.models import (
     Answer,
@@ -74,5 +75,6 @@ __all__ = [
     "answer_confidence",
     "answer_verdict",
     "answers_agree",
+    "describe_failure",
     "make_decider",
 ]

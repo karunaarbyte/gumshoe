@@ -42,3 +42,14 @@ class DeciderAllFailedError(DeciderError):
         detail = "; ".join(f"{name}: {exc.message}" for name, exc in failures.items())
         super().__init__("+".join(failures), f"all backends failed ({detail})")
         self.failures = dict(failures)
+
+
+def describe_failure(exc: DeciderError) -> str:
+    """A safe description of a failed call: its class, backend and HTTP status, never its text.
+    The message may quote a response body, a URL or a key fragment, and may echo the player's
+    words, so it must not reach a log line, a stored record or an API response."""
+    if isinstance(exc, DeciderAllFailedError):
+        parts = ", ".join(f"{name}: {type(e).__name__}" for name, e in exc.failures.items())
+        return f"{type(exc).__name__} ({parts})"
+    status = f", HTTP {exc.status_code}" if isinstance(exc, DeciderAPIError) else ""
+    return f"{type(exc).__name__} ({exc.backend}{status})"

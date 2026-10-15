@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol, runtime_checkable
 
 from gumshoe.decider.contract.answers import answer_confidence
-from gumshoe.decider.contract.errors import DeciderError
+from gumshoe.decider.contract.errors import DeciderError, describe_failure
 from gumshoe.decider.contract.models import Answer, DecisionResult
 
 Role = Literal["primary", "shadow"]
@@ -26,7 +26,7 @@ class CallOutcome:
 
     @property
     def error(self) -> str | None:
-        return None if self.failure is None else str(self.failure)
+        return None if self.failure is None else describe_failure(self.failure)
 
 
 @dataclass(frozen=True)

@@ -7,6 +7,7 @@ import pytest
 from gumshoe.decider.contract.base import Decider
 from gumshoe.decider.contract.errors import (
     DeciderAllFailedError,
+    DeciderAPIError,
     DeciderConfigError,
     DeciderConnectionError,
     DeciderError,
@@ -80,7 +81,7 @@ async def test_shadow_error_is_recorded_not_raised(result):
     assert await decider.decide(DEMO_STATE, DEMO_QUESTIONS) is result
     await decider.drain()
     by_role = {r.role: r for r in recorder.batches[0]}
-    assert by_role["shadow"].error is not None and "ollama is down" in by_role["shadow"].error
+    assert by_role["shadow"].error == "DeciderConnectionError (nimble)"
     assert by_role["shadow"].answers is None
     assert by_role["primary"].error is None and by_role["primary"].used
 
@@ -93,7 +94,7 @@ async def test_unexpected_shadow_crash_does_not_affect_the_turn_and_is_recorded(
     [batch] = recorder.batches
     by_role = {r.role: r for r in batch}
     assert by_role["primary"].error is None and by_role["primary"].used
-    assert by_role["shadow"].error == "[nimble] unexpected RuntimeError"
+    assert by_role["shadow"].error == "DeciderError (nimble)"
 
 
 async def test_recorder_failure_does_not_fail_the_turn(result):
@@ -124,7 +125,7 @@ async def test_an_unexpected_primary_bug_falls_back_to_the_shadow_and_is_recorde
     assert await decider.decide(DEMO_STATE, DEMO_QUESTIONS) is result
     [batch] = recorder.batches
     by_role = {r.role: r for r in batch}
-    assert by_role["primary"].error == "[jev] unexpected RuntimeError"
+    assert by_role["primary"].error == "DeciderError (jev)"
     assert (by_role["shadow"].used, by_role["shadow"].fallback) == (True, True)
 
 
@@ -134,7 +135,7 @@ async def test_an_httpx_error_the_client_did_not_classify_still_falls_back(resul
     assert await decider.decide(DEMO_STATE, DEMO_QUESTIONS) is result
     [batch] = recorder.batches
     assert {r.backend: r.error for r in batch} == {
-        "jev": "[jev] unexpected DecodingError",
+        "jev": "DeciderError (jev)",
         "nimble": None,
     }
 
@@ -241,7 +242,7 @@ async def test_primary_failure_falls_back_to_the_shadow_and_flags_it(result):
     by_backend = {r.backend: r for r in batch}
     assert by_backend["nimble"].used is True and by_backend["jev"].used is False
     assert by_backend["jev"].fallback is True and by_backend["nimble"].fallback is True
-    assert by_backend["jev"].error is not None and "timed out" in by_backend["jev"].error
+    assert by_backend["jev"].error == "DeciderConnectionError (jev)"
 
 
 async def test_missing_primary_key_also_falls_back(result):
@@ -351,3 +352,15 @@ async def test_a_given_decision_id_is_kept_when_the_primary_fails_and_the_shadow
     assert await decider.decide(DEMO_STATE, DEMO_QUESTIONS, decision_id="fallback1") is result
     await decider.drain()
     assert {r.decision_id for batch in recorder.batches for r in batch} == {"fallback1"}
+
+
+async def test_a_recorded_failure_carries_class_backend_and_status_never_the_body(result):
+    body = '{"echo": "sk-secret-123"}'
+    primary = FakeDecider("nimble", error=DeciderAPIError("nimble", 502, body))
+    decider, recorder = make(primary, FakeDecider("jev", result))
+    await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    await decider.drain()
+    [batch] = recorder.batches
+    error = {r.role: r for r in batch}["primary"].error
+    assert error == "DeciderAPIError (nimble, HTTP 502)"
+    assert "sk-secret" not in str(error)
