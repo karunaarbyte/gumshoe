@@ -58,7 +58,13 @@ def create_app(
     personas_up: Callable[[], Awaitable[bool]] | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
-    personas_up = personas_up or PersonaProbe(settings.ollama_base_url).up
+    personas_up = (
+        personas_up
+        or PersonaProbe(
+            settings.ollama_base_url,
+            (settings.persona_model_default, settings.persona_model_dramatic),
+        ).up
+    )
     prices = prices_of(settings)
     factory: ServiceFactory = make_service or (lambda s: default_service(s, settings))
 
@@ -113,7 +119,8 @@ def create_app(
     app.include_router(games_router)
     app.include_router(saves_router)
 
-    # Plain `def` handlers run in FastAPI's thread pool, which suits blocking SQLite calls.
+    # Plain `def` handlers run in FastAPI's thread pool, which suits blocking SQLite calls. Health
+    # is `async` instead: its one outside call (the model probe) is awaited, never blocking.
     @app.get("/api/health")
     async def health(request: Request) -> Health:
         off: str | None = getattr(request.app.state, "game_off", NOT_STARTED)

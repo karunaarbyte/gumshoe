@@ -12,7 +12,8 @@ export const keys = {
 
 export function useHealth() {
   const client = useApi();
-  return useQuery({ queryKey: keys.health, queryFn: client.health });
+  // polled, so a model server that stops or returns mid-session shows in the chat column
+  return useQuery({ queryKey: keys.health, queryFn: client.health, refetchInterval: 15_000 });
 }
 
 export function useMeta() {
