@@ -63,7 +63,6 @@ export function useDisagreements(node: string, question: string, since: string |
   const client = useApi();
   return useQuery({
     queryKey: keys.disagreements(node, question, since),
-    queryFn: () =>
-      client.disagreements({ node: node || undefined, question: question || undefined, since }),
+    queryFn: () => client.disagreements({ node: node || undefined, question: question || undefined, since }),
   });
 }

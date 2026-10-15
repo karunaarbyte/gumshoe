@@ -66,7 +66,12 @@
      "est_cost_usd": 0.0,
      "mean_confidence": 0.61
     }
-   ]
+   ],
+   "question_counts": {
+    "how": 18,
+    "who": 18,
+    "why": 18
+   }
   },
   {
    "node": "post_check",
@@ -130,7 +135,11 @@
      "est_cost_usd": 0.0,
      "mean_confidence": 0.7
     }
-   ]
+   ],
+   "question_counts": {
+    "claims_guilt_or_blames_other": 68,
+    "contradicts_says": 68
+   }
   },
   {
    "node": "understand",
@@ -229,7 +238,12 @@
      "est_cost_usd": 0.0,
      "mean_confidence": 0.7
     }
-   ]
+   ],
+   "question_counts": {
+    "intent": 165,
+    "target": 165,
+    "weight": 165
+   }
   }
  ]
 }

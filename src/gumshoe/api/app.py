@@ -167,9 +167,9 @@ def create_app(
         since: datetime | None = None,
         question: str | None = Query(None, max_length=64),
     ) -> list[DecisionView]:
-        """The latest decisions; or exactly the ones in `ids` (comma-separated, `limit` does
-        not apply); `disagree=true` keeps only head-to-heads where the backends differ, on
-        `question` alone when that is given; `since` keeps decisions that started at or after it."""
+        """The latest decisions; or exactly the ones in `ids` (comma-separated: `limit` and
+        `since` do not apply). `disagree=true` keeps only head-to-heads where the backends differ,
+        on `question` alone when that is given. `since` keeps decisions started at or after it."""
         if question is not None and not disagree:
             raise ApiError(422, "bad_request", "question narrows disagree=true; set that too")
         if ids is not None:
@@ -177,10 +177,10 @@ def create_app(
             if not 0 < len(wanted) <= MAX_IDS:
                 raise ApiError(422, "bad_request", f"ids takes 1 to {MAX_IDS} decision ids")
             calls = [c for c in store.fetch_decisions(wanted) if node is None or c.node == node]
-        elif disagree or since is not None:
+        elif disagree:
             calls = store.fetch_calls(node=node, since=since)  # all of them: the filter needs them
         else:
-            calls = store.fetch_recent(limit=limit, node=node)
+            calls = store.fetch_recent(limit=limit, node=node, since=since)
         if disagree:
             calls = disagreeing(calls, settings.confirm_gate, settings.dramatic_from, question)
         views = recent_decisions(

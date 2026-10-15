@@ -73,6 +73,10 @@ Architectural. Own spec, security review, plan.
   rejected (already enforced by regeneration, keep that test).
 - **Exposure.** The API currently binds to loopback only with no CORS; decide the deployment shape (one machine,
   games in memory), add HTTPS and the CORS policy, and serve the UI build.
+- **Exposure of players' text.** `state_preview` on `/api/decisions` and `/api/stats/decisions` carries the raw
+  text players typed (and persona replies), and the stats page aggregates every game's. These endpoints are
+  unauthenticated. Before going public: require auth for them (admin only) or drop `state_preview` from the
+  list views, and make switching Jev on admin-only (it spends the Jev budget).
 - Open decisions for the spec: the actual numbers, the global-budget behaviour, session token transport.
 
 ## Stage 5: 2e, more packs

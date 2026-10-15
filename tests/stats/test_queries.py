@@ -560,3 +560,40 @@ def test_disagreeing_can_be_narrowed_to_one_question():
     assert {c.decision_id for c in disagreeing(calls, question="weight")} == {"weight_only"}
     assert {c.decision_id for c in disagreeing(calls, question="intent")} == {"intent_only"}
     assert {c.decision_id for c in disagreeing(calls)} == {"weight_only", "intent_only"}
+
+
+def test_a_decision_with_no_primary_answer_is_not_a_shadow_error():
+    # the primary's row has not landed yet: the shadow failing is not the story of this decision
+    only_shadow = [
+        make_record(
+            decision_id="early",
+            backend="nimble",
+            role="shadow",
+            used=False,
+            error="DeciderConnectionError (nimble)",
+            answers=None,
+        )
+    ]
+    [node] = build_report(only_shadow).nodes
+    assert node.shadow_errors == 0
+
+
+def test_the_matrix_total_matches_the_shadow_error_count():
+    calls = shadow_failed("e1", "search") + shadow_failed("e2", "records")
+    [node] = build_report(calls).nodes
+    in_matrix = sum(row.get("(error)", 0) for row in node.intent_confusion.values())
+    assert in_matrix == node.shadow_errors == 2
+
+
+def test_each_question_reports_how_many_decisions_it_was_compared_on():
+    calls = weighed("d1", 1.0, 1.0)
+    extra = make_record(decision_id="d2", answers={"intent": choice("search")})
+    extra_shadow = make_record(
+        decision_id="d2",
+        backend="nimble",
+        role="shadow",
+        used=False,
+        answers={"intent": choice("search")},
+    )
+    [node] = build_report(calls + [extra, extra_shadow]).nodes
+    assert node.question_counts == {"intent": 2, "weight": 1}  # an optional question is asked less

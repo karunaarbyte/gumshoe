@@ -293,3 +293,14 @@ def test_fetch_decisions_returns_every_call_of_the_asked_decisions_only(store):
         ("a", "nimble"),
     ]
     assert store.fetch_decisions([]) == []
+
+
+def test_fetch_recent_can_start_from_a_date_and_still_honours_the_limit(store):
+    for minute in ("00", "10", "20", "30"):
+        ts = f"2026-10-01T10:{minute}:00.000000+00:00"
+        store.insert([make_record(decision_id=f"d{minute}", ts=ts)])
+    since = datetime(2026, 10, 1, 10, 5, tzinfo=UTC)
+    two = store.fetch_recent(limit=2, since=since)
+    ten = store.fetch_recent(limit=10, since=since)
+    assert {c.decision_id for c in two} == {"d30", "d20"}
+    assert {c.decision_id for c in ten} == {"d30", "d20", "d10"}

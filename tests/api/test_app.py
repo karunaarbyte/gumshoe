@@ -261,6 +261,15 @@ async def test_decisions_can_start_from_a_date(client, store):
     assert [d["decision_id"] for d in differing] == ["new"]
 
 
+async def test_since_without_disagree_still_returns_only_the_latest_limit(client, store):
+    for minute in ("20", "30", "40", "50"):
+        seed(store, f"d{minute}", minute=minute)
+    body = (
+        await client.get("/api/decisions", params={"since": "2026-10-01T10:25:00Z", "limit": 2})
+    ).json()
+    assert [d["decision_id"] for d in body] == ["d50", "d40"]  # newest first, d20 is before since
+
+
 async def test_disagree_can_be_narrowed_to_one_question(client, store):
     seed_weighed(store, "weight_only", minute="01", weight=(2.4, 2.6))
     seed_weighed(store, "intent_only", minute="02", intent_b="meta")

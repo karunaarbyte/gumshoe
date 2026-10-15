@@ -199,16 +199,7 @@ export interface DoneEvent {
 }
 
 export type TurnEvent =
-  | IntentEvent
-  | ClarifyEvent
-  | ToolCallEvent
-  | ToolResultEvent
-  | ReplyEvent
-  | PostCheckEvent
-  | ConfirmEvent
-  | CancelledEvent
-  | GameOverEvent
-  | DoneEvent;
+  IntentEvent | ClarifyEvent | ToolCallEvent | ToolResultEvent | ReplyEvent | PostCheckEvent | ConfirmEvent | CancelledEvent | GameOverEvent | DoneEvent;
 
 export type EventKind = TurnEvent['kind'];
 
@@ -304,6 +295,8 @@ export interface NodeStats {
   compared: number;
   shadow_errors: number;
   question_agreement: Record<string, number>;
+  /** Decisions each question was compared on: its own sample size. */
+  question_counts: Record<string, number>;
   /** primary intent -> shadow intent -> decisions; the shadow key "(error)" is its failed calls. */
   intent_confusion: Record<string, Record<string, number>>;
   score_offset: Record<string, number>;

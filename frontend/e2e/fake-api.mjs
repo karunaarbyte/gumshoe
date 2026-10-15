@@ -41,7 +41,17 @@ function state() {
   };
 }
 
-const reply = (text, speaker = null) => ({ kind: 'reply', speaker, text, source: 'draft', degraded: false, violations: [], model: 'fake', drafts: 1, latency_ms: 5 });
+const reply = (text, speaker = null) => ({
+  kind: 'reply',
+  speaker,
+  text,
+  source: 'draft',
+  degraded: false,
+  violations: [],
+  model: 'fake',
+  drafts: 1,
+  latency_ms: 5,
+});
 const done = { kind: 'done', turn_ms: 20 };
 
 function turnEvents(text) {
@@ -63,7 +73,20 @@ function turnEvents(text) {
       done,
     ];
   }
-  return [{ kind: 'reply', speaker: null, text: 'Ask about a suspect, search a place, or accuse.', source: 'help', degraded: false, violations: [], model: null, drafts: 0, latency_ms: null }, done];
+  return [
+    {
+      kind: 'reply',
+      speaker: null,
+      text: 'Ask about a suspect, search a place, or accuse.',
+      source: 'help',
+      degraded: false,
+      violations: [],
+      model: null,
+      drafts: 0,
+      latency_ms: null,
+    },
+    done,
+  ];
 }
 
 function confirmEvents(answer) {
@@ -110,8 +133,27 @@ async function body(req) {
 }
 
 function decision(id) {
-  const call = (backend, role, verdict, used) => ({ backend, role, used, cold: false, latency_ms: role === 'primary' ? 110 : 420, error: null, input_tokens: 800, output_tokens: 10, est_cost_usd: 0.0003, answers: { intent: { verdict, confidence: 0.9 } } });
-  return { decision_id: id, node: 'understand', ts: new Date().toISOString(), fallback: false, state_preview: 'fake', calls: [call('jev', 'primary', 'search', true), call('nimble', 'shadow', 'interrogate', false)], agrees: { intent: false } };
+  const call = (backend, role, verdict, used) => ({
+    backend,
+    role,
+    used,
+    cold: false,
+    latency_ms: role === 'primary' ? 110 : 420,
+    error: null,
+    input_tokens: 800,
+    output_tokens: 10,
+    est_cost_usd: 0.0003,
+    answers: { intent: { verdict, confidence: 0.9 } },
+  });
+  return {
+    decision_id: id,
+    node: 'understand',
+    ts: new Date().toISOString(),
+    fallback: false,
+    state_preview: 'fake',
+    calls: [call('jev', 'primary', 'search', true), call('nimble', 'shadow', 'interrogate', false)],
+    agrees: { intent: false },
+  };
 }
 
 createServer(async (req, res) => {
@@ -119,10 +161,21 @@ createServer(async (req, res) => {
   const path = url.pathname;
   const method = req.method ?? 'GET';
   try {
-    if (method === 'GET' && path === '/api/health') return json(res, 200, { status: 'ok', game: 'on', reason: null, primary: 'jev', shadow: 'nimble', persona_models: { default: 'fake', dramatic: 'fake' }, personas: 'up' });
-    if (method === 'GET' && path === '/api/meta') return json(res, 200, { presets: ['short', 'standard'], default_preset: 'standard', max_attempts: 3, max_turn_chars: 1000 });
+    if (method === 'GET' && path === '/api/health')
+      return json(res, 200, {
+        status: 'ok',
+        game: 'on',
+        reason: null,
+        primary: 'jev',
+        shadow: 'nimble',
+        persona_models: { default: 'fake', dramatic: 'fake' },
+        personas: 'up',
+      });
+    if (method === 'GET' && path === '/api/meta')
+      return json(res, 200, { presets: ['short', 'standard'], default_preset: 'standard', max_attempts: 3, max_turn_chars: 1000 });
     if (method === 'GET' && path === '/api/saves') return json(res, 200, []);
-    if (method === 'GET' && path === '/api/games') return json(res, 200, game === null ? [] : [{ game: GAME, preset: 'standard', outcome: game.outcome, attempts_left: 3, turn_running: false }]);
+    if (method === 'GET' && path === '/api/games')
+      return json(res, 200, game === null ? [] : [{ game: GAME, preset: 'standard', outcome: game.outcome, attempts_left: 3, turn_running: false }]);
     if (method === 'POST' && path === '/api/games') {
       await body(req);
       game = fresh();
@@ -152,7 +205,8 @@ createServer(async (req, res) => {
     if (method === 'POST' && sub === '/confirm') {
       const b = await body(req);
       requests.push({ route: 'confirm', body: b });
-      if (game.pending === null || game.pending.pending_id !== b.pending_id) return error(res, 409, 'no_such_pending', 'that confirmation is not waiting any more');
+      if (game.pending === null || game.pending.pending_id !== b.pending_id)
+        return error(res, 409, 'no_such_pending', 'that confirmation is not waiting any more');
       return stream(res, 'confirm', b.answer, confirmEvents(b.answer));
     }
     if (method === 'POST' && sub === '/save') return json(res, 200, { name: '0123456789abcdef' });

@@ -62,13 +62,11 @@ export const api = {
   meta: () => getJson<Meta>('/api/meta'),
   games: () => getJson<GameSummary[]>('/api/games'),
   saves: () => getJson<SaveSummary[]>('/api/saves'),
-  createGame: (seed: number, preset?: string) =>
-    postJson<GameCreated>('/api/games', preset === undefined ? { seed } : { seed, preset }),
+  createGame: (seed: number, preset?: string) => postJson<GameCreated>('/api/games', preset === undefined ? { seed } : { seed, preset }),
   loadGame: (name: string) => postJson<GameCreated>('/api/games/load', { name }),
   state: (game: string) => getJson<GameState>(g(game)),
   turns: (game: string) => getJson<TurnRecord[]>(`${g(game)}/turns`),
-  save: async (game: string) =>
-    (await (await send(`${g(game)}/save`, { method: 'POST' })).json()) as { name: string },
+  save: async (game: string) => (await (await send(`${g(game)}/save`, { method: 'POST' })).json()) as { name: string },
   deleteGame: async (game: string): Promise<void> => {
     await send(g(game), { method: 'DELETE' });
   },
@@ -87,10 +85,8 @@ export const api = {
     return getJson<DecisionView[]>(`/api/decisions?${q.toString()}`);
   },
   decision: (id: string) => getJson<DecisionView>(`/api/decisions/${encodeURIComponent(id)}`),
-  turn: (game: string, body: TurnBody, signal?: AbortSignal) =>
-    openStream(`${g(game)}/turn`, body, signal),
-  confirm: (game: string, body: ConfirmBody, signal?: AbortSignal) =>
-    openStream(`${g(game)}/confirm`, body, signal),
+  turn: (game: string, body: TurnBody, signal?: AbortSignal) => openStream(`${g(game)}/turn`, body, signal),
+  confirm: (game: string, body: ConfirmBody, signal?: AbortSignal) => openStream(`${g(game)}/confirm`, body, signal),
 };
 
 export type Api = typeof api;

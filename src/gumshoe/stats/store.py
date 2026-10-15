@@ -112,15 +112,22 @@ class SqliteStatsStore:
             params.append(to_utc_iso(since))
         return self._query(sql + " ORDER BY ts, id", params)
 
-    def fetch_recent(self, *, limit: int, node: str | None = None) -> list[CallRecord]:
-        """All calls of the `limit` most recently *started* decisions."""
+    def fetch_recent(
+        self, *, limit: int, node: str | None = None, since: datetime | None = None
+    ) -> list[CallRecord]:
+        """All calls of the `limit` most recently *started* decisions (those that started at or
+        after `since`, when given), so the work is bounded by `limit`, not by the table."""
         where, params = ("WHERE node = ?", [node]) if node is not None else ("", [])
+        having = ""
+        if since is not None:
+            having = "HAVING MIN(ts) >= ?"
+            params = [*params, to_utc_iso(since)]
         with closing(self._connect()) as conn:
             ids = [
                 row["decision_id"]
                 for row in conn.execute(
                     f"SELECT decision_id FROM decision_calls {where} "
-                    "GROUP BY decision_id ORDER BY MIN(ts) DESC, MIN(id) DESC LIMIT ?",
+                    f"GROUP BY decision_id {having} ORDER BY MIN(ts) DESC, MIN(id) DESC LIMIT ?",
                     [*params, limit],
                 )
             ]

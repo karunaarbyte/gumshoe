@@ -43,7 +43,13 @@ describe('App', () => {
   test('typed yes while a confirmation waits sends its pending_id; the Yes button posts confirm', async () => {
     window.location.hash = '#/game/g1';
     const client = fakeApi({ state: states[6], turns: transcript.slice(0, 6) });
-    client.turn.mockResolvedValueOnce(eventsOf([{ kind: 'intent', decision_id: 'x', intent: 'other', target: null, confidence: 0.4 }, { kind: 'clarify', reason: 'pending', text: `Still want to go ahead? ${confirmFirst.text}`, decision_id: null, problems: [] }, { kind: 'done', turn_ms: 1 }]));
+    client.turn.mockResolvedValueOnce(
+      eventsOf([
+        { kind: 'intent', decision_id: 'x', intent: 'other', target: null, confidence: 0.4 },
+        { kind: 'clarify', reason: 'pending', text: `Still want to go ahead? ${confirmFirst.text}`, decision_id: null, problems: [] },
+        { kind: 'done', turn_ms: 1 },
+      ]),
+    );
     renderApp(client);
     const box = await screen.findByRole('textbox', { name: 'Message' });
     await userEvent.type(box, 'yes{Enter}');
@@ -234,7 +240,12 @@ describe('App hardening', () => {
     window.location.hash = '#/game/g1';
     const client = fakeApi();
     let fail: (e: unknown) => void = () => undefined;
-    client.save.mockImplementation(() => new Promise((_, reject) => { fail = reject; }));
+    client.save.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          fail = reject;
+        }),
+    );
     renderApp(client);
     await userEvent.click(await screen.findByRole('button', { name: 'Save' }));
     await userEvent.click(screen.getByRole('button', { name: 'Case files' }));
@@ -275,7 +286,13 @@ describe('App follow-up fixes', () => {
 
   test('the no-reveal notice lives in the header, so the grid keeps its four rows', async () => {
     window.location.hash = '#/game/g1';
-    const { container } = render(<App client={fakeApi({ state: { ...states[10]!, outcome: 'won', reveal: null }, turns: transcript })} queryClient={testQueryClient()} session={{ pollMs: 5 }} />);
+    const { container } = render(
+      <App
+        client={fakeApi({ state: { ...states[10]!, outcome: 'won', reveal: null }, turns: transcript })}
+        queryClient={testQueryClient()}
+        session={{ pollMs: 5 }}
+      />,
+    );
     const notice = await screen.findByText(/This case is closed/);
     expect(notice.closest('header')).not.toBeNull();
     expect(container.querySelector('[data-testid="desk-main"]')!.children).toHaveLength(4);
@@ -284,9 +301,19 @@ describe('App follow-up fixes', () => {
   function liveEnd() {
     window.location.hash = '#/game/g1';
     const client = fakeApi({ state: states[0], turns: [] });
-    client.turn.mockResolvedValueOnce(eventsOf([{ kind: 'game_over', outcome: 'won', reveal }, { kind: 'done', turn_ms: 1 }]));
-    let resolve: (s: typeof states[number]) => void = () => undefined;
-    client.state.mockResolvedValueOnce(states[0]!).mockImplementationOnce(() => new Promise((r) => { resolve = r as typeof resolve; }));
+    client.turn.mockResolvedValueOnce(
+      eventsOf([
+        { kind: 'game_over', outcome: 'won', reveal },
+        { kind: 'done', turn_ms: 1 },
+      ]),
+    );
+    let resolve: (s: (typeof states)[number]) => void = () => undefined;
+    client.state.mockResolvedValueOnce(states[0]!).mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r as typeof resolve;
+        }),
+    );
     client.state.mockResolvedValue(states[10]!);
     return { client, finish: () => act(async () => resolve(states[10]!)) };
   }

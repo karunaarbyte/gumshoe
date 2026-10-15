@@ -104,6 +104,7 @@ class NodeStats(BaseModel):
     compared: int  # decisions where both backends answered and no fallback happened
     shadow_errors: int  # decisions (no fallback) whose shadow call failed: left out of `compared`
     question_agreement: dict[str, float]
+    question_counts: dict[str, int]  # decisions each question was compared on (its sample size)
     # primary's intent -> shadow's intent -> compared decisions (nodes asking "intent" only); the
     # shadow's "(error)" column counts the decisions it failed to answer
     intent_confusion: dict[str, dict[str, int]]
@@ -294,6 +295,7 @@ def _node_stats(
         compared=compared,
         shadow_errors=shadow_errors,
         question_agreement={q: agreeing[q] / totals[q] for q in sorted(totals)},
+        question_counts={q: totals[q] for q in sorted(totals)},
         intent_confusion={a: dict(sorted(b.items())) for a, b in sorted(confusion.items())},
         score_offset={q: round(sum(v) / len(v), 4) for q, v in sorted(offsets.items())},
         agreement_rate=sum(agreeing.values()) / all_pairs if all_pairs else None,
@@ -310,7 +312,14 @@ def _shadow_failed(group: Sequence[CallRecord]) -> bool:
     """A decision with no fallback whose shadow call failed (so it never reached `compared`)."""
     if any(c.fallback for c in group):
         return False
+    # the primary must have answered: otherwise the decision is incomplete, not a shadow failure
+    if _primary_intent_present(group) is False:
+        return False
     return any(c.role == "shadow" and c.error is not None for c in group)
+
+
+def _primary_intent_present(group: Sequence[CallRecord]) -> bool:
+    return any(c.role == "primary" and c.answers for c in group)
 
 
 def _primary_intent(group: Sequence[CallRecord]) -> str | None:
