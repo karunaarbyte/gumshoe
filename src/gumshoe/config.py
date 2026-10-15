@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     # is nimble and DECIDER_SHADOW is not set at all, shadowing is off (not nimble twice).
     decider_primary: Backend = "jev"
     decider_shadow: Backend | None = "nimble"
+    # One switch for the common case. On (default): the roles above apply (Jev decides, Nimble
+    # shadows it). Off: Nimble alone decides, with no Jev call and no Jev key needed, whatever
+    # the two settings above say.
+    shadow_run: bool = True
 
     jev_base_url: str = "https://api.typesafe.ai/v1"
     jev_api_key: SecretStr = SecretStr("")
@@ -133,6 +137,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _roles_must_differ(self) -> Self:
+        if not self.shadow_run:
+            self.decider_primary, self.decider_shadow = "nimble", None
+            return self
         if self.decider_shadow == self.decider_primary:
             if "decider_shadow" not in self.model_fields_set:
                 self.decider_shadow = None  # the default shadow would just repeat the primary

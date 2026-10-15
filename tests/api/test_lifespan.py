@@ -80,3 +80,14 @@ def test_a_503_body_never_names_the_key_or_a_traceback(tmp_path):
     with TestClient(app) as client:
         text = client.post("/api/games", json={"seed": 1}).text
     assert "JEV_API_KEY" not in text and "Traceback" not in text
+
+
+def test_with_the_shadow_run_off_the_game_runs_on_nimble_alone_with_no_jev_key(tmp_path):
+    from gumshoe.config import Settings
+
+    settings = Settings(_env_file=None, shadow_run=False, saves_dir=tmp_path / "saves")
+    app = create_app(SqliteStatsStore(tmp_path / "d.db"), settings=settings)
+    with TestClient(app) as client:
+        health = client.get("/api/health").json()
+        assert (health["game"], health["primary"], health["shadow"]) == ("on", "nimble", None)
+        assert client.post("/api/games", json={"seed": 1}).status_code == 200

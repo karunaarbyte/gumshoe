@@ -269,3 +269,39 @@ def test_extra_keys_in_the_env_file_are_ignored(tmp_path):
 def test_the_agent_text_limit_fits_the_host_limit():
     """The agent truncates drafts to max_text; check_reply refuses anything over MAX_TEXT."""
     assert AgentConfig().max_text <= MAX_TEXT
+
+
+# --- SHADOW_RUN: one switch for "Jev with a Nimble shadow" versus "Nimble alone" -----------------
+
+
+def test_the_shadow_run_is_on_by_default():
+    s = Settings(_env_file=None)
+    assert s.shadow_run is True and (s.decider_primary, s.decider_shadow) == ("jev", "nimble")
+
+
+def test_turning_the_shadow_run_off_means_nimble_alone(monkeypatch):
+    monkeypatch.setenv("SHADOW_RUN", "false")
+    s = Settings(_env_file=None)
+    assert s.shadow_run is False and (s.decider_primary, s.decider_shadow) == ("nimble", None)
+
+
+def test_the_shadow_run_switch_overrides_the_two_role_settings(monkeypatch):
+    monkeypatch.setenv("SHADOW_RUN", "false")
+    monkeypatch.setenv("DECIDER_PRIMARY", "jev")
+    monkeypatch.setenv("DECIDER_SHADOW", "nimble")
+    s = Settings(_env_file=None)
+    assert (s.decider_primary, s.decider_shadow) == ("nimble", None)
+
+
+def test_the_shadow_run_switch_reads_the_env_file(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("SHADOW_RUN=off\n")
+    s = Settings(_env_file=env)
+    assert (s.shadow_run, s.decider_primary, s.decider_shadow) == (False, "nimble", None)
+
+
+def test_nimble_alone_needs_no_jev_key():
+    from gumshoe.decider.backends.factory import make_decider
+
+    s = Settings(_env_file=None, shadow_run=False)  # no key anywhere
+    assert make_decider(s).name == "nimble"
