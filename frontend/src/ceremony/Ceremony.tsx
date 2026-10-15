@@ -86,7 +86,7 @@ export function Ceremony({ outcome, reveal, onNewCase, onClose, timing = { threa
       role="dialog"
       aria-modal="true"
       aria-label="Case result"
-      className="fixed inset-0 z-40 flex max-h-[90vh] flex-col items-center justify-center gap-6 overflow-y-auto bg-ink/70 p-4 outline-none"
+      className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-6 overflow-y-auto bg-ink/70 p-4 outline-none"
     >
       <div aria-live="polite" className="sr-only">
         {phase === 'thread' && !still ? '' : stampText(outcome)}
