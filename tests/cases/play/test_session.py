@@ -65,7 +65,9 @@ def test_search_returns_new_facts_in_id_order_and_reports_what_opened():
 def test_a_locked_place_says_locked_and_a_repeat_says_nothing_new():
     s = session()
     cellar = handle_of(s.brief().locations, "The cellar")
-    assert s.search(cellar).status == "locked"
+    locked = s.search(cellar)
+    assert locked.status == "locked"
+    assert locked.label == "" and "cellar" not in locked.model_dump_json().lower()  # a secret
     study = handle_of(s.brief().locations, "The study")
     s.search(study)
     assert s.search(study).status == "nothing_new"

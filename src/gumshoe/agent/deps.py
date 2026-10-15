@@ -28,6 +28,7 @@ class TurnContext:
     pending: Pending | None = None
     exchanges: list[tuple[str, str]] = field(default_factory=list)  # every turn, for the decider
     talks: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # suspect -> dialogue
+    unclear: int = 0  # messages in a row we could not read; a real move starts it over
 
     # How the game ended, once a turn has said so. The engine only knows won/lost, so a game that
     # was given up would read as lost afterwards without this.

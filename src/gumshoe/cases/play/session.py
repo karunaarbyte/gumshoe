@@ -293,7 +293,8 @@ class GameSession:
         exposed = gate.exposed(self._ix, self._state.held)
         return SourceResult(
             kind=kind,
-            label=label,
+            # a locked suspect or place is shown redacted: its name is not given away here either
+            label="" if status == SourceStatus.LOCKED.value else label,
             status=status,
             new_facts=tuple(self._fact_view(self._ix.facts[i], exposed) for i in sorted(new_ids)),
             contradictions=tuple(self._contradiction_view(c) for c in contradictions),

@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import pytest
 
+from gumshoe.agent import guidance
 from gumshoe.agent.config import AgentConfig
 from gumshoe.agent.events import (
     Clarify,
@@ -21,7 +22,6 @@ from gumshoe.agent.llm import LlmError
 from gumshoe.agent.pending import Pending
 from gumshoe.agent.turn import (
     APOLOGY,
-    HELP,
     NOTHING_PENDING,
     UNREACHABLE,
 )
@@ -84,13 +84,30 @@ async def test_records_checks_a_suspect_or_place():
 
 
 @pytest.mark.parametrize("name", ["meta", "other"])
-async def test_meta_and_other_get_the_help_line_and_call_no_tool(name):
+async def test_meta_and_other_get_the_full_help_and_call_no_tool(name):
     script = Script().understand(intent=name)
     async with playing(script) as h:
         events = await turn(h, "how do I play")
+        expected = guidance.full_help(h.brief)
     assert kinds(events) == ["intent", "reply", "done"]
     reply = only(events, Reply)
-    assert (reply.text, reply.source, reply.speaker) == (HELP, "help", None)
+    assert (reply.text, reply.source, reply.speaker) == (expected, "help", None)
+
+
+async def test_a_bare_help_is_answered_without_asking_any_model():
+    async with playing(Script()) as h:
+        events = await turn(h, "help")
+        expected = guidance.full_help(h.brief)
+    assert kinds(events) == ["reply", "done"] and only(events, Reply).text == expected
+    assert h.decider.calls == []
+
+
+async def test_a_help_typed_while_a_confirmation_waits_still_goes_to_the_model():
+    script = Script().understand(intent="give_up").understand(intent="other", confirm=0.5)
+    async with playing(script) as h:
+        await turn(h, "I give up")
+        events = await turn(h, "help")
+    assert "intent" in kinds(events)  # not short-circuited: the pending flow decides
 
 
 async def test_low_intent_confidence_asks_to_clarify_and_calls_nothing():
@@ -98,7 +115,27 @@ async def test_low_intent_confidence_asks_to_clarify_and_calls_nothing():
     async with playing(script) as h:
         events = await turn(h, "hmm")
     assert kinds(events) == ["intent", "clarify", "done"]
-    assert only(events, Clarify).reason == "low_confidence"
+    clarify = only(events, Clarify)
+    assert clarify.reason == "low_confidence"
+    assert clarify.text.startswith("I did not catch that. To search, say")
+
+
+async def test_a_second_unclear_message_in_a_row_gets_the_full_help_then_it_resets():
+    script = (
+        Script()
+        .understand(intent="other", intent_p=0.2)
+        .understand(intent="other", intent_p=0.2)
+        .understand(intent="search", target="place_1")
+        .understand(intent="other", intent_p=0.2)
+    )
+    async with playing(script) as h:
+        first = only(await turn(h, "hmm"), Clarify).text
+        second = only(await turn(h, "hmm?"), Clarify).text
+        await turn(h, "search the first place")
+        after = only(await turn(h, "hmm"), Clarify).text
+    assert first.startswith("I did not catch that") and "Here is what you can do" not in first
+    assert "Here is what you can do" in second
+    assert "Here is what you can do" not in after  # a real move in between starts it over
 
 
 @pytest.mark.parametrize(
@@ -110,7 +147,9 @@ async def test_a_missing_or_unsure_target_asks_which_one(kw):
     script = Script().understand(intent="search", **kw)
     async with playing(script) as h:
         events = await turn(h, "search there")
-    assert only(events, Clarify).reason == "bad_target" and "tool_call" not in kinds(events)
+    clarify = only(events, Clarify)
+    assert clarify.reason == "bad_target" and "tool_call" not in kinds(events)
+    assert clarify.text.startswith("Which place?")
 
 
 async def test_a_notebook_request_needs_no_target():
@@ -190,6 +229,9 @@ async def test_a_locked_suspect_is_never_voiced():
     for events in (talk, grill):
         reply = only(events, Reply)
         assert (reply.text, reply.source) == (UNREACHABLE, "unreachable")
+        assert "Keep digging" in reply.text and not any(
+            s.name in reply.text for s in h.brief.suspects
+        )
         assert "post_check" not in kinds(events)
     assert llm.calls == []
     assert only(grill, ToolResult).data["status"] == "locked"
@@ -624,7 +666,7 @@ async def test_naming_a_suspect_the_gate_has_not_opened_says_so():
         h.script.understand(intent="accuse").parse(who=locked.name)
         events = await turn(h, f"it was {locked.name}")
     clarify = only(events, Clarify)
-    assert clarify.reason == "accusation" and "cannot name the who yet" in clarify.text
+    assert clarify.reason == "accusation" and "You don't hold a lead" in clarify.text
     assert h.ctx.pending is None
 
 
@@ -907,14 +949,14 @@ async def test_a_yes_with_nothing_pending_says_there_is_nothing_to_confirm(
     async with playing(script) as h:
         events = await turn(h, text, pending_id=pending_id)
     assert kinds(events) == ["intent", "reply", "done"]
-    assert only(events, Reply).text == f"{NOTHING_PENDING} {HELP}"
+    assert only(events, Reply).text == f"{NOTHING_PENDING} {guidance.short_nudge(h.brief)}"
 
 
 async def test_an_ordinary_question_still_gets_the_plain_help_line():
     script = Script().understand(intent="other")
     async with playing(script) as h:
         events = await turn(h, "yes or no, who knows")
-    assert only(events, Reply).text == HELP
+    assert only(events, Reply).text == guidance.full_help(h.brief)
 
 
 async def test_an_unclear_accusation_lists_each_problem_with_the_names_that_may_be_used():

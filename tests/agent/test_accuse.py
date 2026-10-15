@@ -40,3 +40,59 @@ def test_missing_text_names_the_axes_and_what_may_be_named():
     )
     text = missing_text(plan)
     assert "how" in text and "why" in text and "the poison" in text and "Berta" not in text
+
+
+def plan_with(*problems):
+    return AccusationPlan(
+        resolved=(),
+        problems=problems,
+        warnings=(),
+        repeat=False,
+        can_confirm=False,
+        confirmation="",
+    )
+
+
+def test_a_who_with_nobody_nameable_is_one_no_lead_line_without_the_how_and_why_noise():
+    plan = plan_with(
+        AxisProblem(axis="who", reason="not_permitted", options=()),
+        AxisProblem(axis="how", reason="unclear", options=()),
+        AxisProblem(axis="why", reason="unclear", options=()),
+    )
+    assert missing_text(plan, "Maud the clerk") == (
+        "You don't hold a lead on anyone yet. Keep searching, questioning and reading records."
+    )
+
+
+def test_a_who_with_others_nameable_names_who_the_player_can_pick_instead():
+    plan = plan_with(
+        AxisProblem(
+            axis="who",
+            reason="not_permitted",
+            options=(Candidate(handle="h1", name="Gilbert"), Candidate(handle="h2", name="Hugh")),
+        ),
+    )
+    text = missing_text(plan, "Maud the clerk")
+    assert text == "You have nothing on Maud the clerk yet. You can name: Gilbert, Hugh."
+
+
+def test_a_who_the_player_may_not_know_by_name_is_never_named():
+    plan = plan_with(AxisProblem(axis="who", reason="not_permitted", options=()))
+    assert "Maud" not in missing_text(plan, None)
+    plan = plan_with(
+        AxisProblem(
+            axis="who", reason="not_permitted", options=(Candidate(handle="h1", name="Gilbert"),)
+        )
+    )
+    assert (
+        missing_text(plan, None) == "You have nothing on that suspect yet. You can name: Gilbert."
+    )
+
+
+def test_a_gated_how_reads_exactly_like_an_unknown_one():
+    # the engine reports both as `unclear` with the same options; the text must not tell them apart
+    options = (Candidate(handle="h1", name="the poison"),)
+    gated = plan_with(AxisProblem(axis="how", reason="unclear", options=options))
+    unknown = plan_with(AxisProblem(axis="how", reason="unclear", options=options))
+    assert missing_text(gated, None) == missing_text(unknown, None)
+    assert "lead" not in missing_text(gated, None) and "yet" not in missing_text(gated, None)

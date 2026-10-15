@@ -11,6 +11,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from gumshoe.agent import accuse as accusation
+from gumshoe.agent import guidance
 from gumshoe.agent.deps import Deps, TurnContext
 from gumshoe.agent.dialogue import draft_reply, evidence_against, post_check
 from gumshoe.agent.events import (
@@ -35,11 +36,10 @@ from gumshoe.decider import DeciderError, describe_failure
 logger = logging.getLogger(__name__)
 
 APOLOGY = "I lost my train of thought. Could you say that again?"
-HELP = (
-    "You can search a place, question a suspect, read records, check your notebook, "
-    "or make an accusation."
+UNREACHABLE = (
+    "You haven't found a way to them yet. Keep digging: searching, questioning and reading "
+    "records turn up new people."
 )
-UNREACHABLE = "You cannot get to them yet."
 NOTHING_PENDING = "There is nothing waiting for your confirmation right now."
 YES_WORDS = frozenset(
     {"yes", "y", "yeah", "yep", "yup", "sure", "ok", "okay", "confirm", "go ahead", "do it"}
@@ -61,6 +61,7 @@ def is_bare_yes(text: str) -> bool:
 
 
 def _remember(ctx: TurnContext, text: str, summary: str) -> None:
+    ctx.unclear = 0  # a message we understood ends a run of ones we did not
     ctx.exchanges.append((text, summary))
     del ctx.exchanges[:-MAX_EXCHANGES]
 
@@ -169,6 +170,11 @@ async def _turn(
         async for event in _answer_yes(deps, ctx, text, ctx.pending, pending_id):
             yield event
         return
+    if ctx.pending is None and guidance.is_help_request(text):
+        # "help" is a request the game can answer itself: no model is asked, nothing is billed
+        yield Reply(speaker=None, text=guidance.full_help(brief), source="help")
+        _remember(ctx, text, "asked for help")
+        return
     notebook = await deps.client.notebook(game)
     built = build_understand(brief, pending=ctx.pending is not None)
     state = build_state(
@@ -268,20 +274,27 @@ async def _process(
     config = deps.config
     game = ctx.game
     if stale_yes and not is_actionable(intent, config):
-        yield Reply(speaker=None, text=f"{NOTHING_PENDING} {HELP}", source="help")
+        yield Reply(
+            speaker=None, text=f"{NOTHING_PENDING} {guidance.short_nudge(brief)}", source="help"
+        )
         _remember(ctx, text, "there was nothing to confirm")
         return
     if intent.intent_confidence < config.confidence_gate:
-        yield Clarify(
-            reason="low_confidence",
-            text="I am not sure what you want to do. Could you say it differently?",
-        )
+        ctx.unclear += 1
+        if ctx.unclear >= 2:  # still lost: stop hinting and lay the moves out
+            said = guidance.full_help(brief)
+        elif (hint := guidance.tailored(brief, intent.name)) is not None:
+            said = f"I did not catch that. {hint}"
+        else:
+            said = guidance.short_nudge(brief)
+        yield Clarify(reason="low_confidence", text=said)
         return
     name = intent.name
     handle = intent.target
     if name in NEEDS_TARGET:
         if handle is None or intent.target_confidence < config.confidence_gate:
-            yield Clarify(reason="bad_target", text="Which place or suspect do you mean?")
+            ctx.unclear += 1
+            yield Clarify(reason="bad_target", text=guidance.which_text(brief, name))
             return
         places = {x.handle for x in brief.locations}
         suspects = {x.handle for x in brief.suspects}
@@ -292,7 +305,7 @@ async def _process(
             "records": places | suspects,
         }[name]
         if handle not in allowed:
-            yield Clarify(reason="mismatch", text="That does not work with what you named.")
+            yield Clarify(reason="mismatch", text=guidance.mismatch_text(brief, name, handle))
             return
     if name == "search" and handle is not None:
         found, searched, fatal = await _tool(
@@ -368,7 +381,7 @@ async def _process(
         async for event in _start_accusation(deps, ctx, text):
             yield event
     else:  # meta and other
-        yield Reply(speaker=None, text=HELP, source="help")
+        yield Reply(speaker=None, text=guidance.full_help(brief), source="help")
         _remember(ctx, text, "explained what the player can do")
 
 
@@ -467,7 +480,7 @@ async def _plan_accusation(
     elif plan.problems:
         yield Clarify(
             reason="accusation",
-            text=accusation.missing_text(plan),
+            text=accusation.missing_text(plan, await _named_suspect(deps, ctx, parsed)),
             decision_id=decision_id,
             problems=accusation.problems_of(plan),
         )
@@ -477,6 +490,14 @@ async def _plan_accusation(
             text="That accusation cannot be made right now.",
             decision_id=decision_id,
         )
+
+
+async def _named_suspect(deps: Deps, ctx: TurnContext, parsed: ParsedAccusation) -> str | None:
+    """The suspect the player named, by name, only if the board already shows that name."""
+    if parsed.who is None:
+        return None
+    brief = await deps.client.case_brief(ctx.game)
+    return next((s.name for s in brief.suspects if s.handle == parsed.who and not s.locked), None)
 
 
 def names_the_same(parsed: ParsedAccusation, handles: tuple[str, str, str]) -> bool:
