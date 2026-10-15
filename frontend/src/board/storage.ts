@@ -58,3 +58,12 @@ export function storeBoard(key: string, data: BoardData): void {
 export function copyBoard(fromKey: string, toKey: string): void {
   storeBoard(toKey, loadBoard(fromKey));
 }
+
+/** Whether anything is stored under the key (an absent board must not overwrite a copy). */
+export function hasBoard(key: string): boolean {
+  try {
+    return window.localStorage.getItem(key) !== null;
+  } catch {
+    return false;
+  }
+}
