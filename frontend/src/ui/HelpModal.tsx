@@ -5,10 +5,10 @@ const STEPS: [string, string][] = [
   ['The case', 'Someone has been murdered. Your job is to name who did it, how, and why. You have a few attempts, so do not guess.'],
   ['Search places', 'Type "search the Great Hall" in the chat. Every place on the board can be searched, and each search adds facts to your notebook.'],
   ['Meet the suspects', 'Suspects start face down. Searching places and checking records unlocks them one by one. Then ask them questions: "ask Maud the clerk where she was".'],
-  ['Check the records', 'Type "show me the household register" (or another record listed in the notebook) to read what the household wrote down.'],
+  ['Read the records', 'Type "read the records about Gilbert the cook" (or about a place). Records often name where someone was, and are the quickest way to catch a lie.'],
   ['Catch the lies', 'Some suspects lie. A fact that contradicts a claim is marked and joined to it by a red string. Contradictions are your best leads.'],
   ['Use the board', 'Click a card to read it in full. Drag cards to arrange them. Drag from a card’s red pin to another card to draw your own thread. "Tidy up" resets the layout.'],
-  ['Accuse', 'When you are ready, press Accuse, or type "I accuse <suspect>". The agent asks for the how and the why; pick the options or answer in your own words, then confirm. A wrong accusation costs an attempt.'],
+  ['Accuse', 'You can only accuse someone you hold a lead on, so keep searching, questioning and reading records. Then press Accuse, or type "I accuse <suspect>". Pick the how and the why from the buttons, then confirm. A wrong accusation costs an attempt.'],
 ];
 
 /** A short how-to-play card. Escape or the close button dismisses it. */

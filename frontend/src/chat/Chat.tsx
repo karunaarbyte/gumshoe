@@ -1,8 +1,9 @@
-import { type RefObject, useCallback, useEffect, useRef } from 'react';
-import type { GameView } from '../game/model';
-import { PinnedConfirm } from './ConfirmCard';
-import { ChatInput } from './ChatInput';
-import { Message } from './Message';
+import { type RefObject, useCallback, useEffect, useRef } from "react";
+import type { GameView } from "../game/model";
+import { PinnedConfirm } from "./ConfirmCard";
+import { ChatInput } from "./ChatInput";
+import { Message } from "./Message";
+import { composePick } from "./composePick";
 
 export interface ChatProps {
   view: GameView;
@@ -11,19 +12,28 @@ export interface ChatProps {
   draft: string;
   onDraft: (text: string) => void;
   onSend: (text: string) => void | Promise<void>;
-  onAnswer: (answer: 'yes' | 'no') => void;
+  onAnswer: (answer: "yes" | "no") => void;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
 }
 
-export function Chat({ view, busy, maxChars, draft, onDraft, onSend, onAnswer, inputRef }: ChatProps) {
+export function Chat({
+  view,
+  busy,
+  maxChars,
+  draft,
+  onDraft,
+  onSend,
+  onAnswer,
+  inputRef,
+}: ChatProps) {
   const end = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   useEffect(() => {
-    if (nearBottom.current) end.current?.scrollIntoView?.({ block: 'end' });
+    if (nearBottom.current) end.current?.scrollIntoView?.({ block: "end" });
   }, [view.messages.length]);
   const pending = view.pending;
   const lastTurn = view.messages.reduce((n, m) => Math.max(n, m.turn), -1);
-  const playerCount = view.messages.filter((m) => m.kind === 'player').length;
+  const playerCount = view.messages.filter((m) => m.kind === "player").length;
   const latest = useRef(playerCount);
   latest.current = playerCount;
   const draftRef = useRef(draft);
@@ -36,30 +46,69 @@ export function Chat({ view, busy, maxChars, draft, onDraft, onSend, onAnswer, i
       try {
         await onSend(text);
       } catch {
-        if (draftRef.current === '') onDraft(text);
+        if (draftRef.current === "") onDraft(text);
         return;
       }
-      if (latest.current === before && draftRef.current === '') onDraft(text);
+      if (latest.current === before && draftRef.current === "") onDraft(text);
     },
     [onSend, onDraft],
   );
-  const shown = pending !== null && view.messages.some((m) => m.kind === 'confirm' && m.state === 'open' && m.event.pending_id === pending.pending_id);
+  const pick = useCallback(
+    (text: string) => send(composePick(view.messages, text)),
+    [send, view.messages],
+  );
+  const shown =
+    pending !== null &&
+    view.messages.some(
+      (m) =>
+        m.kind === "confirm" &&
+        m.state === "open" &&
+        m.event.pending_id === pending.pending_id,
+    );
   return (
     <section aria-label="Chat" className="flex h-full min-h-0 flex-col">
-      <div role="log" aria-label="Case conversation" className="min-h-0 flex-1 overflow-y-auto p-3"
+      <div
+        role="log"
+        aria-label="Case conversation"
+        className="min-h-0 flex-1 overflow-y-auto p-3"
         onScroll={(e) => {
           const t = e.currentTarget;
-          nearBottom.current = t.scrollHeight - t.scrollTop - t.clientHeight < 80;
+          nearBottom.current =
+            t.scrollHeight - t.scrollTop - t.clientHeight < 80;
         }}
       >
         {view.messages.map((m) => (
-          <Message key={m.id} message={m} pending={pending} busy={busy} stale={m.turn !== lastTurn || pending !== null} onSend={send} onAnswer={onAnswer} />
+          <Message
+            key={m.id}
+            message={m}
+            pending={pending}
+            busy={busy}
+            stale={m.turn !== lastTurn || pending !== null}
+            onSend={pick}
+            onAnswer={onAnswer}
+          />
         ))}
-        {pending !== null && !shown && <PinnedConfirm pending={pending} disabled={busy} onAnswer={onAnswer} />}
-        {view.status === 'remote' && <p className="text-xs italic">A turn is running…</p>}
+        {pending !== null && !shown && (
+          <PinnedConfirm
+            pending={pending}
+            disabled={busy}
+            onAnswer={onAnswer}
+          />
+        )}
+        {view.status === "remote" && (
+          <p className="text-xs italic">A turn is running…</p>
+        )}
         <div ref={end} />
       </div>
-      <ChatInput draft={draft} onDraft={onDraft} onSend={send} busy={busy} closed={view.outcome !== 'playing'} maxChars={maxChars} inputRef={inputRef} />
+      <ChatInput
+        draft={draft}
+        onDraft={onDraft}
+        onSend={send}
+        busy={busy}
+        closed={view.outcome !== "playing"}
+        maxChars={maxChars}
+        inputRef={inputRef}
+      />
     </section>
   );
 }

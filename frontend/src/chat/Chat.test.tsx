@@ -50,7 +50,7 @@ describe('Chat rendering', () => {
     render(<Harness view={at(5)} onSend={onSend} />);
     const how = screen.getByRole('group', { name: 'How?' });
     await userEvent.click(within(how).getByRole('button', { name: 'poisoned port' }));
-    expect(onSend).toHaveBeenCalledWith('I think it was poisoned port');
+    expect(onSend).toHaveBeenCalledWith('I accuse the butler. I think it was poisoned port'); // the pick carries the accusation so far
     expect(pickerText({ handle: 'w1', name: 'an unpaid inheritance' }, 'why')).toBe('I think it was an unpaid inheritance');
     expect(pickerText({ handle: 's1', name: 'Mr Grey' }, 'who')).toBe('Mr Grey');
   });
