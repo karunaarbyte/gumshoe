@@ -26,3 +26,17 @@ test('the Accuse button calls back and can be disabled', async () => {
   rerender(<Notebook state={states[0]!} canAccuse={false} onAccuse={onAccuse} />);
   expect(screen.getByRole('button', { name: 'Accuse' })).toBeDisabled();
 });
+
+test('the notebook collapses to a slim rail that still accuses', async () => {
+  const onToggle = vi.fn();
+  const onAccuse = vi.fn();
+  const { rerender } = render(<Notebook state={states[2]!} canAccuse onAccuse={onAccuse} onToggle={onToggle} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Hide the notebook' }));
+  expect(onToggle).toHaveBeenCalledOnce();
+  rerender(<Notebook state={states[2]!} canAccuse onAccuse={onAccuse} onToggle={onToggle} collapsed />);
+  expect(screen.queryByRole('region', { name: 'Mr Grey the butler' })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Accuse' }));
+  expect(onAccuse).toHaveBeenCalledOnce();
+  await userEvent.click(screen.getByRole('button', { name: 'Open the notebook' }));
+  expect(onToggle).toHaveBeenCalledTimes(2);
+});

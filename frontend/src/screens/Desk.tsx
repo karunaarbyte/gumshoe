@@ -37,6 +37,20 @@ export function Desk({ game, onExit, onError, session: sessionOptions }: Props) 
   const input = useRef<HTMLTextAreaElement>(null);
   const mounted = useRef(true);
   const saving = useRef(false);
+  const [notebookOpen, setNotebookOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem('gumshoe:notebook') !== 'closed';
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('gumshoe:notebook', notebookOpen ? 'open' : 'closed');
+    } catch {
+      // a per-viewer convenience; the desk works without it
+    }
+  }, [notebookOpen]);
   const answerButton = useRef<HTMLButtonElement>(null);
   const exitButton = useRef<HTMLButtonElement>(null);
   const focusAfterClose = useRef(false);
@@ -115,9 +129,11 @@ export function Desk({ game, onExit, onError, session: sessionOptions }: Props) 
           </InkButton>
           <InkButton ref={exitButton} onClick={onExit}>Case files</InkButton>
         </header>
-        <div className="grid min-h-0 grid-cols-[280px_minmax(0,1fr)_380px]">
+        <div className={`grid min-h-0 ${notebookOpen ? 'grid-cols-[280px_minmax(0,1fr)_380px]' : 'grid-cols-[72px_minmax(0,1fr)_380px]'}`}>
           <Notebook
             state={state}
+            collapsed={!notebookOpen}
+            onToggle={() => setNotebookOpen((o) => !o)}
             canAccuse={view.outcome === 'playing' && !session.busy}
             onAccuse={() => {
               if (draft === '') setDraft(ACCUSE_DRAFT);
