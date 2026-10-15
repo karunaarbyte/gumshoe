@@ -7,6 +7,8 @@ export interface MessageProps {
   message: ChatMessage;
   pending: PendingView | null;
   busy: boolean;
+  /** A clarify from an earlier turn, or any turn while a confirmation waits, must not send. */
+  stale?: boolean;
   onSend: (text: string) => void;
   onAnswer: (answer: 'yes' | 'no') => void;
 }
@@ -17,7 +19,7 @@ function Tag({ children }: { children: string }) {
 
 const agentLine = 'my-1 border-l-4 border-ink bg-card px-3 py-2';
 
-export function Message({ message: m, pending, busy, onSend, onAnswer }: MessageProps) {
+export function Message({ message: m, pending, busy, stale = false, onSend, onAnswer }: MessageProps) {
   switch (m.kind) {
     case 'player':
       return (
@@ -56,7 +58,7 @@ export function Message({ message: m, pending, busy, onSend, onAnswer }: Message
       return (
         <div className={agentLine} data-kind="clarify">
           <p>{m.event.text}</p>
-          {m.event.reason === 'accusation' && m.event.problems.length > 0 && <Pickers problems={m.event.problems} disabled={busy} onPick={onSend} />}
+          {m.event.reason === 'accusation' && m.event.problems.length > 0 && <Pickers problems={m.event.problems} disabled={busy || stale} onPick={onSend} />}
         </div>
       );
     case 'confirm':

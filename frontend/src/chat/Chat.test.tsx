@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, test, vi } from 'vitest';
@@ -9,9 +9,16 @@ import { states, transcript } from '../test/fixtures';
 import { Chat } from './Chat';
 import { pickerText } from './pickerText';
 
-function Harness({ view, busy = false, onSend = vi.fn(), onAnswer = vi.fn() }: { view: GameView; busy?: boolean; onSend?: (t: string) => void; onAnswer?: (a: 'yes' | 'no') => void }) {
+function Harness({ view, busy = false, onSend = vi.fn(), onAnswer = vi.fn(), accepts = true }: { accepts?: boolean; view: GameView; busy?: boolean; onSend?: (t: string) => void; onAnswer?: (a: 'yes' | 'no') => void }) {
   const [draft, setDraft] = useState('');
-  return <Chat view={view} busy={busy} maxChars={1000} draft={draft} onDraft={setDraft} onSend={onSend} onAnswer={onAnswer} />;
+  const [sent, setSent] = useState(false);
+  // a send the session accepted shows up as a player message
+  const shown: GameView = sent ? { ...view, messages: [...view.messages, { id: 'p-new', turn: 99, kind: 'player', text: 'x', via: 'turn' }] } : view;
+  const accept = (t: string) => {
+    onSend(t);
+    if (accepts) setSent(true);
+  };
+  return <Chat view={shown} busy={busy} maxChars={1000} draft={draft} onDraft={setDraft} onSend={accept} onAnswer={onAnswer} />;
 }
 
 const at = (k: number) => rebuild('g1', states[k]!, transcript.slice(0, k));
@@ -57,16 +64,16 @@ describe('Chat rendering', () => {
     render(<Harness view={at(6)} onAnswer={onAnswer} />);
     const card = screen.getByRole('region', { name: 'Accusation confirmation' });
     expect(card).toHaveTextContent('You hold a fact that points away from Mr Grey.');
-    await userEvent.click(within(card).getByRole('button', { name: 'Yes' }));
+    await userEvent.click(within(card).getByRole('button', { name: 'Yes, accuse' }));
     expect(onAnswer).toHaveBeenCalledWith('yes');
-    await userEvent.click(within(card).getByRole('button', { name: 'No' }));
+    await userEvent.click(within(card).getByRole('button', { name: 'No, cancel the accusation' }));
     expect(onAnswer).toHaveBeenCalledWith('no');
   });
 
   test('reason pending renders next to the still-live confirm card', () => {
     render(<Harness view={at(7)} />);
     expect(screen.getByText(/Still want to go ahead\?/)).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Accusation confirmation' })).getByRole('button', { name: 'Yes' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Accusation confirmation' })).getByRole('button', { name: 'Yes, accuse' })).toBeInTheDocument();
   });
 
   test('a cancelled confirmation is struck through with no buttons', () => {
@@ -80,13 +87,13 @@ describe('Chat rendering', () => {
   test('only the confirmation the server holds has buttons', () => {
     render(<Harness view={at(10)} />);
     expect(screen.getAllByRole('region', { name: 'Accusation confirmation' }).map((c) => c.getAttribute('data-state'))).toEqual(['cancelled', 'answered']);
-    expect(screen.queryByRole('button', { name: 'Yes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Yes, accuse' })).not.toBeInTheDocument();
     expect(screen.getByText('Case closed')).toBeInTheDocument();
   });
 
   test('a waiting confirmation lost from the transcript is pinned from pending', () => {
     render(<Harness view={rebuild('g1', states[6]!, [])} />);
-    expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Yes, accuse' })).toBeInTheDocument();
   });
 
   test('the input is disabled with a typing indicator while a turn runs', () => {
@@ -117,6 +124,42 @@ describe('Chat rendering', () => {
     render(<Harness view={rebuild('g1', states[0]!, many)} />);
     expect(screen.getByText('hello 199')).toBeInTheDocument();
     expect(screen.getByRole('log')).toHaveClass('overflow-y-auto');
+  });
+});
+
+describe('Chat hardening', () => {
+  test('pickers are disabled while a confirmation waits, enabled in the latest turn otherwise', () => {
+    const { unmount } = render(<Harness view={at(6)} />);
+    expect(within(screen.getByRole('group', { name: 'How?' })).getByRole('button', { name: 'poisoned port' })).toBeDisabled();
+    unmount();
+    render(<Harness view={at(5)} />);
+    expect(within(screen.getByRole('group', { name: 'How?' })).getByRole('button', { name: 'poisoned port' })).toBeEnabled();
+  });
+
+  test('a send that did not start a turn keeps the typed text', async () => {
+    render(<Harness view={at(1)} accepts={false} />);
+    const box = screen.getByRole('textbox', { name: 'Message' });
+    await userEvent.type(box, 'ask the cook{Enter}');
+    expect(box).toHaveValue('ask the cook');
+  });
+
+  test('Enter that confirms an IME candidate does not send', () => {
+    const onSend = vi.fn();
+    render(<Harness view={at(1)} onSend={onSend} />);
+    const box = screen.getByRole('textbox', { name: 'Message' });
+    fireEvent.change(box, { target: { value: 'にほん' } });
+    fireEvent.keyDown(box, { key: 'Enter', keyCode: 229 });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  test('the status element is always present', () => {
+    render(<Harness view={at(1)} />);
+    expect(screen.getByRole('status')).toHaveTextContent('');
+  });
+
+  test('give up confirmations name what Yes and No do', () => {
+    render(<Harness view={at(6)} />);
+    expect(screen.getByRole('button', { name: 'No, cancel the accusation' })).toBeInTheDocument();
   });
 });
 

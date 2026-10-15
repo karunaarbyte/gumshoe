@@ -14,6 +14,8 @@ interface Props {
 }
 
 const TITLE = { accuse: 'Accusation', give_up: 'Give up' } as const;
+const YES = { accuse: 'Yes, accuse', give_up: 'Yes, give up' } as const;
+const NO = { accuse: 'No, cancel the accusation', give_up: 'No, keep playing' } as const;
 const NOTE: Partial<Record<ConfirmState, string>> = {
   cancelled: 'Cancelled',
   answered: 'Answered',
@@ -40,10 +42,10 @@ export function ConfirmCard({ text, warnings, kind, state, live, disabled, onAns
       )}
       {live ? (
         <div className="mt-2 flex gap-2">
-          <StampButton disabled={disabled} onClick={() => onAnswer('yes')}>
+          <StampButton aria-label={YES[kind]} disabled={disabled} onClick={() => onAnswer('yes')}>
             Yes
           </StampButton>
-          <InkButton disabled={disabled} onClick={() => onAnswer('no')}>
+          <InkButton aria-label={NO[kind]} disabled={disabled} onClick={() => onAnswer('no')}>
             No
           </InkButton>
         </div>

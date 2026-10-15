@@ -4,7 +4,7 @@ import { StampButton } from '../ui/Button';
 interface Props {
   draft: string;
   onDraft: (text: string) => void;
-  onSend: (text: string) => void;
+  onSend: (text: string) => void | Promise<void>;
   busy: boolean;
   closed: boolean;
   maxChars: number;
@@ -23,11 +23,9 @@ export function ChatInput({ draft, onDraft, onSend, busy, closed, maxChars, inpu
   };
   return (
     <form onSubmit={submit} className="border-t border-ink bg-card p-2">
-      {busy && (
-        <p role="status" className="mb-1 text-xs italic">
-          The agent is typing…
-        </p>
-      )}
+      <p role="status" className="mb-1 min-h-4 text-xs italic">
+        {busy ? 'The agent is typing…' : ''}
+      </p>
       <textarea
         ref={inputRef}
         aria-label="Message"
@@ -40,7 +38,10 @@ export function ChatInput({ draft, onDraft, onSend, busy, closed, maxChars, inpu
         onCompositionStart={() => setComposing(true)}
         onCompositionEnd={() => setComposing(false)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey && !composing) submit(e);
+          if (e.key !== 'Enter' || e.shiftKey) return;
+          // Safari fires the confirming Enter after compositionend, with keyCode 229
+          if (composing || e.nativeEvent.isComposing || e.keyCode === 229) return;
+          submit(e);
         }}
       />
       <div className="mt-1 flex items-center justify-between text-xs">
