@@ -24,6 +24,7 @@ export const healthOn: Health = {
   primary: 'jev',
   shadow: 'nimble',
   persona_models: { default: 'ministral-3:14b', dramatic: 'gemma4:12b' },
+  personas: 'up',
 };
 
 export const healthOff: Health = { ...healthOn, game: 'off', reason: 'the decider is not configured: JEV_API_KEY is missing' };

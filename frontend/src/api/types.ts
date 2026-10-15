@@ -12,6 +12,7 @@ export interface Health {
   primary: string;
   shadow: string | null;
   persona_models: { default: string; dramatic: string };
+  personas: 'up' | 'down'; // down: the dialogue model does not answer, suspects give stock lines
 }
 
 export interface Meta {

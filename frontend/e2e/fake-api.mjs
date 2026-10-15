@@ -115,7 +115,7 @@ createServer(async (req, res) => {
   const path = url.pathname;
   const method = req.method ?? 'GET';
   try {
-    if (method === 'GET' && path === '/api/health') return json(res, 200, { status: 'ok', game: 'on', reason: null, primary: 'jev', shadow: 'nimble', persona_models: { default: 'fake', dramatic: 'fake' } });
+    if (method === 'GET' && path === '/api/health') return json(res, 200, { status: 'ok', game: 'on', reason: null, primary: 'jev', shadow: 'nimble', persona_models: { default: 'fake', dramatic: 'fake' }, personas: 'up' });
     if (method === 'GET' && path === '/api/meta') return json(res, 200, { presets: ['short', 'standard'], default_preset: 'standard', max_attempts: 3, max_turn_chars: 1000 });
     if (method === 'GET' && path === '/api/saves') return json(res, 200, []);
     if (method === 'GET' && path === '/api/games') return json(res, 200, game === null ? [] : [{ game: GAME, preset: 'standard', outcome: game.outcome, attempts_left: 3, turn_running: false }]);

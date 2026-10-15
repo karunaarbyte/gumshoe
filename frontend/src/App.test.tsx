@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { App, defaultQueryClient } from './App';
 import { ApiError } from './api/errors';
 import { gameKey, loadBoard, saveKey, storeBoard } from './board/storage';
-import { confirmFirst, healthOff, reveal, states, transcript } from './test/fixtures';
+import { confirmFirst, healthOff, healthOn, reveal, states, transcript } from './test/fixtures';
 import { apiError, droppedAfter, eventsOf, fakeApi } from './test/fakeApi';
 import { preferReducedMotion, testQueryClient } from './test/render';
 
@@ -82,6 +82,14 @@ describe('App', () => {
     renderApp(client);
     const panel = await screen.findByRole('alert', { name: 'The game is off' });
     await waitFor(() => expect(panel).toHaveTextContent('JEV_API_KEY is missing'));
+  });
+
+  test('the dialogue model being offline is said in the chat column', async () => {
+    window.location.hash = '#/game/g1';
+    const client = fakeApi();
+    client.health.mockResolvedValue({ ...healthOn, personas: 'down' });
+    renderApp(client);
+    expect(await screen.findByText(/dialogue model is offline/)).toBeInTheDocument();
   });
 
   test('unknown_game: back to the title with the ended banner', async () => {

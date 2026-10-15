@@ -226,6 +226,15 @@ export function Desk({
               ?
             </button>
           </div>
+          {health.data?.personas === "down" && (
+            <p
+              role="status"
+              className="shrink-0 border-b border-ink bg-card-light px-3 py-1 text-xs italic"
+            >
+              The dialogue model is offline, so suspects can only give stock
+              lines until it is back.
+            </p>
+          )}
           <div className="min-h-0 flex-1">
             <Chat
               view={view}
