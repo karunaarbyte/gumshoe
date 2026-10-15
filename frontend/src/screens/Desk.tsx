@@ -147,8 +147,18 @@ export function Desk({
     <>
       <div
         inert={ceremonyOpen || helpOpen}
-        className="grid h-screen grid-cols-[minmax(0,1fr)_400px]"
+        className={`grid h-screen grid-rows-[minmax(0,1fr)] ${notebookOpen ? "grid-cols-[280px_minmax(0,1fr)_400px]" : "grid-cols-[88px_minmax(0,1fr)_400px]"}`}
       >
+        <Notebook
+          state={state}
+          collapsed={!notebookOpen}
+          onToggle={() => setNotebookOpen((o) => !o)}
+          canAccuse={view.outcome === "playing" && !session.busy}
+          onAccuse={() => {
+            if (draft === "") setDraft(ACCUSE_DRAFT);
+            input.current?.focus();
+          }}
+        />
         <div
           data-testid="desk-main"
           className="grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)_auto]"
@@ -195,19 +205,7 @@ export function Desk({
               {state.brief.intro}
             </p>
           </section>
-          <div
-            className={`grid min-h-0 ${notebookOpen ? "grid-cols-[280px_minmax(0,1fr)]" : "grid-cols-[88px_minmax(0,1fr)]"}`}
-          >
-            <Notebook
-              state={state}
-              collapsed={!notebookOpen}
-              onToggle={() => setNotebookOpen((o) => !o)}
-              canAccuse={view.outcome === "playing" && !session.busy}
-              onAccuse={() => {
-                if (draft === "") setDraft(ACCUSE_DRAFT);
-                input.current?.focus();
-              }}
-            />
+          <div className="min-h-0 min-w-0 overflow-hidden">
             <Board game={game} state={state} />
           </div>
           <TraceDrawer turns={view.turns} health={health.data} />

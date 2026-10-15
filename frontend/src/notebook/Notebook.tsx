@@ -104,7 +104,11 @@ export function Notebook({
           </ul>
         </section>
       )}
-      <StampButton className="mt-auto" disabled={!canAccuse} onClick={onAccuse}>
+      <StampButton
+        className="sticky bottom-0 mt-auto"
+        disabled={!canAccuse}
+        onClick={onAccuse}
+      >
         Accuse
       </StampButton>
     </nav>
