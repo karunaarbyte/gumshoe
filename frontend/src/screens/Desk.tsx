@@ -153,7 +153,7 @@ export function Desk({
           data-testid="desk-main"
           className="grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)_auto]"
         >
-          <header className="flex items-center gap-4 border-b-2 border-ink bg-card px-4 py-2">
+          <header className="flex items-center gap-4 border-b-2 border-ink bg-card px-4 py-1">
             <h1 className="text-2xl">GUMSHOE</h1>
             <span className="flex-1" />
             {over && view.reveal === null && (
@@ -170,6 +170,7 @@ export function Desk({
               </InkButton>
             )}
             <InkButton
+              className="py-1!"
               disabled={save.isPending}
               onClick={() => {
                 if (saving.current) return;
@@ -179,25 +180,19 @@ export function Desk({
             >
               Save
             </InkButton>
-            <InkButton ref={exitButton} onClick={onExit}>
+            <InkButton className="py-1!" ref={exitButton} onClick={onExit}>
               Case files
             </InkButton>
           </header>
           <section
             aria-label="The case"
-            className="border-b-2 border-ink bg-card-light px-8 py-4 text-center"
+            className="border-b-2 border-ink bg-card-light px-6 py-1.5 text-center"
           >
-            <span className="inline-block bg-stamp px-3 py-0.5 text-xs tracking-[0.3em] text-card-light uppercase">
+            <span className="block text-[10px] leading-none tracking-[0.3em] text-stamp uppercase">
               The case
             </span>
-            <p className="mx-auto mt-2 max-w-3xl font-display text-2xl leading-snug">
+            <p className="mx-auto max-w-4xl font-display text-lg leading-snug">
               {state.brief.intro}
-            </p>
-            <p className="mt-2 text-xs tracking-widest uppercase">
-              Attempts left{" "}
-              <b className="ml-1 text-base text-stamp">
-                {state.brief.attempts_left}
-              </b>
             </p>
           </section>
           <div

@@ -58,6 +58,9 @@ export function Notebook({
         <h2 className="text-xl">Notebook</h2>
         {toggle("Hide the notebook", "«")}
       </div>
+      <p className="text-center text-xs">
+        Attempts left: {brief.attempts_left}
+      </p>
       {notebook.sections.length === 0 && (
         <p className="text-sm italic">Nothing noted yet.</p>
       )}
