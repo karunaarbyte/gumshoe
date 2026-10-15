@@ -31,8 +31,8 @@ describe('api client', () => {
   });
 
   test('a body that is not JSON becomes http_error', async () => {
-    stubFetch(new Response('<html>bad gateway</html>', { status: 502 }));
-    await expect(api.health()).rejects.toMatchObject({ status: 502, code: 'http_error' });
+    stubFetch(new Response('<html>oops</html>', { status: 500 }));
+    await expect(api.health()).rejects.toMatchObject({ status: 500, code: 'http_error' });
   });
 
   test('a network failure becomes the network code', async () => {

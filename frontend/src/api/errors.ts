@@ -30,5 +30,7 @@ export async function errorFrom(response: Response): Promise<ApiError> {
   } catch {
     // a body that is not JSON (a proxy's error page): keep the generic code
   }
+  // a gateway error with no API body: the proxy has no server behind it, same as being offline
+  if (code === 'http_error' && [502, 503, 504].includes(response.status)) return new ApiError(response.status, NETWORK, 'the server could not be reached');
   return new ApiError(response.status, code, message);
 }

@@ -15,6 +15,13 @@ describe('summariseTool', () => {
     expect(summariseTool({ kind: 'interrogate', label: 'Maud', status: 'locked' })?.lines[0]).toMatch(/Not available yet/);
   });
 
+  test('a made accusation reports how many parts were right', () => {
+    expect(summariseTool({ status: 'resolved', correct: 0, attempts_left: 2, game: 'playing', message: '0 of 3 right.' })).toEqual({
+      heading: 'Your accusation: 0 of 3 right.',
+      lines: ['Attempts left: 2.'],
+    });
+  });
+
   test('an unknown result has no summary', () => {
     expect(summariseTool(null)).toBeNull();
     expect(summariseTool({ kind: 'mystery', label: 'x' })).toBeNull();
