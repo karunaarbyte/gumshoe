@@ -30,7 +30,7 @@ export function Message({ message: m, pending, busy, stale = false, onSend, onAn
       );
     case 'reply': {
       const e = m.event;
-      if (e.source === 'help') return <p className={`${agentLine} italic`} data-kind="agent-note">{e.text}</p>;
+      if (e.source === 'help') return <p className={`${agentLine} whitespace-pre-line italic`} data-kind="agent-note">{e.text}</p>;
       return (
         <div className="my-2" data-kind="reply">
           <p className="text-xs font-bold uppercase">
@@ -55,8 +55,8 @@ export function Message({ message: m, pending, busy, stale = false, onSend, onAn
           {summary !== null && (
             <div className="my-1 border-l-4 border-ink bg-card px-3 py-2 text-sm opacity-100" data-kind="tool-summary">
               <p className="font-bold">{summary.heading}</p>
-              {summary.lines.map((line) => (
-                <p key={line}>{line}</p>
+              {summary.lines.map((line, i) => (
+                <p key={`${i}-${line}`}>{line}</p>
               ))}
             </div>
           )}
@@ -70,7 +70,7 @@ export function Message({ message: m, pending, busy, stale = false, onSend, onAn
     case 'clarify':
       return (
         <div className={agentLine} data-kind="clarify">
-          <p>{m.event.text}</p>
+          <p className="whitespace-pre-line">{m.event.text}</p>
           {m.event.reason === 'accusation' && m.event.problems.length > 0 && <Pickers problems={m.event.problems} disabled={busy || stale} onPick={onSend} />}
         </div>
       );

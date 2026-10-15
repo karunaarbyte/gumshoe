@@ -8,7 +8,8 @@ const STEPS: [string, string][] = [
   ['Read the records', 'Type "read the records about Gilbert the cook" (or about a place). Records often name where someone was, and are the quickest way to catch a lie.'],
   ['Catch the lies', 'Some suspects lie. A fact that contradicts a claim is marked and joined to it by a red string. Contradictions are your best leads.'],
   ['Use the board', 'Click a card to read it in full. Drag cards to arrange them. Drag from a card’s red pin to another card to draw your own thread. "Tidy up" resets the layout.'],
-  ['Accuse', 'You can only accuse someone you hold a lead on, so keep searching, questioning and reading records. Then press Accuse, or type "I accuse <suspect>". Pick the how and the why from the buttons, then confirm. A wrong accusation costs an attempt.'],
+  ['Accuse', 'You can only accuse someone you hold a lead on, so keep searching, questioning and reading records. Then press Accuse, or type "I accuse <suspect>". Pick the how and the why from the buttons, then confirm with the Yes button (or type yes). A wrong accusation costs an attempt.'],
+  ['Stuck?', 'Type help for a list of moves that fit the case right now.'],
 ];
 
 /** A short how-to-play card. Escape or the close button dismisses it. */

@@ -12,13 +12,35 @@ describe('summariseTool', () => {
 
   test('nothing new and locked read plainly', () => {
     expect(summariseTool({ kind: 'search', label: 'Hall', status: 'nothing_new' })?.lines).toEqual(['Nothing new turned up.']);
-    expect(summariseTool({ kind: 'interrogate', label: 'Maud', status: 'locked' })?.lines[0]).toMatch(/Not available yet/);
+    expect(summariseTool({ kind: 'interrogate', label: '', status: 'locked' })?.heading).toBe('That is not open to you yet.');
   });
 
   test('a made accusation reports how many parts were right', () => {
     expect(summariseTool({ status: 'resolved', correct: 0, attempts_left: 2, game: 'playing', message: '0 of 3 right.' })).toEqual({
       heading: 'Your accusation: 0 of 3 right.',
       lines: ['Attempts left: 2.'],
+    });
+  });
+
+  test('the notebook is a count and the contradictions, not a dump of every fact', () => {
+    const s = summariseTool({
+      sections: [
+        { source: 'Gatehouse', facts: [{ text: 'a' }, { text: 'b' }] },
+        { source: 'Kitchen', facts: [{ text: 'c' }] },
+      ],
+      contradictions: [{ text: 'Grey says pantry, the ledger says hall.' }],
+    });
+    expect(s).toEqual({
+      heading: 'Your notebook: 3 facts from 2 places, 1 contradiction.',
+      lines: ['Contradiction: Grey says pantry, the ledger says hall.'],
+    });
+    expect(summariseTool({ sections: [], contradictions: [] })?.heading).toBe('Your notebook is empty.');
+  });
+
+  test('a locked source is redacted: no name, and it says so', () => {
+    expect(summariseTool({ kind: 'search', label: '', status: 'locked', new_facts: [] })).toEqual({
+      heading: 'That is not open to you yet.',
+      lines: ['Keep digging: searching, questioning and reading records open up more.'],
     });
   });
 

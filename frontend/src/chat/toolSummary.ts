@@ -39,6 +39,21 @@ export function summariseTool(
         : [];
     return { heading: `Your accusation: ${data.message}`, lines: left };
   }
+  if (data !== null && Array.isArray(data.sections)) {
+    // the notebook panel already lists the facts: say how many, and give the contradictions
+    const facts = data.sections.reduce<number>((n, sec) => {
+      const list = (sec as { facts?: unknown }).facts;
+      return n + (Array.isArray(list) ? list.length : 0);
+    }, 0);
+    const places = data.sections.length;
+    const contradictions = texts(data.contradictions);
+    const s = (n: number) => (n === 1 ? "" : "s");
+    const heading =
+      facts === 0
+        ? "Your notebook is empty."
+        : `Your notebook: ${facts} fact${s(facts)} from ${places} place${s(places)}, ${contradictions.length} contradiction${s(contradictions.length)}.`;
+    return { heading, lines: contradictions.map((c) => `Contradiction: ${c}`) };
+  }
   if (
     data === null ||
     typeof data.kind !== "string" ||
@@ -47,12 +62,19 @@ export function summariseTool(
     return null;
   const verb = VERB[data.kind];
   if (verb === undefined) return null;
+  if (data.status === "locked") {
+    // the name of a locked suspect or place is a secret; the engine sends it empty
+    return {
+      heading: "That is not open to you yet.",
+      lines: [
+        "Keep digging: searching, questioning and reading records open up more.",
+      ],
+    };
+  }
   const heading = `${verb} ${data.label}.`;
   const facts = texts(data.new_facts);
   const lines: string[] = [];
-  if (data.status === "locked")
-    lines.push("Not available yet: find out more elsewhere first.");
-  else if (
+  if (
     data.status === "nothing_new" ||
     (data.status === "ok" && facts.length === 0)
   )
