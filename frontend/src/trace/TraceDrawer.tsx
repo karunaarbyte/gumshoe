@@ -36,7 +36,7 @@ export function TraceDrawer({ turns, health, retryBaseMs }: Props) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const client = useApi();
   const backends = health === undefined ? [] : [health.primary, ...(health.shadow === null ? [] : [health.shadow])];
-  const ids = turns.flatMap((t) => t.decisionIds);
+  const ids = [...new Set(turns.flatMap((t) => t.decisionIds))];
   // read-only view of what is already in the cache: these never fetch on their own
   const cached = useQueries({
     queries: ids.map((id) => ({ queryKey: keys.decision(id), queryFn: () => client.decision(id), enabled: false, staleTime: Infinity })),

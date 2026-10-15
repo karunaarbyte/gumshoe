@@ -26,7 +26,11 @@ export function DecisionPanel({ id, backends, retryBaseMs }: { id: string; backe
   const query = useDecision(id, retryBaseMs);
   if (query.isPending) return <p className="text-xs italic">Fetching decision {id}…</p>;
   if (query.isError) {
-    const text = isApiError(query.error, 'not_recorded_yet') ? 'not recorded yet' : query.error.message;
+    const text = isApiError(query.error, 'not_recorded_yet')
+      ? 'not recorded yet'
+      : isApiError(query.error)
+        ? query.error.message
+        : 'could not be loaded';
     return <p className="text-xs text-stamp">Decision {id}: {text}</p>;
   }
   const d = query.data;
@@ -70,7 +74,7 @@ export function DecisionPanel({ id, backends, retryBaseMs }: { id: string; backe
       </table>
       <details className="text-xs">
         <summary>state preview</summary>
-        <pre className="whitespace-pre-wrap">{d.state_preview}</pre>
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words">{d.state_preview}</pre>
       </details>
     </div>
   );

@@ -17,18 +17,18 @@ export function disagrees(calls: CallView[], question: string): boolean {
 export interface BackendTotals {
   backend: string;
   calls: number;
-  costUsd: number;
+  costUsd: number | null;
   meanLatencyMs: number | null;
 }
 
 /** Running totals per backend over the decisions loaded so far. */
 export function totals(decisions: DecisionView[]): BackendTotals[] {
-  const by = new Map<string, { calls: number; cost: number; latency: number }>();
+  const by = new Map<string, { calls: number; cost: number | null; latency: number }>();
   for (const d of decisions) {
     for (const c of d.calls) {
-      const t = by.get(c.backend) ?? { calls: 0, cost: 0, latency: 0 };
+      const t = by.get(c.backend) ?? { calls: 0, cost: null, latency: 0 };
       t.calls += 1;
-      t.cost += c.est_cost_usd ?? 0;
+      if (c.est_cost_usd !== null) t.cost = (t.cost ?? 0) + c.est_cost_usd;
       t.latency += c.latency_ms;
       by.set(c.backend, t);
     }

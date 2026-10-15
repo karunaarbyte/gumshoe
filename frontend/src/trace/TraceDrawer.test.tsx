@@ -30,6 +30,19 @@ describe('compare', () => {
       { backend: 'nimble', calls: 2, costUsd: 0.0002, meanLatencyMs: 480 },
     ]);
   });
+
+  test('unknown cost stays null; known costs are summed around the unknown ones', () => {
+    const a = decision('a');
+    const b = decision('b');
+    a.calls[0] = { ...a.calls[0]!, est_cost_usd: null };
+    a.calls[1] = { ...a.calls[1]!, est_cost_usd: null };
+    b.calls[1] = { ...b.calls[1]!, est_cost_usd: 0.0003 };
+    const [jev, nimble] = totals([a, b]);
+    expect(jev?.costUsd).toBe(0.0004);
+    expect(nimble?.costUsd).toBe(0.0003);
+    const [none] = totals([a]);
+    expect(none?.costUsd).toBeNull();
+  });
 });
 
 describe('TraceDrawer', () => {
@@ -110,5 +123,50 @@ describe('TraceDrawer', () => {
     await openTurn('search the long gallery');
     const panel = await screen.findByTestId(`decision-${decisionIds.search}`);
     expect(within(panel).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['question', 'jev', 'nimble']);
+  });
+
+  test('totals show a dash when no cost is known', async () => {
+    const client = fakeApi();
+    client.decision.mockImplementation(async (id) => {
+      const d = decision(id);
+      d.calls = d.calls.map((c) => ({ ...c, est_cost_usd: null }));
+      return d;
+    });
+    renderWithApp(<TraceDrawer turns={turns} health={healthOn} />, client);
+    await openTurn('search the long gallery');
+    await screen.findByTestId(`decision-${decisionIds.search}`);
+    expect(screen.getByTestId('totals-jev')).toHaveTextContent('1 calls · – · mean');
+  });
+
+  test('a decision id shared by two turns is counted once', async () => {
+    const client = fakeApi();
+    client.decision.mockImplementation(async (id) => decision(id));
+    const shared = turns.map((t, i) => (i < 2 ? { ...t, decisionIds: [decisionIds.search] } : t));
+    renderWithApp(<TraceDrawer turns={shared} health={healthOn} />, client);
+    await openTurn('search the long gallery');
+    await screen.findByTestId(`decision-${decisionIds.search}`);
+    await waitFor(() => expect(screen.getByTestId('totals-jev')).toHaveTextContent('1 calls'));
+  });
+
+  test.each([
+    [new ApiError(500, 'internal', 'boom'), 'boom'],
+    [new ApiError(404, 'unknown_game', 'nope'), 'nope'],
+  ])('a non-retryable error is asked once and shown (%s)', async (error, text) => {
+    const client = fakeApi();
+    client.decision.mockRejectedValue(error);
+    renderWithApp(<TraceDrawer turns={turns} health={healthOn} retryBaseMs={1} />, client);
+    await openTurn('search the long gallery');
+    expect(await screen.findByText(new RegExp(text))).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(client.decision).toHaveBeenCalledTimes(1);
+  });
+
+  test('a non-API failure shows a generic message, not the raw one', async () => {
+    const client = fakeApi();
+    client.decision.mockRejectedValue(new TypeError('secret internals'));
+    renderWithApp(<TraceDrawer turns={turns} health={healthOn} retryBaseMs={1} />, client);
+    await openTurn('search the long gallery');
+    expect(await screen.findByText(/could not be loaded/)).toBeInTheDocument();
+    expect(screen.queryByText(/secret internals/)).not.toBeInTheDocument();
   });
 });
