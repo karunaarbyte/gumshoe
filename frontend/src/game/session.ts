@@ -44,11 +44,15 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
   const [view, dispatch] = useReducer(gameReducer, game, emptyView);
   const [ready, setReady] = useState(false);
   const [sending, setSending] = useState(false);
+  const [pollTick, setPollTick] = useState(0);
+  const readyRef = useRef(false);
+  readyRef.current = ready;
   const viewRef = useRef(view);
   viewRef.current = view;
   const inFlight = useRef(false); // set synchronously: a double click can never send twice
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
+  // Desk must remount per game (key={game}); the session is bound to one game for life
   const alive = useRef(true);
   const abort = useRef<AbortController | null>(null);
 
@@ -78,13 +82,26 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
 
   // a turn we are not reading (another tab, a 409, a reload mid-turn): poll until it ends
   useEffect(() => {
-    if (view.status !== 'remote') return undefined;
+    if (view.status !== 'remote' && view.status !== 'lost') return undefined;
     const timer = window.setTimeout(() => {
-      // a failed poll is retried by the next view change; never an unhandled rejection
-      reload().catch(() => undefined);
+      // success or failure, tick so the effect re-arms while the status stays remote or lost
+      reload()
+        .catch(() => undefined)
+        .finally(() => {
+          if (alive.current) setPollTick((t) => t + 1);
+        });
     }, pollMs);
     return () => window.clearTimeout(timer);
-  }, [view, pollMs, reload]);
+  }, [view.status, pollTick, pollMs, reload]);
+
+  // a reload inside run() must never reject send()/answer(): non-API failures become a notice
+  const safeReload = useCallback(async () => {
+    try {
+      await reload();
+    } catch {
+      if (alive.current) handlersRef.current.onNotice(CONNECTION_LOST_NOTICE);
+    }
+  }, [reload]);
 
   const run = useCallback(
     async (kind: 'turn' | 'confirm', text: string, open: (signal: AbortSignal) => Promise<AsyncGenerator<TurnEvent>>) => {
@@ -98,13 +115,14 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
         try {
           events = await open(controller.signal);
         } catch (error) {
+          if (!alive.current) return;
           if (!isApiError(error)) throw error;
           if (error.code === 'turn_in_progress') {
             handlersRef.current.onNotice(TURN_RUNNING_NOTICE);
             dispatch({ type: 'remote_running' });
           } else if (error.code === 'no_such_pending') {
             handlersRef.current.onNotice(PENDING_GONE_NOTICE);
-            await reload();
+            await safeReload();
           } else {
             handlersRef.current.onError(error);
           }
@@ -124,12 +142,13 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
         dispatch({ type: 'stream_ended', sawDone });
         if (!sawDone) {
           handlersRef.current.onNotice(CONNECTION_LOST_NOTICE);
-          await reload();
+          await safeReload();
           return;
         }
         try {
           dispatch({ type: 'server_state', state: await client.state(game) });
         } catch (error) {
+          if (!alive.current) return;
           if (isApiError(error)) handlersRef.current.onError(error);
         }
       } finally {
@@ -137,14 +156,14 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
         if (alive.current) setSending(false);
       }
     },
-    [client, game, now, reload],
+    [client, game, now, reload, safeReload],
   );
 
   const send = useCallback(
     async (raw: string) => {
       const text = raw.trim();
       const current = viewRef.current;
-      if (text === '' || current.status !== 'idle' || current.outcome !== 'playing') return;
+      if (!readyRef.current || text === '' || current.status !== 'idle' || current.outcome !== 'playing') return;
       const body: TurnBody = { text };
       // a typed yes runs the action only with the waiting id; never send an id otherwise
       if (current.pending !== null) body.pending_id = current.pending.pending_id;
@@ -156,7 +175,7 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
   const answer = useCallback(
     async (choice: 'yes' | 'no') => {
       const current = viewRef.current;
-      if (current.pending === null || current.status !== 'idle') return;
+      if (!readyRef.current || current.pending === null || current.status !== 'idle') return;
       const pendingId = current.pending.pending_id;
       await run('confirm', choice, (signal) => client.confirm(game, { pending_id: pendingId, answer: choice }, signal));
     },

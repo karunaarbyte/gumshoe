@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 import { confirmFirst, reveal, states, transcript } from '../test/fixtures';
 import { apiError, droppedAfter, eventsOf, fakeApi } from '../test/fakeApi';
-import { CONNECTION_LOST_NOTICE, TURN_RUNNING_NOTICE, useGameSession } from './session';
+import { CONNECTION_LOST_NOTICE, PENDING_GONE_NOTICE, TURN_RUNNING_NOTICE, useGameSession } from './session';
 
 function setup(client = fakeApi()) {
   const handlers = { onError: vi.fn(), onNotice: vi.fn() };
@@ -105,6 +105,7 @@ describe('useGameSession', () => {
     expect(handlers.onNotice).toHaveBeenCalledWith(CONNECTION_LOST_NOTICE);
     expect(client.turns).toHaveBeenCalledTimes(2);
     expect(hook.result.current.view.turns[0]?.complete).toBe(true);
+    expect(hook.result.current.busy).toBe(false);
   });
 
   test('an empty stream (no events, no done) takes the reload path', async () => {
@@ -121,10 +122,11 @@ describe('useGameSession', () => {
     const client = fakeApi({ state: waitingState, turns: transcript.slice(0, 6) });
     client.confirm.mockRejectedValueOnce(apiError('no_such_pending'));
     client.state.mockResolvedValueOnce(waitingState).mockResolvedValue(states[8]!);
-    const { hook } = setup(client);
+    const { handlers, hook } = setup(client);
     await waitFor(() => expect(hook.result.current.view.pending).not.toBeNull());
     await act(() => hook.result.current.answer('yes'));
     expect(hook.result.current.view.pending).toBeNull();
+    expect(handlers.onNotice).toHaveBeenCalledWith(PENDING_GONE_NOTICE);
   });
 
   test('other errors go to onError', async () => {
@@ -158,5 +160,82 @@ describe('useGameSession', () => {
     await waitFor(() => expect(hook.result.current.ready).toBe(true));
     await act(() => hook.result.current.send('accuse the butler'));
     expect(hook.result.current.view.pending?.pending_id).toBe('p-first');
+  });
+
+  test('nothing is reported after unmount, even when the abort surfaces as a network ApiError', async () => {
+    const client = fakeApi();
+    let fail: (e: unknown) => void = () => undefined;
+    client.turn.mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }));
+    const { handlers, hook } = setup(client);
+    await waitFor(() => expect(hook.result.current.ready).toBe(true));
+    let sent: Promise<void> = Promise.resolve();
+    act(() => { sent = hook.result.current.send('hello'); });
+    hook.unmount();
+    fail(apiError('network', 0));
+    await sent;
+    expect(handlers.onError).not.toHaveBeenCalled();
+    expect(handlers.onNotice).not.toHaveBeenCalled();
+  });
+
+  test('a lost stream whose first reload fails keeps retrying until it recovers', async () => {
+    const client = fakeApi();
+    client.turn.mockResolvedValueOnce(droppedAfter(transcript[1]!.events.slice(0, 2)));
+    client.state.mockResolvedValueOnce(states[0]!).mockRejectedValueOnce(apiError('unavailable', 503));
+    client.turns.mockResolvedValueOnce([]).mockResolvedValue([transcript[1]!]);
+    const { hook } = setup(client);
+    await waitFor(() => expect(hook.result.current.ready).toBe(true));
+    await act(() => hook.result.current.send('search the long gallery'));
+    await waitFor(() => expect(hook.result.current.view.status).toBe('idle'));
+    expect(hook.result.current.busy).toBe(false);
+  });
+
+  test('a remote poll that fails once keeps polling until the turn completes', async () => {
+    const client = fakeApi();
+    client.turn.mockRejectedValueOnce(apiError('turn_in_progress'));
+    const running = { ...transcript[0]!, complete: false, events: [] };
+    client.turns.mockResolvedValueOnce([]).mockRejectedValueOnce(apiError('unavailable', 503))
+      .mockRejectedValueOnce(new TypeError('network error')).mockResolvedValueOnce([running])
+      .mockResolvedValue([transcript[0]!]);
+    const { hook } = setup(client);
+    await waitFor(() => expect(hook.result.current.ready).toBe(true));
+    await act(() => hook.result.current.send('hello'));
+    await waitFor(() => expect(hook.result.current.view.turns[0]?.complete).toBe(true));
+    expect(hook.result.current.busy).toBe(false);
+  });
+
+  test('a non-API failure during the connection-lost reload does not reject send', async () => {
+    const client = fakeApi();
+    client.turn.mockResolvedValueOnce(droppedAfter([]));
+    client.state.mockResolvedValueOnce(states[0]!).mockRejectedValueOnce(new SyntaxError('bad json'));
+    const { handlers, hook } = setup(client);
+    await waitFor(() => expect(hook.result.current.ready).toBe(true));
+    await act(() => hook.result.current.send('hello'));
+    expect(handlers.onNotice).toHaveBeenCalledWith(CONNECTION_LOST_NOTICE);
+  });
+
+  test('send before the first load finishes sends nothing', async () => {
+    const { client, hook } = setup();
+    await act(() => hook.result.current.send('hello'));
+    expect(client.turn).not.toHaveBeenCalled();
+  });
+
+  test('a Yes press racing a typed send makes exactly one request', async () => {
+    const { client, hook } = setup(fakeApi({ state: waitingState, turns: transcript.slice(0, 6) }));
+    await waitFor(() => expect(hook.result.current.view.pending).not.toBeNull());
+    await act(async () => {
+      await Promise.all([hook.result.current.answer('yes'), hook.result.current.send('yes')]);
+    });
+    expect(client.confirm.mock.calls.length + client.turn.mock.calls.length).toBe(1);
+  });
+
+  test('send is refused while another turn runs remotely', async () => {
+    const client = fakeApi();
+    client.turn.mockRejectedValueOnce(apiError('turn_in_progress'));
+    client.turns.mockResolvedValueOnce([]).mockResolvedValue([{ ...transcript[0]!, complete: false, events: [] }]);
+    const { hook } = setup(client);
+    await waitFor(() => expect(hook.result.current.ready).toBe(true));
+    await act(() => hook.result.current.send('hello'));
+    await act(() => hook.result.current.send('again'));
+    expect(client.turn).toHaveBeenCalledTimes(1);
   });
 });
