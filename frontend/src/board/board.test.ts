@@ -36,7 +36,10 @@ describe('cards', () => {
 
   test('the same text twice in one section is one card', () => {
     const section = state.notebook.sections.find((x) => x.facts.length > 0)!;
-    const doubled = { ...state, notebook: { ...state.notebook, sections: state.notebook.sections.map((x) => (x === section ? { ...x, facts: [...x.facts, x.facts[0]!] } : x)) } };
+    const doubled = {
+      ...state,
+      notebook: { ...state.notebook, sections: state.notebook.sections.map((x) => (x === section ? { ...x, facts: [...x.facts, x.facts[0]!] } : x)) },
+    };
     const ids = buildCards(doubled).map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
   });

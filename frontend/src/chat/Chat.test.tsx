@@ -9,7 +9,19 @@ import { states, transcript } from '../test/fixtures';
 import { Chat } from './Chat';
 import { pickerText } from './pickerText';
 
-function Harness({ view, busy = false, onSend = vi.fn(), onAnswer = vi.fn(), accepts = true }: { accepts?: boolean; view: GameView; busy?: boolean; onSend?: (t: string) => void; onAnswer?: (a: 'yes' | 'no') => void }) {
+function Harness({
+  view,
+  busy = false,
+  onSend = vi.fn(),
+  onAnswer = vi.fn(),
+  accepts = true,
+}: {
+  accepts?: boolean;
+  view: GameView;
+  busy?: boolean;
+  onSend?: (t: string) => void;
+  onAnswer?: (a: 'yes' | 'no') => void;
+}) {
   const [draft, setDraft] = useState('');
   const [sent, setSent] = useState(false);
   // a send the session accepted shows up as a player message

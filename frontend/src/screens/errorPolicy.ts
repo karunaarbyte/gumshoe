@@ -1,10 +1,6 @@
 import type { ApiError } from '../api/errors';
 
-export type ErrorAction =
-  | { kind: 'off'; message: string }
-  | { kind: 'ended' }
-  | { kind: 'notice'; message: string }
-  | { kind: 'toast'; message: string };
+export type ErrorAction = { kind: 'off'; message: string } | { kind: 'ended' } | { kind: 'notice'; message: string } | { kind: 'toast'; message: string };
 
 export const ENDED_MESSAGE = 'This game has ended (the server may have restarted).';
 export const UNREACHABLE_MESSAGE = 'The game server could not be reached.';

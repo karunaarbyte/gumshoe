@@ -54,13 +54,7 @@ export interface GameOverMessage extends Base {
   event: GameOverEvent;
 }
 
-export type ChatMessage =
-  | PlayerMessage
-  | ReplyMessage
-  | ToolMessage
-  | ClarifyMessage
-  | ConfirmMessage
-  | GameOverMessage;
+export type ChatMessage = PlayerMessage | ReplyMessage | ToolMessage | ClarifyMessage | ConfirmMessage | GameOverMessage;
 
 export interface TurnView {
   index: number;

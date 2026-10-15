@@ -59,20 +59,23 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
   const alive = useRef(true);
   const abort = useRef<AbortController | null>(null);
 
-  const reload = useCallback(async (quiet = false) => {
-    try {
-      const [state, turns] = await Promise.all([client.state(game), client.turns(game)]);
-      if (!alive.current) return;
-      dispatch({ type: 'reset', view: rebuild(game, state, turns) });
-      setReady(true);
-      setLoadError(false);
-    } catch (error) {
-      if (alive.current) setLoadError(true);
-      if (alive.current && isApiError(error)) {
-        if (!quiet) handlersRef.current.onError(error);
-      } else if (alive.current) throw error;
-    }
-  }, [client, game]);
+  const reload = useCallback(
+    async (quiet = false) => {
+      try {
+        const [state, turns] = await Promise.all([client.state(game), client.turns(game)]);
+        if (!alive.current) return;
+        dispatch({ type: 'reset', view: rebuild(game, state, turns) });
+        setReady(true);
+        setLoadError(false);
+      } catch (error) {
+        if (alive.current) setLoadError(true);
+        if (alive.current && isApiError(error)) {
+          if (!quiet) handlersRef.current.onError(error);
+        } else if (alive.current) throw error;
+      }
+    },
+    [client, game],
+  );
 
   useEffect(() => {
     alive.current = true;

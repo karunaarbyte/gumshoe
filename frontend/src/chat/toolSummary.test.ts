@@ -3,7 +3,14 @@ import { summariseTool } from './toolSummary';
 
 describe('summariseTool', () => {
   test('a search lists the new facts and the places now worth a look', () => {
-    const s = summariseTool({ kind: 'search', label: 'Keep', status: 'ok', new_facts: [{ text: 'A rag was thick with wax.' }], contradictions: [{ text: 'Grey lied.' }], opened: ['Maud the clerk'] });
+    const s = summariseTool({
+      kind: 'search',
+      label: 'Keep',
+      status: 'ok',
+      new_facts: [{ text: 'A rag was thick with wax.' }],
+      contradictions: [{ text: 'Grey lied.' }],
+      opened: ['Maud the clerk'],
+    });
     expect(s).toEqual({
       heading: 'You searched Keep.',
       lines: ['New: A rag was thick with wax.', 'Contradiction: Grey lied.', 'Worth a look now: Maud the clerk.'],

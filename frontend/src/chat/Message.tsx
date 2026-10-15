@@ -30,7 +30,12 @@ export function Message({ message: m, pending, busy, stale = false, onSend, onAn
       );
     case 'reply': {
       const e = m.event;
-      if (e.source === 'help') return <p className={`${agentLine} whitespace-pre-line italic`} data-kind="agent-note">{e.text}</p>;
+      if (e.source === 'help')
+        return (
+          <p className={`${agentLine} whitespace-pre-line italic`} data-kind="agent-note">
+            {e.text}
+          </p>
+        );
       return (
         <div className="my-2" data-kind="reply">
           <p className="text-xs font-bold uppercase">

@@ -26,9 +26,33 @@ export function buildCards(state: GameState): BoardCard[] {
   const { brief, notebook } = state;
   const base = { contradicted: false, speaker: null, source: null };
   const cards = [
-    ...brief.suspects.map((s): BoardCard => ({ ...base, id: suspectCard(s.name), type: 'suspect', label: 'Suspect', title: s.name, body: s.description, locked: s.locked })),
-    ...brief.locations.map((l): BoardCard => ({ ...base, id: locationCard(l.name), type: 'location', label: 'Place', title: l.name, body: l.description, locked: l.locked })),
-    ...brief.record_kinds.map((r): BoardCard => ({ ...base, id: recordCard(r.label), type: 'record', label: 'Records', title: r.label, body: '', locked: false })),
+    ...brief.suspects.map((s): BoardCard => ({
+      ...base,
+      id: suspectCard(s.name),
+      type: 'suspect',
+      label: 'Suspect',
+      title: s.name,
+      body: s.description,
+      locked: s.locked,
+    })),
+    ...brief.locations.map((l): BoardCard => ({
+      ...base,
+      id: locationCard(l.name),
+      type: 'location',
+      label: 'Place',
+      title: l.name,
+      body: l.description,
+      locked: l.locked,
+    })),
+    ...brief.record_kinds.map((r): BoardCard => ({
+      ...base,
+      id: recordCard(r.label),
+      type: 'record',
+      label: 'Records',
+      title: r.label,
+      body: '',
+      locked: false,
+    })),
     ...notebook.sections.flatMap((section) =>
       section.facts.map((f): BoardCard => ({
         id: factCard(section.source, f.text),

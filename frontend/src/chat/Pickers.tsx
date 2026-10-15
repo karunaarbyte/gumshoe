@@ -12,7 +12,12 @@ export function Pickers({ problems, disabled, onPick }: { problems: Problem[]; d
         <div key={`${p.axis}-${i}`} role="group" aria-label={`${AXIS[p.axis]}?`} className="flex flex-wrap items-center gap-2">
           <span className="w-10 font-display text-xs uppercase">{AXIS[p.axis]}</span>
           {p.options.map((o) => (
-            <InkButton key={o.handle} className="px-2 py-1 text-xs normal-case tracking-normal" disabled={disabled} onClick={() => onPick(pickerText(o, p.axis))}>
+            <InkButton
+              key={o.handle}
+              className="px-2 py-1 text-xs normal-case tracking-normal"
+              disabled={disabled}
+              onClick={() => onPick(pickerText(o, p.axis))}
+            >
               {o.name}
             </InkButton>
           ))}

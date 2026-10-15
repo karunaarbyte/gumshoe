@@ -26,11 +26,7 @@ const NOTE: Partial<Record<ConfirmState, string>> = {
 export function ConfirmCard({ text, warnings, kind, state, live, disabled, onAnswer }: Props) {
   const struck = state === 'cancelled';
   return (
-    <section
-      aria-label={`${TITLE[kind]} confirmation`}
-      data-state={state}
-      className="my-2 border-2 border-stamp bg-card-light p-3 shadow-hard"
-    >
+    <section aria-label={`${TITLE[kind]} confirmation`} data-state={state} className="my-2 border-2 border-stamp bg-card-light p-3 shadow-hard">
       <p className="font-display text-xs tracking-[0.2em] text-stamp uppercase">{TITLE[kind]}: confirm?</p>
       <p className={struck ? 'line-through opacity-60' : ''}>{text}</p>
       {warnings.length > 0 && (
@@ -59,7 +55,5 @@ export function ConfirmCard({ text, warnings, kind, state, live, disabled, onAns
 /** A pinned card for a confirmation the transcript no longer shows (it fell off the 200-turn
  * window): the waiting `pending` from `GET /api/games/{game}` is the truth. */
 export function PinnedConfirm({ pending, disabled, onAnswer }: { pending: PendingView; disabled: boolean; onAnswer: (a: 'yes' | 'no') => void }) {
-  return (
-    <ConfirmCard text={pending.text} warnings={pending.warnings} kind={pending.kind} state="open" live disabled={disabled} onAnswer={onAnswer} />
-  );
+  return <ConfirmCard text={pending.text} warnings={pending.warnings} kind={pending.kind} state="open" live disabled={disabled} onAnswer={onAnswer} />;
 }

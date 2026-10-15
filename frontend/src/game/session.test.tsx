@@ -165,11 +165,18 @@ describe('useGameSession', () => {
   test('nothing is reported after unmount, even when the abort surfaces as a network ApiError', async () => {
     const client = fakeApi();
     let fail: (e: unknown) => void = () => undefined;
-    client.turn.mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }));
+    client.turn.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          fail = reject;
+        }),
+    );
     const { handlers, hook } = setup(client);
     await waitFor(() => expect(hook.result.current.ready).toBe(true));
     let sent: Promise<void> = Promise.resolve();
-    act(() => { sent = hook.result.current.send('hello'); });
+    act(() => {
+      sent = hook.result.current.send('hello');
+    });
     hook.unmount();
     fail(apiError('network', 0));
     await sent;
@@ -193,8 +200,11 @@ describe('useGameSession', () => {
     const client = fakeApi();
     client.turn.mockRejectedValueOnce(apiError('turn_in_progress'));
     const running = { ...transcript[0]!, complete: false, events: [] };
-    client.turns.mockResolvedValueOnce([]).mockRejectedValueOnce(apiError('unavailable', 503))
-      .mockRejectedValueOnce(new TypeError('network error')).mockResolvedValueOnce([running])
+    client.turns
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(apiError('unavailable', 503))
+      .mockRejectedValueOnce(new TypeError('network error'))
+      .mockResolvedValueOnce([running])
       .mockResolvedValue([transcript[0]!]);
     const { hook } = setup(client);
     await waitFor(() => expect(hook.result.current.ready).toBe(true));

@@ -53,10 +53,7 @@ describe('readEvents', () => {
   });
 
   test('skips an unknown kind and an event name that does not match its kind', async () => {
-    const text =
-      'event: novel\ndata: {"kind":"novel"}\n\n' +
-      'event: reply\ndata: {"kind":"done","turn_ms":1}\n\n' +
-      sseText([done]);
+    const text = 'event: novel\ndata: {"kind":"novel"}\n\n' + 'event: reply\ndata: {"kind":"done","turn_ms":1}\n\n' + sseText([done]);
     expect(await collect(readEvents(streamOf([text])))).toEqual([done]);
   });
 

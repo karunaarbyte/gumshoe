@@ -38,7 +38,11 @@ describe('gameReducer, per event kind', () => {
   });
 
   test('reply and clarify become chat messages', () => {
-    const view = fold([start, ...transcript[0]!.events.map(ev), ev({ kind: 'clarify', reason: 'low_confidence', text: 'Say again?', decision_id: null, problems: [] })]);
+    const view = fold([
+      start,
+      ...transcript[0]!.events.map(ev),
+      ev({ kind: 'clarify', reason: 'low_confidence', text: 'Say again?', decision_id: null, problems: [] }),
+    ]);
     expect(view.messages.map((m) => m.kind)).toEqual(['player', 'reply', 'clarify']);
   });
 
@@ -77,7 +81,12 @@ describe('gameReducer, per event kind', () => {
   });
 
   test('an accuse or give_up tool call answers the open card', () => {
-    const view = fold([start, ev(confirmFirst), { type: 'turn_started', kind: 'confirm', text: 'yes', ts: 't' }, ev({ kind: 'tool_call', tool: 'accuse', args: {} })]);
+    const view = fold([
+      start,
+      ev(confirmFirst),
+      { type: 'turn_started', kind: 'confirm', text: 'yes', ts: 't' },
+      ev({ kind: 'tool_call', tool: 'accuse', args: {} }),
+    ]);
     expect(view.pending).toBeNull();
     expect(view.messages[1]).toMatchObject({ kind: 'confirm', state: 'answered' });
   });
@@ -124,22 +133,22 @@ describe('reload equals live', () => {
     // a desk opens with the state of the new game, then plays turns
     let view = fold([{ type: 'server_state', state: states[0]! }]);
     transcript.slice(0, upTo).forEach((record, i) => {
-      view = fold([
-        { type: 'turn_started', kind: record.kind, text: record.text, ts: record.ts },
-        ...record.events.map(ev),
-        { type: 'stream_ended', sawDone: true },
-        { type: 'server_state', state: states[i + 1]! },
-      ], view);
+      view = fold(
+        [
+          { type: 'turn_started', kind: record.kind, text: record.text, ts: record.ts },
+          ...record.events.map(ev),
+          { type: 'stream_ended', sawDone: true },
+          { type: 'server_state', state: states[i + 1]! },
+        ],
+        view,
+      );
     });
     return view;
   }
 
-  test.each(Array.from({ length: transcript.length + 1 }, (_, k) => k))(
-    'after %i turns the reloaded view equals the live view',
-    (k) => {
-      expect(rebuild('g1', states[k]!, transcript.slice(0, k))).toEqual(live(k));
-    },
-  );
+  test.each(Array.from({ length: transcript.length + 1 }, (_, k) => k))('after %i turns the reloaded view equals the live view', (k) => {
+    expect(rebuild('g1', states[k]!, transcript.slice(0, k))).toEqual(live(k));
+  });
 
   test('the full game ends won with the reveal and no pending', () => {
     const view = rebuild('g1', states[10]!, transcript);

@@ -20,11 +20,15 @@ function TurnSummary({ turn }: { turn: TurnView }) {
   return (
     <span className="text-xs">
       {intent?.kind === 'intent' && ` · ${intent.intent}${intent.target === null ? '' : ` → ${intent.target}`} (${intent.confidence.toFixed(2)})`}
-      {checks.map((c) => c.kind === 'post_check' && (
-        <span key={c.decision_id} className={c.failed ? 'text-stamp' : ''}>
-          {' '}· check {c.failed ? 'failed' : 'passed'}
-        </span>
-      ))}
+      {checks.map(
+        (c) =>
+          c.kind === 'post_check' && (
+            <span key={c.decision_id} className={c.failed ? 'text-stamp' : ''}>
+              {' '}
+              · check {c.failed ? 'failed' : 'passed'}
+            </span>
+          ),
+      )}
       {turn.turnMs !== null && ` · ${ms(turn.turnMs)}`}
     </span>
   );
