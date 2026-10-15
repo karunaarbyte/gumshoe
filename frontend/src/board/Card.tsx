@@ -60,9 +60,14 @@ export function Card({ card, domKey, at, onGrab, onPin }: Props) {
           <p className="mt-3 font-display text-lg tracking-widest text-card-light">REDACTED</p>
         ) : (
           <>
-            <h3 className="mt-1 truncate font-bold uppercase">{card.title}</h3>
-            {card.speaker !== null && <p className="text-xs italic">said by {card.speaker}</p>}
-            <p className="line-clamp-3 text-xs">{card.body}</p>
+            {card.type === 'fact' ? (
+              <p className="mt-1 truncate text-xs font-bold uppercase">{card.speaker !== null ? `${card.speaker} said` : `Found in ${card.source ?? 'the case'}`}</p>
+            ) : (
+              <h3 className="mt-1 truncate font-bold uppercase">{card.title}</h3>
+            )}
+            <p className={`${card.type === 'fact' ? 'line-clamp-5' : 'line-clamp-4'} text-xs`} title={card.body}>
+              {card.body}
+            </p>
           </>
         )}
         {card.contradicted && (

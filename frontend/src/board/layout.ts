@@ -1,14 +1,14 @@
 import type { BoardCard } from './cards';
 import { jitter } from './seed';
 
-export const CARD_W = 180;
-export const CARD_H = 124;
+export const CARD_W = 200;
+export const CARD_H = 170;
 const GAP_X = 36;
 const MARGIN = 32;
 const ROW_SUSPECTS = 32;
-const ROW_PLACES = 228;
-const ROW_EVIDENCE = 424;
-const FACT_STEP_Y = 150;
+const ROW_PLACES = 242;
+const ROW_EVIDENCE = 452;
+const FACT_STEP_Y = 190;
 
 export interface Point {
   x: number;
@@ -36,18 +36,19 @@ export function initialLayout(cards: BoardCard[]): Record<string, Placement> {
   cards.filter((c) => c.type === 'suspect').forEach((c, i) => place(c, column(i), ROW_SUSPECTS));
   const row2 = cards.filter((c) => c.type === 'location' || c.type === 'record');
   row2.forEach((c, i) => place(c, column(i), ROW_PLACES));
-  const sources: string[] = [];
+  // evidence hangs under the card it came from (a place, a suspect or a record), one stack each
+  const columnOf = new Map<string, number>();
+  cards.filter((c) => c.type === 'suspect').forEach((c, i) => columnOf.set(c.title, i));
+  row2.forEach((c, i) => columnOf.set(c.title, i));
+  let next = Math.max(cards.filter((c) => c.type === 'suspect').length, row2.length);
   const perSource = new Map<string, number>();
   for (const c of cards) {
     if (c.type !== 'fact') continue;
     const source = c.source ?? '';
-    if (!perSource.has(source)) {
-      perSource.set(source, 0);
-      sources.push(source);
-    }
+    if (!columnOf.has(source)) columnOf.set(source, next++);
     const row = perSource.get(source) ?? 0;
     perSource.set(source, row + 1);
-    place(c, column(sources.indexOf(source)), ROW_EVIDENCE + row * FACT_STEP_Y);
+    place(c, column(columnOf.get(source) ?? 0), ROW_EVIDENCE + row * FACT_STEP_Y);
   }
   return out;
 }
