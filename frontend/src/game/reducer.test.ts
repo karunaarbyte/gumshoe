@@ -114,7 +114,12 @@ describe('gameReducer, per event kind', () => {
 });
 
 describe('reload equals live', () => {
-  /** What the turn hook dispatches: the turn, its events, the end, then the fresh state. */
+  /** What the turn hook dispatches: the turn, its events, the end, then the fresh state.
+   * The live path passes the record's ts only so the two folds compare; the real hook uses a
+   * client clock until a reload replaces it (TurnView.ts is advisory).
+   * Every fixture server_state agrees with the event fold. One accepted drift: a pending the
+   * server drops without a `cancelled` event reads `closed` live but `replaced`/`cancelled`
+   * after a reload (a visual label only; neither is answerable). */
   function live(upTo: number): GameView {
     // a desk opens with the state of the new game, then plays turns
     let view = fold([{ type: 'server_state', state: states[0]! }]);
@@ -154,5 +159,11 @@ describe('reload equals live', () => {
     const died = { ...transcript[1]!, events: transcript[1]!.events.slice(0, 2) };
     expect(recordActions(died).at(-1)).toEqual({ type: 'turn_closed' });
     expect(rebuild('g1', states[2]!, [died]).status).toBe('idle');
+  });
+
+  test('a pending whose card fell outside the turns window shows no open card', () => {
+    const view = rebuild('g1', states[6]!, transcript.slice(0, 1));
+    expect(view.pending?.pending_id).toBe('p-first');
+    expect(view.messages.some((m) => m.kind === 'confirm' && m.state === 'open')).toBe(false);
   });
 });

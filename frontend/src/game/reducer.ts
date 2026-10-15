@@ -1,4 +1,4 @@
-import type { ConfirmEvent, TurnEvent } from '../api/types';
+import type { ConfirmEvent, PendingView, TurnEvent } from '../api/types';
 import type { ChatMessage, ConfirmMessage, ConfirmState, GameAction, GameView, TurnView } from './model';
 
 const SPENDING_TOOLS = new Set(['accuse', 'give_up']);
@@ -50,16 +50,20 @@ function decisionIdOf(event: TurnEvent): string | null {
   switch (event.kind) {
     case 'intent':
     case 'post_check':
-      return event.decision_id;
     case 'clarify':
     case 'confirm':
       return event.decision_id;
-    default:
+    case 'reply':
+    case 'tool_call':
+    case 'tool_result':
+    case 'cancelled':
+    case 'game_over':
+    case 'done':
       return null;
   }
 }
 
-function pendingOf(event: ConfirmEvent) {
+function pendingOf(event: ConfirmEvent): PendingView {
   return {
     pending_id: event.pending_id,
     kind: event.pending,
