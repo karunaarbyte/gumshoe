@@ -34,6 +34,13 @@ describe('cards', () => {
     expect(cards.find((c) => c.id === F2)).toMatchObject({ contradicted: true, speaker: 'Mr Grey the butler' });
   });
 
+  test('the same text twice in one section is one card', () => {
+    const section = state.notebook.sections.find((x) => x.facts.length > 0)!;
+    const doubled = { ...state, notebook: { ...state.notebook, sections: state.notebook.sections.map((x) => (x === section ? { ...x, facts: [...x.facts, x.facts[0]!] } : x)) } };
+    const ids = buildCards(doubled).map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   test('game strings: contradictions and relates_to by suspect name', () => {
     expect(gameStrings(state).map((s) => [s.from, s.to, s.kind])).toEqual([
       [F2, F3, 'contradiction'],

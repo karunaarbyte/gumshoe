@@ -25,7 +25,7 @@ export const factCard = (source: string, text: string) => `fact:${source}|${text
 export function buildCards(state: GameState): BoardCard[] {
   const { brief, notebook } = state;
   const base = { contradicted: false, speaker: null, source: null };
-  return [
+  const cards = [
     ...brief.suspects.map((s): BoardCard => ({ ...base, id: suspectCard(s.name), type: 'suspect', label: 'Suspect', title: s.name, body: s.description, locked: s.locked })),
     ...brief.locations.map((l): BoardCard => ({ ...base, id: locationCard(l.name), type: 'location', label: 'Place', title: l.name, body: l.description, locked: l.locked })),
     ...brief.record_kinds.map((r): BoardCard => ({ ...base, id: recordCard(r.label), type: 'record', label: 'Records', title: r.label, body: '', locked: false })),
@@ -43,6 +43,9 @@ export function buildCards(state: GameState): BoardCard[] {
       })),
     ),
   ];
+  // the same text twice in one section is one fact: a card id must be unique on the board
+  const seen = new Set<string>();
+  return cards.filter((c) => !seen.has(c.id) && seen.add(c.id));
 }
 
 export interface GameString {

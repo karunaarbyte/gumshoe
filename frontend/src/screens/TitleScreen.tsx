@@ -106,6 +106,7 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
       </form>
       <section aria-label="Saved games">
         <h2 className="text-2xl">Saved games</h2>
+        {saves.isError && <p role="alert" className="italic">The saves could not be loaded.</p>}
         {saves.data?.length === 0 && <p className="italic">No saves yet.</p>}
         <ul>
           {(saves.data ?? []).map((s) => (
@@ -122,6 +123,7 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
       </section>
       <section aria-label="Open games">
         <h2 className="text-2xl">Open games</h2>
+        {games.isError && <p role="alert" className="italic">The open games could not be loaded.</p>}
         {games.data?.length === 0 && <p className="italic">No open games.</p>}
         <ul>
           {(games.data ?? []).map((g) => (

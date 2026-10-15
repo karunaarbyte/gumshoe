@@ -22,7 +22,7 @@ export function ToastProvider({ children, durationMs = TOAST_MS }: { children: R
     (message: string, tone: ToastTone = 'error') => {
       next.current += 1;
       const id = next.current;
-      setToasts((all) => [...all, { id, message, tone }]);
+      setToasts((all) => (all.some((t) => t.message === message && t.tone === tone) ? all : [...all, { id, message, tone }]));
       window.setTimeout(() => dismiss(id), durationMs);
     },
     [dismiss, durationMs],

@@ -59,7 +59,7 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
   const alive = useRef(true);
   const abort = useRef<AbortController | null>(null);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (quiet = false) => {
     try {
       const [state, turns] = await Promise.all([client.state(game), client.turns(game)]);
       if (!alive.current) return;
@@ -68,8 +68,9 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
       setLoadError(false);
     } catch (error) {
       if (alive.current) setLoadError(true);
-      if (alive.current && isApiError(error)) handlersRef.current.onError(error);
-      else if (alive.current) throw error;
+      if (alive.current && isApiError(error)) {
+        if (!quiet) handlersRef.current.onError(error);
+      } else if (alive.current) throw error;
     }
   }, [client, game]);
 
@@ -90,7 +91,7 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
     if (view.status !== 'remote' && view.status !== 'lost') return undefined;
     const timer = window.setTimeout(() => {
       // success or failure, tick so the effect re-arms while the status stays remote or lost
-      reload()
+      reload(true)
         .catch(() => undefined)
         .finally(() => {
           if (alive.current) setPollTick((t) => t + 1);
@@ -141,7 +142,7 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
             dispatch({ type: 'event', event });
           }
         } catch {
-          sawDone = false; // the connection dropped mid-turn
+          // the connection dropped; a turn whose done event already arrived still finished
         }
         if (!alive.current) return;
         dispatch({ type: 'stream_ended', sawDone });

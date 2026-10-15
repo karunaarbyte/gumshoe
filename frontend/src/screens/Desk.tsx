@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { type ApiError, isApiError } from '../api/errors';
 import { Board } from '../board/Board';
-import { copyBoard, gameKey, hasBoard, saveKey } from '../board/storage';
+import { copyBoard, gameKey, hasBoard, removeBoard, saveKey } from '../board/storage';
 import { Ceremony } from '../ceremony/Ceremony';
 import { Chat } from '../chat/Chat';
 import { useApi } from '../data/ApiContext';
@@ -58,8 +58,9 @@ export function Desk({ game, onExit, onError, session: sessionOptions }: Props) 
   const save = useMutation({
     mutationFn: () => client.save(game),
     onSuccess: ({ name }) => {
-      // the arrangement travels with the save name, but never overwrite it with an empty board
+      // the arrangement travels with the save name; a reused name must not keep an older game's board
       if (hasBoard(gameKey(game))) copyBoard(gameKey(game), saveKey(name));
+      else removeBoard(saveKey(name));
       toast.show(`Saved as ${name}.`, 'notice');
       void queryClient.invalidateQueries({ queryKey: keys.saves });
     },

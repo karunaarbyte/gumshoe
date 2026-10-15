@@ -67,3 +67,12 @@ export function hasBoard(key: string): boolean {
     return false;
   }
 }
+
+/** Drops whatever is stored under the key (a reused save name must not keep an older layout). */
+export function removeBoard(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // blocked storage: nothing to drop
+  }
+}

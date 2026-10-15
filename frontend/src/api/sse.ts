@@ -35,6 +35,7 @@ export async function* readEvents(body: ReadableStream<Uint8Array>): AsyncGenera
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let finished = false;
   try {
     for (;;) {
       const { value, done } = await reader.read();
@@ -50,10 +51,12 @@ export async function* readEvents(body: ReadableStream<Uint8Array>): AsyncGenera
       if (done) {
         const tail = buffer.trim() === '' ? null : parseBlock(buffer);
         if (tail !== null) yield tail;
+        finished = true;
         return;
       }
     }
   } finally {
+    if (!finished) await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }

@@ -18,7 +18,7 @@ export function ChatInput({ draft, onDraft, onSend, busy, closed, maxChars, inpu
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     if (disabled || draft.trim() === '') return;
-    onSend(draft);
+    void Promise.resolve(onSend(draft)).catch(() => undefined);
     onDraft('');
   };
   return (

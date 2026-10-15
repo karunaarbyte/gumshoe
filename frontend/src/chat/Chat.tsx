@@ -33,7 +33,12 @@ export function Chat({ view, busy, maxChars, draft, onDraft, onSend, onAnswer, i
   const send = useCallback(
     async (text: string) => {
       const before = latest.current;
-      await onSend(text);
+      try {
+        await onSend(text);
+      } catch {
+        if (draftRef.current === '') onDraft(text);
+        return;
+      }
       if (latest.current === before && draftRef.current === '') onDraft(text);
     },
     [onSend, onDraft],
