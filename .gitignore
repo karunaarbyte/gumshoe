@@ -31,3 +31,9 @@ logs/
 
 # MCP server saves (they hold the full solution)
 saves/
+
+# Web UI (frontend/)
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
