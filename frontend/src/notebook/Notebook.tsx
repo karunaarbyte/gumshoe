@@ -44,7 +44,7 @@ export function Notebook({
           <b className="block text-base text-stamp">{brief.attempts_left}</b>
         </p>
         <StampButton
-          className="mt-auto w-full px-1 text-[11px] tracking-wider"
+          className="mt-auto w-full px-0 text-[11px] tracking-wide!"
           disabled={!canAccuse}
           onClick={onAccuse}
         >

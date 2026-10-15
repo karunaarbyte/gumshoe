@@ -186,9 +186,9 @@ export function Desk({
           </header>
           <section
             aria-label="The case"
-            className="border-b-2 border-ink bg-card-light px-6 py-1.5 text-center"
+            className="border-b-2 border-ink bg-card-light px-6 py-2 text-center"
           >
-            <span className="inline-block bg-stamp px-4 py-0.5 font-display text-sm tracking-[0.2em] text-card-light uppercase shadow-hard">
+            <span className="mx-auto mb-2 block w-fit bg-stamp px-4 py-1 font-display text-sm tracking-[0.2em] text-card-light uppercase shadow-hard">
               The case
             </span>
             <p className="mx-auto max-w-4xl font-display text-lg leading-snug">
@@ -196,7 +196,7 @@ export function Desk({
             </p>
           </section>
           <div
-            className={`grid min-h-0 ${notebookOpen ? "grid-cols-[280px_minmax(0,1fr)]" : "grid-cols-[72px_minmax(0,1fr)]"}`}
+            className={`grid min-h-0 ${notebookOpen ? "grid-cols-[280px_minmax(0,1fr)]" : "grid-cols-[88px_minmax(0,1fr)]"}`}
           >
             <Notebook
               state={state}
