@@ -3,7 +3,6 @@ import { type PointerEvent, useState } from "react";
 import { Chip } from "../ui/Button";
 import { usePrefersReducedMotion } from "../ui/motion";
 import type { BoardCard } from "./cards";
-import { cardIcon } from "./icons";
 import { CARD_H, CARD_W, type Placement } from "./layout";
 
 interface Props {
@@ -86,14 +85,11 @@ export function Card({
         </button>
         <div className="mt-2 flex items-center justify-between">
           <Chip>{card.label}</Chip>
-          {/* a locked card must not leak what its name says */}
-          <span
-            aria-hidden="true"
-            data-testid="card-icon"
-            className="text-lg leading-none"
-          >
-            {card.locked ? "❓" : cardIcon(card)}
-          </span>
+          {card.locked && (
+            <span aria-hidden="true" className="text-lg leading-none">
+              ❓
+            </span>
+          )}
         </div>
         {card.locked ? (
           <p className="mt-3 font-display text-lg tracking-widest text-card-light">
