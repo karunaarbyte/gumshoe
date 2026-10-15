@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { Outcome, Reveal } from '../api/types';
 import { colors } from '../theme/tokens';
 import { usePrefersReducedMotion } from '../ui/motion';
@@ -38,10 +38,61 @@ export function Ceremony({ outcome, reveal, onNewCase, onClose, timing = { threa
     };
   }, [still, timing.thread, timing.stamp]);
 
+  // Focus management: take focus on mount, give it back on unmount. Making the rest of the app
+  // inert (aria-hidden / inert on the background) is the caller's job.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    return () => previous?.focus?.();
+  }, []);
+
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      if (phase === 'reveal') onClose();
+      else setPhase('reveal');
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const items = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled])'));
+    if (items.length === 0) {
+      e.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && (active === first || active === dialog)) {
+      e.preventDefault();
+      last?.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first?.focus();
+    } else if (!dialog.contains(active)) {
+      e.preventDefault();
+      first?.focus();
+    }
+  };
+
   return (
-    <div role="dialog" aria-modal="true" aria-label="Case result" className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-6 bg-ink/70">
+    <div
+      ref={dialogRef}
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Case result"
+      className="fixed inset-0 z-40 flex max-h-[90vh] flex-col items-center justify-center gap-6 overflow-y-auto bg-ink/70 p-4 outline-none"
+    >
+      <div aria-live="polite" className="sr-only">
+        {phase === 'thread' && !still ? '' : stampText(outcome)}
+      </div>
       {!still && (
-        <div className="relative h-40 w-[520px]" data-testid="ceremony-stage">
+        <div className="relative h-40 w-full max-w-[520px]" data-testid="ceremony-stage">
           <svg className="absolute inset-0" width={520} height={160} aria-hidden="true">
             <motion.line
               x1={0}

@@ -15,7 +15,7 @@ export function RevealCard({ reveal, onNewCase, onClose }: Props) {
     ['Secret', reveal.secret],
   ];
   return (
-    <article aria-label="The answer" className="w-[520px] rotate-[-1deg] border border-ink bg-card-light p-6 shadow-hard">
+    <article aria-label="The answer" className="w-full max-w-[520px] max-h-[90vh] overflow-y-auto rotate-[-1deg] border border-ink bg-card-light p-6 shadow-hard">
       <h2 className="mb-4 text-3xl">The answer</h2>
       <dl className="grid grid-cols-[110px_1fr] gap-y-2">
         {rows.map(([k, v]) => (
@@ -23,7 +23,7 @@ export function RevealCard({ reveal, onNewCase, onClose }: Props) {
             <dt>
               <Chip>{k}</Chip>
             </dt>
-            <dd className="font-bold uppercase">{v}</dd>
+            <dd className="break-words">{v}</dd>
           </div>
         ))}
       </dl>
