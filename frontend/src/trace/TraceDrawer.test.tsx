@@ -1,0 +1,114 @@
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, test } from 'vitest';
+import { ApiError } from '../api/errors';
+import { rebuild } from '../game/rebuild';
+import { decision, decisionIds, healthOn, states, transcript } from '../test/fixtures';
+import { fakeApi } from '../test/fakeApi';
+import { renderWithApp } from '../test/render';
+import { disagrees, totals } from './compare';
+import { TraceDrawer } from './TraceDrawer';
+
+const turns = rebuild('g1', states[3]!, transcript.slice(0, 3)).turns;
+
+async function openTurn(text: string) {
+  await userEvent.click(screen.getByRole('button', { name: 'Open the trace' }));
+  await userEvent.click(screen.getByRole('button', { name: new RegExp(text) }));
+}
+
+describe('compare', () => {
+  test('disagreement needs two verdicts that differ', () => {
+    const d = decision('x', ['search', 'interrogate']);
+    expect(disagrees(d.calls, 'intent')).toBe(true);
+    expect(disagrees(d.calls, 'confirms_pending')).toBe(false);
+    expect(disagrees(d.calls.slice(0, 1), 'intent')).toBe(false);
+  });
+
+  test('totals per backend', () => {
+    expect(totals([decision('a'), decision('b')])).toEqual([
+      { backend: 'jev', calls: 2, costUsd: 0.0008, meanLatencyMs: 120 },
+      { backend: 'nimble', calls: 2, costUsd: 0.0002, meanLatencyMs: 480 },
+    ]);
+  });
+});
+
+describe('TraceDrawer', () => {
+  test('lists turns newest first', async () => {
+    renderWithApp(<TraceDrawer turns={turns} health={healthOn} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open the trace' }));
+    const items = screen.getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent('#3');
+    expect(items[2]).toHaveTextContent('#1');
+    expect(items[0]).toHaveTextContent('interrogate → s1 (0.93)');
+    expect(items[0]).toHaveTextContent('check failed');
+  });
+
+  test('a turn shows its decisions side by side and highlights disagreement', async () => {
+    const client = fakeApi();
+    client.decision.mockImplementation(async (id) => decision(id, ['search', 'interrogate']));
+    renderWithApp(<TraceDrawer turns={turns} health={healthOn} />, client);
+    await openTurn('search the long gallery');
+    const panel = await screen.findByTestId(`decision-${decisionIds.search}`);
+    const rows = within(panel).getAllByRole('row');
+    const intentRow = rows.find((r) => r.textContent?.startsWith('intent'));
+    expect(intentRow).toHaveAttribute('data-disagree', 'true');
+    expect(intentRow).toHaveTextContent('search (0.93)');
+    expect(intentRow).toHaveTextContent('interrogate (0.71)');
+    expect(rows.find((r) => r.textContent?.startsWith('confirms_pending'))).toHaveAttribute('data-disagree', 'false');
+    expect(within(panel).getByText('used')).toBeInTheDocument();
+    expect(within(panel).getByText('cold')).toBeInTheDocument();
+    expect(screen.getByTestId('totals-jev')).toHaveTextContent('1 calls');
+  });
+
+  test('not_recorded_yet is retried until the decision lands', async () => {
+    const client = fakeApi();
+    let calls = 0;
+    client.decision.mockImplementation(async (id) => {
+      calls += 1;
+      if (calls < 3) throw new ApiError(404, 'not_recorded_yet', 'not yet');
+      return decision(id);
+    });
+    renderWithApp(<TraceDrawer turns={turns} health={healthOn} retryBaseMs={1} />, client);
+    await openTurn('search the long gallery');
+    await screen.findByTestId(`decision-${decisionIds.search}`);
+    expect(calls).toBe(3);
+  });
+
+  test('gives up after a few retries and says so', async () => {
+    const client = fakeApi(); // every decision: not_recorded_yet
+    renderWithApp(<TraceDrawer turns={turns} health={healthOn} retryBaseMs={1} />, client);
+    await openTurn('search the long gallery');
+    await waitFor(() => expect(screen.getByText(/not recorded yet/)).toBeInTheDocument());
+    expect(client.decision).toHaveBeenCalledTimes(5);
+  });
+
+  test('an error line shows class, backend and status only, as the server gives it', async () => {
+    const client = fakeApi();
+    client.decision.mockImplementation(async (id) => {
+      const d = decision(id);
+      d.calls[1] = { ...d.calls[1]!, error: 'TimeoutError nimble 504', answers: {} };
+      return d;
+    });
+    renderWithApp(<TraceDrawer turns={turns} health={healthOn} />, client);
+    await openTurn('search the long gallery');
+    expect(await screen.findByText('error: TimeoutError nimble 504')).toBeInTheDocument();
+  });
+
+  test('with no shadow the drawer is one column', async () => {
+    const client = fakeApi();
+    client.decision.mockImplementation(async (id) => decision(id));
+    renderWithApp(<TraceDrawer turns={turns} health={{ ...healthOn, shadow: null }} />, client);
+    await openTurn('search the long gallery');
+    const panel = await screen.findByTestId(`decision-${decisionIds.search}`);
+    expect(within(panel).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['question', 'jev']);
+  });
+
+  test('before health has loaded, the columns come from the decision itself', async () => {
+    const client = fakeApi();
+    client.decision.mockImplementation(async (id) => decision(id));
+    renderWithApp(<TraceDrawer turns={turns} health={undefined} />, client);
+    await openTurn('search the long gallery');
+    const panel = await screen.findByTestId(`decision-${decisionIds.search}`);
+    expect(within(panel).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['question', 'jev', 'nimble']);
+  });
+});
