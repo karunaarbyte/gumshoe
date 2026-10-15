@@ -25,6 +25,8 @@ export interface Session {
   view: GameView;
   /** False until the first state and transcript have loaded. */
   ready: boolean;
+  /** True while the latest load or reload failed; cleared by a successful reload. */
+  loadError: boolean;
   /** True from the moment a turn is sent until its stream has ended and state is fresh. */
   busy: boolean;
   send: (text: string) => Promise<void>;
@@ -43,6 +45,7 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
   const pollMs = options.pollMs ?? POLL_MS;
   const [view, dispatch] = useReducer(gameReducer, game, emptyView);
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [sending, setSending] = useState(false);
   const [pollTick, setPollTick] = useState(0);
   const readyRef = useRef(false);
@@ -62,7 +65,9 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
       if (!alive.current) return;
       dispatch({ type: 'reset', view: rebuild(game, state, turns) });
       setReady(true);
+      setLoadError(false);
     } catch (error) {
+      if (alive.current) setLoadError(true);
       if (alive.current && isApiError(error)) handlersRef.current.onError(error);
       else if (alive.current) throw error;
     }
@@ -182,5 +187,5 @@ export function useGameSession(game: string, handlers: SessionHandlers, options:
     [client, game, run],
   );
 
-  return { view, ready, busy: sending || view.status !== 'idle', send, answer, reload };
+  return { view, ready, loadError, busy: sending || view.status !== 'idle', send, answer, reload };
 }

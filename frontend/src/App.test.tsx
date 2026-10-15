@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { App, defaultQueryClient } from './App';
 import { ApiError } from './api/errors';
 import { gameKey, loadBoard, saveKey, storeBoard } from './board/storage';
-import { confirmFirst, healthOff, states, transcript } from './test/fixtures';
+import { confirmFirst, healthOff, reveal, states, transcript } from './test/fixtures';
 import { apiError, droppedAfter, eventsOf, fakeApi } from './test/fakeApi';
 import { preferReducedMotion, testQueryClient } from './test/render';
 
@@ -189,15 +189,6 @@ describe('App hardening', () => {
     expect(document.querySelector('[inert]')).toBeNull();
   });
 
-  test('a closed ceremony stays closed when state refreshes', async () => {
-    window.location.hash = '#/game/g1';
-    const client = renderApp(fakeApi({ state: states[10], turns: transcript }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Back to the board' }));
-    const calls = client.state.mock.calls.length;
-    await waitFor(() => expect(client.state.mock.calls.length).toBeGreaterThan(calls), { timeout: 400 }).catch(() => undefined);
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
   test('Save without a stored board does not write a layout under the save name', async () => {
     window.location.hash = '#/game/g1';
     window.localStorage.clear();
@@ -233,5 +224,94 @@ describe('App hardening', () => {
 
   test('the production query client does not refetch on window focus', () => {
     expect(defaultQueryClient().getDefaultOptions().queries?.refetchOnWindowFocus).toBe(false);
+  });
+});
+
+describe('App follow-up fixes', () => {
+  test.each([
+    ['a 500', () => apiError('internal', 500, 'something went wrong')],
+    ['a network error', () => new ApiError(0, 'network', 'offline')],
+    ['a non-API error', () => new TypeError('boom')],
+  ])('a first load that fails with %s offers Retry and Case files, and Retry opens the desk', async (_n, make) => {
+    window.location.hash = '#/game/g1';
+    const client = fakeApi();
+    client.state.mockRejectedValueOnce(make());
+    renderApp(client);
+    expect(await screen.findByText(/Couldn't open the case file/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Case files' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('navigation', { name: 'Notebook' })).toBeInTheDocument();
+  });
+
+  test('Case files on the load-failure panel goes to the title', async () => {
+    window.location.hash = '#/game/g1';
+    const client = fakeApi();
+    client.state.mockRejectedValue(new ApiError(0, 'network', 'offline'));
+    renderApp(client);
+    await userEvent.click(await screen.findByRole('button', { name: 'Case files' }));
+    expect(window.location.hash).toBe('#/');
+  });
+
+  test('the no-reveal notice lives in the header, so the grid keeps its three rows', async () => {
+    window.location.hash = '#/game/g1';
+    const { container } = render(<App client={fakeApi({ state: { ...states[10]!, outcome: 'won', reveal: null }, turns: transcript })} queryClient={testQueryClient()} session={{ pollMs: 5 }} />);
+    const notice = await screen.findByText(/This case is closed/);
+    expect(notice.closest('header')).not.toBeNull();
+    expect(container.querySelector('.h-screen')!.children).toHaveLength(3);
+  });
+
+  function liveEnd() {
+    window.location.hash = '#/game/g1';
+    const client = fakeApi({ state: states[0], turns: [] });
+    client.turn.mockResolvedValueOnce(eventsOf([{ kind: 'game_over', outcome: 'won', reveal }, { kind: 'done', turn_ms: 1 }]));
+    let resolve: (s: typeof states[number]) => void = () => undefined;
+    client.state.mockResolvedValueOnce(states[0]!).mockImplementationOnce(() => new Promise((r) => { resolve = r as typeof resolve; }));
+    client.state.mockResolvedValue(states[10]!);
+    return { client, finish: () => act(async () => resolve(states[10]!)) };
+  }
+
+  test('a live game over opens the ceremony; once closed, the state refresh does not reopen it', async () => {
+    const { client, finish } = liveEnd();
+    renderApp(client);
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Message' }), 'I accuse the butler{Enter}');
+    await screen.findByRole('dialog', { name: 'Case result' });
+    await userEvent.click(screen.getByRole('button', { name: 'Back to the board' }));
+    await waitFor(() => expect(client.state).toHaveBeenCalledTimes(2));
+    await finish();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  test('closing the ceremony moves focus to the Show the answer button', async () => {
+    const { client, finish } = liveEnd();
+    renderApp(client);
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Message' }), 'I accuse the butler{Enter}');
+    await screen.findByRole('dialog', { name: 'Case result' });
+    await userEvent.click(screen.getByRole('button', { name: 'Back to the board' }));
+    await finish();
+    expect(screen.getByRole('button', { name: 'Show the answer' })).toHaveFocus();
+  });
+
+  test('Accuse keeps text the player already typed', async () => {
+    window.location.hash = '#/game/g1';
+    renderApp();
+    const box = await screen.findByRole('textbox', { name: 'Message' });
+    await userEvent.type(box, 'was it the butler');
+    await userEvent.click(screen.getByRole('button', { name: 'Accuse' }));
+    expect(box).toHaveValue('was it the butler');
+    expect(box).toHaveFocus();
+  });
+
+  test('two synchronous clicks on Save start one save', async () => {
+    window.location.hash = '#/game/g1';
+    const client = fakeApi();
+    client.save.mockImplementation(() => new Promise(() => undefined));
+    renderApp(client);
+    const button = await screen.findByRole('button', { name: 'Save' });
+    act(() => {
+      button.click();
+      button.click();
+    });
+    await waitFor(() => expect(client.save).toHaveBeenCalled());
+    expect(client.save).toHaveBeenCalledTimes(1);
   });
 });

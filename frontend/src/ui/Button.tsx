@@ -1,6 +1,6 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ComponentPropsWithRef, ReactNode } from 'react';
 
-type Props = ButtonHTMLAttributes<HTMLButtonElement> & { children: ReactNode };
+type Props = ComponentPropsWithRef<'button'> & { children: ReactNode };
 
 const base =
   'px-4 py-2 font-display uppercase tracking-[0.2em] text-sm disabled:opacity-40 disabled:cursor-not-allowed';
