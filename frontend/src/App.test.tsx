@@ -257,7 +257,7 @@ describe('App follow-up fixes', () => {
     const { container } = render(<App client={fakeApi({ state: { ...states[10]!, outcome: 'won', reveal: null }, turns: transcript })} queryClient={testQueryClient()} session={{ pollMs: 5 }} />);
     const notice = await screen.findByText(/This case is closed/);
     expect(notice.closest('header')).not.toBeNull();
-    expect(container.querySelector('.h-screen')!.children).toHaveLength(4);
+    expect(container.querySelector('[data-testid="desk-main"]')!.children).toHaveLength(4);
   });
 
   function liveEnd() {

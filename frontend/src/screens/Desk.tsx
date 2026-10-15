@@ -147,89 +147,97 @@ export function Desk({
     <>
       <div
         inert={ceremonyOpen || helpOpen}
-        className="grid h-screen grid-rows-[auto_auto_minmax(0,1fr)_auto]"
+        className="grid h-screen grid-cols-[minmax(0,1fr)_400px]"
       >
-        <header className="flex items-center gap-4 border-b-2 border-ink bg-card px-4 py-2">
-          <h1 className="text-2xl">GUMSHOE</h1>
-          <span className="flex-1" />
-          {over && view.reveal === null && (
-            <p role="status" className="text-sm">
-              This case is closed. The answer is not available for this file.
-            </p>
-          )}
-          {over && view.reveal !== null && ceremonyClosed && (
-            <InkButton
-              ref={answerButton}
-              onClick={() => setCeremonyClosed(false)}
-            >
-              Show the answer
-            </InkButton>
-          )}
-          <InkButton
-            disabled={save.isPending}
-            onClick={() => {
-              if (saving.current) return;
-              saving.current = true;
-              save.mutate();
-            }}
-          >
-            Save
-          </InkButton>
-          <InkButton ref={exitButton} onClick={onExit}>
-            Case files
-          </InkButton>
-        </header>
-        <section
-          aria-label="The case"
-          className="border-b-2 border-ink bg-card-light px-6 py-3"
-        >
-          <span className="mr-3 inline-block bg-stamp px-2 py-0.5 text-xs tracking-[0.2em] text-card-light uppercase">
-            The case
-          </span>
-          <span className="font-display text-xl">{state.brief.intro}</span>
-        </section>
         <div
-          className={`grid min-h-0 ${notebookOpen ? "grid-cols-[280px_minmax(0,1fr)_380px]" : "grid-cols-[72px_minmax(0,1fr)_380px]"}`}
+          data-testid="desk-main"
+          className="grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)_auto]"
         >
-          <Notebook
-            state={state}
-            collapsed={!notebookOpen}
-            onToggle={() => setNotebookOpen((o) => !o)}
-            canAccuse={view.outcome === "playing" && !session.busy}
-            onAccuse={() => {
-              if (draft === "") setDraft(ACCUSE_DRAFT);
-              input.current?.focus();
-            }}
-          />
-          <Board game={game} state={state} />
-          <div className="flex min-h-0 flex-col border-l border-ink">
-            <div className="flex shrink-0 items-center justify-between border-b border-ink bg-card px-3 py-1">
-              <span className="text-xs tracking-widest uppercase">Chat</span>
-              <button
-                type="button"
-                aria-label="How to play"
-                title="How to play"
-                onClick={() => setHelpOpen(true)}
-                className="h-7 w-7 border border-ink bg-card-light font-display text-lg leading-none"
+          <header className="flex items-center gap-4 border-b-2 border-ink bg-card px-4 py-2">
+            <h1 className="text-2xl">GUMSHOE</h1>
+            <span className="flex-1" />
+            {over && view.reveal === null && (
+              <p role="status" className="text-sm">
+                This case is closed. The answer is not available for this file.
+              </p>
+            )}
+            {over && view.reveal !== null && ceremonyClosed && (
+              <InkButton
+                ref={answerButton}
+                onClick={() => setCeremonyClosed(false)}
               >
-                ?
-              </button>
-            </div>
-            <div className="min-h-0 flex-1">
-              <Chat
-                view={view}
-                busy={session.busy}
-                maxChars={meta.data?.max_turn_chars ?? 1000}
-                draft={draft}
-                onDraft={setDraft}
-                onSend={(t) => session.send(t)}
-                onAnswer={(a) => void session.answer(a)}
-                inputRef={input}
-              />
-            </div>
+                Show the answer
+              </InkButton>
+            )}
+            <InkButton
+              disabled={save.isPending}
+              onClick={() => {
+                if (saving.current) return;
+                saving.current = true;
+                save.mutate();
+              }}
+            >
+              Save
+            </InkButton>
+            <InkButton ref={exitButton} onClick={onExit}>
+              Case files
+            </InkButton>
+          </header>
+          <section
+            aria-label="The case"
+            className="border-b-2 border-ink bg-card-light px-6 py-3"
+          >
+            <span className="mr-3 inline-block bg-stamp px-2 py-0.5 text-xs tracking-[0.2em] text-card-light uppercase">
+              The case
+            </span>
+            <span className="font-display text-xl">{state.brief.intro}</span>
+          </section>
+          <div
+            className={`grid min-h-0 ${notebookOpen ? "grid-cols-[280px_minmax(0,1fr)]" : "grid-cols-[72px_minmax(0,1fr)]"}`}
+          >
+            <Notebook
+              state={state}
+              collapsed={!notebookOpen}
+              onToggle={() => setNotebookOpen((o) => !o)}
+              canAccuse={view.outcome === "playing" && !session.busy}
+              onAccuse={() => {
+                if (draft === "") setDraft(ACCUSE_DRAFT);
+                input.current?.focus();
+              }}
+            />
+            <Board game={game} state={state} />
           </div>
+          <TraceDrawer turns={view.turns} health={health.data} />
         </div>
-        <TraceDrawer turns={view.turns} health={health.data} />
+        <aside
+          aria-label="Case chat"
+          className="flex h-screen min-h-0 flex-col border-l-2 border-ink bg-card"
+        >
+          <div className="flex shrink-0 items-center justify-between border-b border-ink bg-card px-3 py-1">
+            <span className="text-xs tracking-widest uppercase">Chat</span>
+            <button
+              type="button"
+              aria-label="How to play"
+              title="How to play"
+              onClick={() => setHelpOpen(true)}
+              className="h-7 w-7 border border-ink bg-card-light font-display text-lg leading-none"
+            >
+              ?
+            </button>
+          </div>
+          <div className="min-h-0 flex-1">
+            <Chat
+              view={view}
+              busy={session.busy}
+              maxChars={meta.data?.max_turn_chars ?? 1000}
+              draft={draft}
+              onDraft={setDraft}
+              onSend={(t) => session.send(t)}
+              onAnswer={(a) => void session.answer(a)}
+              inputRef={input}
+            />
+          </div>
+        </aside>
       </div>
       {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
       {ceremonyOpen && view.reveal !== null && view.outcome !== "playing" && (
