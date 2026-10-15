@@ -337,7 +337,7 @@ async def test_a_finished_game_costs_no_decision_and_yields_the_reveal():
 
 
 async def test_give_up_asks_first_and_only_a_yes_gives_up():
-    script = Script().understand(intent="give_up").understand(intent="other", confirm=0.95)
+    script = Script().understand(intent="give_up")
     async with playing(script) as h:
         first = await turn(h, "I give up")
         assert kinds(first) == ["intent", "confirm", "done"]
@@ -345,8 +345,8 @@ async def test_give_up_asks_first_and_only_a_yes_gives_up():
         brief = await h.deps.client.case_brief(h.ctx.game)
         assert brief.status == "playing"
         second = await answer(h, "yes")
-    assert "Waiting for the player to confirm: Give up and see the answer?" in h.decider.calls[1][1]
-    assert kinds(second) == ["intent", "tool_call", "tool_result", "game_over", "done"]
+    assert [c[0] for c in h.decider.calls] == ["understand"]  # a typed yes asks no model
+    assert kinds(second) == ["tool_call", "tool_result", "game_over", "done"]
     over = only(second, GameOver)
     assert over.outcome == "gave_up" and over.reveal.culprit and h.ctx.pending is None
 
@@ -417,16 +417,15 @@ async def test_a_true_accusation_is_confirmed_then_won_and_revealed():
         who, how, why = names_of_truth(h)
         h.script.understand(intent="accuse")
         h.script.parse(who=who, how=how, why=why)
-        h.script.understand(intent="other", confirm=0.95)
         first = await turn(h, "it was them, with that, for this")
         assert kinds(first) == ["intent", "confirm", "done"]
         assert "Your accusation" in only(first, Confirm).text
         assert h.ctx.pending is not None and h.ctx.pending.kind == "accuse"
         second = await answer(h, "yes")
         brief = await h.deps.client.case_brief(h.ctx.game)
-    assert kinds(second) == ["intent", "tool_call", "tool_result", "game_over", "done"]
+    assert kinds(second) == ["tool_call", "tool_result", "game_over", "done"]
     assert only(second, GameOver).outcome == "won" and brief.status == "won"
-    assert [d[0] for d in h.decider.calls] == ["understand", "parse_accusation", "understand"]
+    assert [d[0] for d in h.decider.calls] == ["understand", "parse_accusation"]
 
 
 async def test_yes_runs_the_accusation_exactly_once():
@@ -435,7 +434,6 @@ async def test_yes_runs_the_accusation_exactly_once():
         who, how, why = names_of_truth(h)
         other = next(c.name for c in h.host.nameable(h.ctx.game, "who").options if c.name != who)
         h.script.understand(intent="accuse").parse(who=other, how=how, why=why)
-        h.script.understand(intent="other", confirm=0.95)
         h.script.understand(intent="other", confirm=0.95)  # a second yes, nothing pending now
         await turn(h, "accuse")
         first_yes = await answer(h, "yes")
@@ -484,7 +482,6 @@ async def test_a_repeated_accusation_is_refused_before_confirming():
         other = next(c.name for c in h.host.nameable(h.ctx.game, "who").options if c.name != who)
         s = h.script
         s.understand(intent="accuse").parse(who=other, how=how, why=why)
-        s.understand(intent="other", confirm=0.95)
         s.understand(intent="accuse").parse(who=other, how=how, why=why)
         await turn(h, "accuse the other one")
         miss = await answer(h, "yes")
@@ -577,7 +574,6 @@ async def test_a_not_permitted_accusation_clears_the_pending_one_and_spends_noth
         explore_all(h.host, h.ctx.game)
         who, how, why = names_of_truth(h)
         h.script.understand(intent="accuse").parse(who=who, how=how, why=why)
-        h.script.understand(intent="other", confirm=0.95)
         await turn(h, "accuse")
 
         async def refused(*args, **kwargs):
@@ -592,19 +588,19 @@ async def test_a_not_permitted_accusation_clears_the_pending_one_and_spends_noth
         monkeypatch.setattr(h.deps.client, "accuse", refused)
         events = await answer(h, "yes")
         brief = await h.deps.client.case_brief(h.ctx.game)
-    assert kinds(events) == ["intent", "tool_call", "tool_result", "clarify", "done"]
+    assert kinds(events) == ["tool_call", "tool_result", "clarify", "done"]
     clarify = only(events, Clarify)
     assert (clarify.reason, clarify.text) == ("accusation", "You cannot accuse yet.")
     assert h.ctx.pending is None and brief.attempts_left == 3
 
 
 async def test_a_give_up_refused_with_game_over_is_a_failed_result_and_no_game_over(monkeypatch):
-    script = Script().understand(intent="give_up").understand(intent="other", confirm=0.95)
+    script = Script().understand(intent="give_up")
     async with playing(script) as h:
         await turn(h, "I give up")
         monkeypatch.setattr(h.deps.client, "give_up", failing("game_over", "it is over"))
         events = await answer(h, "yes")
-    assert kinds(events) == ["intent", "tool_call", "tool_result", "done"]
+    assert kinds(events) == ["tool_call", "tool_result", "done"]
     assert only(events, ToolResult).ok is False and h.ctx.pending is None
     assert h.ctx.exchanges[-1][1] == "could not give up"
 
@@ -778,12 +774,12 @@ async def test_the_confirm_event_carries_the_id_of_the_pending_action():
 
 @pytest.mark.parametrize("sent", [None, "0" * 32], ids=["no id", "stale id"])
 async def test_a_yes_without_the_confirmations_id_shows_it_again_and_spends_nothing(sent):
-    script = Script().understand(intent="give_up").understand(intent="other", confirm=0.95)
+    script = Script().understand(intent="give_up")
     async with playing(script) as h:
         first = only(await turn(h, "I give up"), Confirm)
         events = await turn(h, "yes", pending_id=sent)
         brief = await h.deps.client.case_brief(h.ctx.game)
-    assert kinds(events) == ["intent", "confirm", "done"]
+    assert kinds(events) == ["confirm", "done"]
     assert only(events, Confirm) == first  # the same confirmation, the same id
     assert brief.status == "playing" and h.ctx.pending is not None
     assert h.ctx.pending.id == first.pending_id
@@ -977,3 +973,29 @@ async def test_a_turn_that_outlives_its_budget_ends_with_the_apology_and_done():
             events = await turn(h, "notes")
     assert kinds(events) == ["clarify", "done"]
     assert only(events, Clarify).text == APOLOGY and h.ctx.pending is kept
+
+
+# --- a bare typed yes -----------------------------------------------------------------------------
+
+
+async def test_a_bare_typed_yes_runs_the_waiting_accusation_without_asking_the_decider():
+    """The live run: the model read a lone "yes" as a new accusation and cancelled the real one."""
+    async with playing(Script()) as h:
+        explore_all(h.host, h.ctx.game)
+        who, how, why = names_of_truth(h)
+        h.script.understand(intent="accuse").parse(who=who, how=how, why=why)
+        only(await turn(h, "accuse"), Confirm)
+        calls_before = len(h.decider.calls)
+        events = await answer(h, "yes")
+    assert len(h.decider.calls) == calls_before  # no understand, no parse
+    assert only(events, GameOver).outcome == "won" and h.ctx.pending is None
+
+
+async def test_a_bare_typed_yes_with_the_wrong_pending_id_shows_the_confirmation_again():
+    async with playing(Script()) as h:
+        explore_all(h.host, h.ctx.game)
+        who, how, why = names_of_truth(h)
+        h.script.understand(intent="accuse").parse(who=who, how=how, why=why)
+        shown = only(await turn(h, "accuse"), Confirm)
+        events = await turn(h, "yes", pending_id="not-the-id")
+    assert only(events, Confirm).pending_id == shown.pending_id and h.ctx.pending is not None

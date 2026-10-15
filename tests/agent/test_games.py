@@ -27,7 +27,6 @@ async def test_a_game_won_from_free_text_turns_only():
         await explore_by_turns(h, script, llm)
         who, how, why = names_of_truth(h, seed=3)
         script.understand(intent="accuse").parse(who=who, how=how, why=why)
-        script.understand(intent="other", confirm=0.95)
         first = await turn(h, "I accuse them")
         second = await answer(h, "yes")
     assert only(first, Confirm).pending == "accuse"
@@ -50,7 +49,6 @@ async def test_a_game_lost_after_three_wrong_accusations():
         outcome = None
         for wrong in wrongs:
             script.understand(intent="accuse").parse(who=wrong, how=how, why=why)
-            script.understand(intent="other", confirm=0.95)
             await turn(h, f"it was {wrong}")
             events = await answer(h, "yes")
             result = only(events, ToolResult)

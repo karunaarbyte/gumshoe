@@ -163,6 +163,12 @@ async def _turn(
         reveal = await deps.client.reveal(game)
         yield GameOver(outcome=ended(ctx, brief), reveal=reveal)
         return
+    if ctx.pending is not None and is_bare_yes(text):
+        # a lone yes next to a waiting confirmation is that confirmation's answer: no model is
+        # asked, so it cannot be misread as a new request (the live run read it as an accusation)
+        async for event in _answer_yes(deps, ctx, text, ctx.pending, pending_id):
+            yield event
+        return
     notebook = await deps.client.notebook(game)
     built = build_understand(brief, pending=ctx.pending is not None)
     state = build_state(
