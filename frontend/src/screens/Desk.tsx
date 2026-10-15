@@ -185,12 +185,20 @@ export function Desk({
           </header>
           <section
             aria-label="The case"
-            className="border-b-2 border-ink bg-card-light px-6 py-3"
+            className="border-b-2 border-ink bg-card-light px-8 py-4 text-center"
           >
-            <span className="mr-3 inline-block bg-stamp px-2 py-0.5 text-xs tracking-[0.2em] text-card-light uppercase">
+            <span className="inline-block bg-stamp px-3 py-0.5 text-xs tracking-[0.3em] text-card-light uppercase">
               The case
             </span>
-            <span className="font-display text-xl">{state.brief.intro}</span>
+            <p className="mx-auto mt-2 max-w-3xl font-display text-2xl leading-snug">
+              {state.brief.intro}
+            </p>
+            <p className="mt-2 text-xs tracking-widest uppercase">
+              Attempts left{" "}
+              <b className="ml-1 text-base text-stamp">
+                {state.brief.attempts_left}
+              </b>
+            </p>
           </section>
           <div
             className={`grid min-h-0 ${notebookOpen ? "grid-cols-[280px_minmax(0,1fr)]" : "grid-cols-[72px_minmax(0,1fr)]"}`}
