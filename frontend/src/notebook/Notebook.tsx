@@ -39,8 +39,12 @@ export function Notebook({
         className="flex h-full min-h-0 flex-col items-center gap-3 border-r border-ink bg-card p-2"
       >
         {toggle("Open the notebook", "»")}
+        <p className="text-center text-xs leading-tight">
+          Attempts left
+          <b className="block text-base text-stamp">{brief.attempts_left}</b>
+        </p>
         <StampButton
-          className="mt-auto px-2 text-xs"
+          className="mt-auto w-full px-1 text-[11px] tracking-wider"
           disabled={!canAccuse}
           onClick={onAccuse}
         >

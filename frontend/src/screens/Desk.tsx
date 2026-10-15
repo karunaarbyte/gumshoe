@@ -188,7 +188,7 @@ export function Desk({
             aria-label="The case"
             className="border-b-2 border-ink bg-card-light px-6 py-1.5 text-center"
           >
-            <span className="block text-[10px] leading-none tracking-[0.3em] text-stamp uppercase">
+            <span className="inline-block bg-stamp px-4 py-0.5 font-display text-sm tracking-[0.2em] text-card-light uppercase shadow-hard">
               The case
             </span>
             <p className="mx-auto max-w-4xl font-display text-lg leading-snug">
