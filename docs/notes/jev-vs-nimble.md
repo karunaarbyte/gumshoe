@@ -1,4 +1,61 @@
-# Jev vs Nimble: first observations (2026-10-01)
+# Jev vs Nimble: verdict from the real game (2026-10-15)
+
+Data: 320 decisions from 12 played games (`data/decisions.db`), shadow mode on: Jev (hosted) decided, Nimble
+(`nimble:latest`, local via Ollama) ran beside it, recorded only. Numbers come from `GET /api/stats/decisions` and the
+`#/stats` page. Agreement is "gave the same answer", not "was right": there is no ground truth yet.
+Jev prices used: $0.042 per million input tokens, output free (secondary sources, not TypeSafe's own page: confirm).
+
+## The short answer
+
+- **Jev is the right primary for the player-facing decisions.** About 0.3 s median at every node, no errors in 320
+  calls, and the whole run cost about **$0.016** in input tokens. Cost is not a reason to avoid it.
+- **Nimble is not ready to be the primary for `understand` or `parse_accusation` on this setup.** Its median was
+  12.5 s at `understand` and 26 s at `parse_accusation`, and 69 calls hit the 30 s limit. The game cannot wait that
+  long for a player's message. Nimble is usable where the input is short and a few seconds is fine (`post_check`:
+  5 s median, 0 errors, 90% agreement), but it is still 16x slower than Jev there.
+- **Where they agree, the choice does not matter; where they disagree, we do not yet know who is right.** See below.
+
+## Numbers
+
+| Node | Compared | Agreement | Jev p50 / p95 | Nimble p50 / p95 | Nimble errors |
+|---|---|---|---|---|---|
+| understand | 165 of 228 | intent 72%, target 86%, weight 83% | 317 / 401 ms | 12.5 s / 28.6 s | 63 (28%) |
+| parse_accusation | 18 of 24 | who 100%, why 100%, how 89% | 306 / 356 ms | 26.0 s / 30.0 s | 6 (25%) |
+| post_check | 68 of 68 | guilt/blame 100%, contradicts 81% | 301 / 405 ms | 5.0 s / 5.3 s | 0 |
+
+Weight is compared in bands; Nimble scores about 0.38 of a level higher than Jev on average.
+Input tokens are not comparable between backends (Nimble reports ~4000 per `understand` call, Jev ~1400).
+
+## What the disagreements look like (`understand` intent)
+
+- **Search was the weak spot for Nimble.** 42 of the 64 "search" decisions had a Nimble error, and where it answered
+  it split between search (14), interrogate, records and talk. Most of the "disagreement" here is missing data.
+- **Records and accuse agree well** (29 of 36 records; all 21 accuse decisions Nimble answered matched, 3 more errored).
+- **`other` and `meta` are fuzzy for both.** Jev said `other` on 9 messages where Nimble said records, accuse or meta.
+  These are the unclear messages the game answers with guidance anyway, so little rides on them.
+
+## Caveats (read before trusting any latency number)
+
+1. **The latency comparison is confounded.** Nimble shared one Ollama with the two persona models, so a persona
+   reply could evict Nimble or queue ahead of it. The 30 s errors are partly that, not Nimble alone. A clean run
+   (Nimble on its own Ollama, personas on another) was planned but not done: it needs a Jev key and `SHADOW_RUN=true`.
+   Even then both models share one 24 GB machine, so contention for GPU and memory remains.
+2. **Agreement is not accuracy.** 165 compared of 228 means 28% of `understand` decisions have no Nimble answer.
+   Someone should label a sample of the disagreements by hand before saying either model is better.
+3. **One player type.** The 12 games were scripted with varied phrasing, not real players.
+4. **Prices are from secondary sources**, and the free output price may change.
+
+## Next experiments
+
+1. Clean latency run with two Ollama instances (`OLLAMA_HOST=127.0.0.1:11435 ollama serve` for Nimble, then
+   `NIMBLE_BASE_URL=http://localhost:11435/v1`). If Nimble then answers in ~1-2 s with few errors, it becomes a
+   viable fallback or a primary for offline play.
+2. Hand-label 50 `understand` disagreements to see who is right.
+3. Try richer criteria text for the `search`/`records` intents before blaming the model.
+
+---
+
+# Earlier observations (2026-10-01, 8 inputs, anecdote)
 
 Setup: demo question set (`intent` choice with 4 options, `needs_interrogation` noul, `urgency` score with 5 levels),
 8 player inputs, one `compare` run each (fresh process per input, both backends called concurrently).
