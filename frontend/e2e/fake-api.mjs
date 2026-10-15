@@ -1,6 +1,10 @@
 // A scripted stand-in for the Gumshoe API, for the Playwright smoke test only. It never calls
 // a model and never touches the real backend. Run: node e2e/fake-api.mjs [port]
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+
+// the same fixtures the unit tests use, so the two cannot drift
+const fixture = (name) => JSON.parse(readFileSync(new URL(`../src/test/${name}`, import.meta.url), 'utf8'));
 
 const PORT = Number(process.argv[2] ?? process.env.FAKE_API_PORT ?? 8765);
 const GAME = 'e2e-game';
@@ -107,7 +111,7 @@ async function body(req) {
 
 function decision(id) {
   const call = (backend, role, verdict, used) => ({ backend, role, used, cold: false, latency_ms: role === 'primary' ? 110 : 420, error: null, input_tokens: 800, output_tokens: 10, est_cost_usd: 0.0003, answers: { intent: { verdict, confidence: 0.9 } } });
-  return { decision_id: id, node: 'understand', ts: new Date().toISOString(), fallback: false, state_preview: 'fake', calls: [call('jev', 'primary', 'search', true), call('nimble', 'shadow', 'interrogate', false)] };
+  return { decision_id: id, node: 'understand', ts: new Date().toISOString(), fallback: false, state_preview: 'fake', calls: [call('jev', 'primary', 'search', true), call('nimble', 'shadow', 'interrogate', false)], agrees: { intent: false } };
 }
 
 createServer(async (req, res) => {
@@ -126,6 +130,8 @@ createServer(async (req, res) => {
       return json(res, 200, { game: GAME, brief, preset: 'standard' });
     }
     if (method === 'GET' && path === '/__requests') return json(res, 200, requests);
+    if (method === 'GET' && path === '/api/stats/decisions') return json(res, 200, fixture('stats-fixture.json'));
+    if (method === 'GET' && path === '/api/decisions') return json(res, 200, fixture('disagreements-fixture.json'));
     const decisionMatch = /^\/api\/decisions\/([^/]+)$/.exec(path);
     if (method === 'GET' && decisionMatch) return json(res, 200, decision(decisionMatch[1]));
     const m = /^\/api\/games\/([^/]+)(\/turn|\/confirm|\/turns|\/save)?$/.exec(path);

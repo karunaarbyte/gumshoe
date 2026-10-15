@@ -1,5 +1,6 @@
 import type { BackendStats, NodeStats } from "../api/types";
 import { ms } from "../trace/compare";
+import { ConfusionMatrix } from "./ConfusionMatrix";
 import {
   agreementText,
   comparedLine,
@@ -187,6 +188,7 @@ export function NodeCard({ node }: { node: NodeStats }) {
           </ul>
         </>
       )}
+      <ConfusionMatrix node={node} />
     </section>
   );
 }
