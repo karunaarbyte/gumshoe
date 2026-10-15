@@ -1,0 +1,235 @@
+{
+ "generated_at": "2026-10-15T09:00:00+00:00",
+ "since": null,
+ "include_cold": false,
+ "nodes": [
+  {
+   "node": "parse_accusation",
+   "decisions": 24,
+   "fallbacks": 0,
+   "compared": 18,
+   "shadow_errors": 6,
+   "question_agreement": {
+    "how": 0.8889,
+    "who": 1.0,
+    "why": 1.0
+   },
+   "intent_confusion": {},
+   "score_offset": {},
+   "agreement_rate": 0.963,
+   "backends": [
+    {
+     "backend": "jev",
+     "role": "primary",
+     "calls": 24,
+     "errors": 0,
+     "cold_calls": 0,
+     "used_calls": 24,
+     "latency_ms": {
+      "p50": 305.6,
+      "p95": 356.1,
+      "mean": 312.9
+     },
+     "error_latency_ms": {
+      "p50": null,
+      "p95": null,
+      "mean": null
+     },
+     "mean_input_tokens": 1126.2,
+     "mean_output_tokens": 175.7,
+     "total_input_tokens": 27028,
+     "total_output_tokens": 4216,
+     "est_cost_usd": 0.0,
+     "mean_confidence": 0.929
+    },
+    {
+     "backend": "nimble",
+     "role": "shadow",
+     "calls": 24,
+     "errors": 6,
+     "cold_calls": 0,
+     "used_calls": 0,
+     "latency_ms": {
+      "p50": 25988.0,
+      "p95": 29997.0,
+      "mean": 25819.0
+     },
+     "error_latency_ms": {
+      "p50": 30004.9,
+      "p95": 30005.6,
+      "mean": 30004.8
+     },
+     "mean_input_tokens": 2574.2,
+     "mean_output_tokens": 4.0,
+     "total_input_tokens": 61780,
+     "total_output_tokens": 96,
+     "est_cost_usd": 0.0,
+     "mean_confidence": 0.61
+    }
+   ]
+  },
+  {
+   "node": "post_check",
+   "decisions": 68,
+   "fallbacks": 0,
+   "compared": 68,
+   "shadow_errors": 0,
+   "question_agreement": {
+    "claims_guilt_or_blames_other": 1.0,
+    "contradicts_says": 0.8088
+   },
+   "intent_confusion": {},
+   "score_offset": {},
+   "agreement_rate": 0.904,
+   "backends": [
+    {
+     "backend": "jev",
+     "role": "primary",
+     "calls": 68,
+     "errors": 0,
+     "cold_calls": 0,
+     "used_calls": 68,
+     "latency_ms": {
+      "p50": 300.5,
+      "p95": 404.7,
+      "mean": 322.2
+     },
+     "error_latency_ms": {
+      "p50": null,
+      "p95": null,
+      "mean": null
+     },
+     "mean_input_tokens": 440.6,
+     "mean_output_tokens": 46.0,
+     "total_input_tokens": 29960,
+     "total_output_tokens": 3128,
+     "est_cost_usd": 0.0,
+     "mean_confidence": 0.832
+    },
+    {
+     "backend": "nimble",
+     "role": "shadow",
+     "calls": 68,
+     "errors": 0,
+     "cold_calls": 0,
+     "used_calls": 0,
+     "latency_ms": {
+      "p50": 4980.9,
+      "p95": 5310.0,
+      "mean": 5027.4
+     },
+     "error_latency_ms": {
+      "p50": null,
+      "p95": null,
+      "mean": null
+     },
+     "mean_input_tokens": 709.4,
+     "mean_output_tokens": 3.0,
+     "total_input_tokens": 48239,
+     "total_output_tokens": 204,
+     "est_cost_usd": 0.0,
+     "mean_confidence": 0.7
+    }
+   ]
+  },
+  {
+   "node": "understand",
+   "decisions": 228,
+   "fallbacks": 0,
+   "compared": 165,
+   "shadow_errors": 63,
+   "question_agreement": {
+    "intent": 0.7152,
+    "target": 0.8606,
+    "weight": 0.8303
+   },
+   "intent_confusion": {
+    "accuse": {
+     "accuse": 21
+    },
+    "interrogate": {
+     "accuse": 3,
+     "give_up": 2,
+     "interrogate": 46,
+     "meta": 4,
+     "other": 5,
+     "records": 1,
+     "(error)": 11
+    },
+    "records": {
+     "interrogate": 2,
+     "meta": 2,
+     "notebook": 1,
+     "other": 2,
+     "records": 29
+    },
+    "search": {
+     "(error)": 42,
+     "interrogate": 3,
+     "records": 3,
+     "search": 14,
+     "talk": 2
+    },
+    "give_up": {
+     "give_up": 5,
+     "interrogate": 1,
+     "(error)": 7
+    }
+   },
+   "score_offset": {
+    "weight": 0.3785
+   },
+   "agreement_rate": 0.799,
+   "backends": [
+    {
+     "backend": "jev",
+     "role": "primary",
+     "calls": 228,
+     "errors": 0,
+     "cold_calls": 1,
+     "used_calls": 228,
+     "latency_ms": {
+      "p50": 316.7,
+      "p95": 400.8,
+      "mean": 328.5
+     },
+     "error_latency_ms": {
+      "p50": null,
+      "p95": null,
+      "mean": null
+     },
+     "mean_input_tokens": 1403.0,
+     "mean_output_tokens": 230.0,
+     "total_input_tokens": 319884,
+     "total_output_tokens": 52440,
+     "est_cost_usd": 0.0,
+     "mean_confidence": 0.88
+    },
+    {
+     "backend": "nimble",
+     "role": "shadow",
+     "calls": 228,
+     "errors": 63,
+     "cold_calls": 2,
+     "used_calls": 0,
+     "latency_ms": {
+      "p50": 12492.0,
+      "p95": 29862.0,
+      "mean": 15000.0
+     },
+     "error_latency_ms": {
+      "p50": 30004.0,
+      "p95": 30010.0,
+      "mean": 30004.0
+     },
+     "mean_input_tokens": 3971.0,
+     "mean_output_tokens": 4.0,
+     "total_input_tokens": 905388,
+     "total_output_tokens": 912,
+     "est_cost_usd": 0.0,
+     "mean_confidence": 0.7
+    }
+   ]
+  }
+ ]
+}

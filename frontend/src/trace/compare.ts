@@ -1,17 +1,8 @@
-import type { CallView, DecisionView } from '../api/types';
+import type { DecisionView } from '../api/types';
 
 /** The questions any call answered, in a stable order. */
 export function questionsOf(decision: DecisionView): string[] {
   return [...new Set(decision.calls.flatMap((c) => Object.keys(c.answers)))].sort();
-}
-
-/** True when two or more backends answered this question and their verdicts differ. */
-export function disagrees(calls: CallView[], question: string): boolean {
-  const verdicts = calls.flatMap((c) => {
-    const a = c.answers[question];
-    return a === undefined ? [] : [a.verdict];
-  });
-  return verdicts.length > 1 && new Set(verdicts).size > 1;
 }
 
 export interface BackendTotals {

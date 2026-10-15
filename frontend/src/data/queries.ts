@@ -3,6 +3,8 @@ import { isApiError } from '../api/errors';
 import { useApi } from './ApiContext';
 
 export const keys = {
+  stats: (since: string | undefined, includeCold: boolean) => ['stats', since ?? '', includeCold] as const,
+  disagreements: (node: string, question: string, since: string | undefined) => ['disagreements', node, question, since ?? ''] as const,
   health: ['health'] as const,
   meta: ['meta'] as const,
   saves: ['saves'] as const,
@@ -44,5 +46,24 @@ export function useDecision(id: string, retryBaseMs: number = DECISION_RETRY_BAS
     staleTime: Infinity,
     retry: (failures, error) => isApiError(error, 'not_recorded_yet') && failures < DECISION_RETRIES,
     retryDelay: (attempt) => retryBaseMs * 2 ** attempt,
+  });
+}
+
+/** The comparison report. The filters are part of the key, so changing one asks again. */
+export function useStats(since: string | undefined, includeCold: boolean) {
+  const client = useApi();
+  return useQuery({
+    queryKey: keys.stats(since, includeCold),
+    queryFn: () => client.stats({ since, includeCold }),
+  });
+}
+
+/** The latest decisions where the backends differ (on one question when given). */
+export function useDisagreements(node: string, question: string, since: string | undefined) {
+  const client = useApi();
+  return useQuery({
+    queryKey: keys.disagreements(node, question, since),
+    queryFn: () =>
+      client.disagreements({ node: node || undefined, question: question || undefined, since }),
   });
 }

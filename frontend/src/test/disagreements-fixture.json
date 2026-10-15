@@ -1,0 +1,130 @@
+[
+ {
+  "decision_id": "dec-weight",
+  "node": "understand",
+  "ts": "2026-10-15T08:20:00+00:00",
+  "fallback": false,
+  "state_preview": "Player says: look around the kitchen",
+  "calls": [
+   {
+    "backend": "jev",
+    "role": "primary",
+    "used": true,
+    "cold": false,
+    "latency_ms": 300.0,
+    "error": null,
+    "input_tokens": 1400,
+    "output_tokens": 230,
+    "est_cost_usd": null,
+    "answers": {
+     "intent": {
+      "verdict": "search",
+      "confidence": 0.9
+     },
+     "target": {
+      "verdict": "place_4",
+      "confidence": 0.9
+     },
+     "weight": {
+      "verdict": "2.40",
+      "confidence": 0.6
+     }
+    }
+   },
+   {
+    "backend": "nimble",
+    "role": "shadow",
+    "used": false,
+    "cold": false,
+    "latency_ms": 9000.0,
+    "error": null,
+    "input_tokens": 3900,
+    "output_tokens": 4,
+    "est_cost_usd": null,
+    "answers": {
+     "intent": {
+      "verdict": "search",
+      "confidence": 0.9
+     },
+     "target": {
+      "verdict": "place_4",
+      "confidence": 0.9
+     },
+     "weight": {
+      "verdict": "2.60",
+      "confidence": 0.3
+     }
+    }
+   }
+  ],
+  "agrees": {
+   "intent": true,
+   "target": true,
+   "weight": false
+  }
+ },
+ {
+  "decision_id": "dec-intent",
+  "node": "understand",
+  "ts": "2026-10-15T08:19:00+00:00",
+  "fallback": false,
+  "state_preview": "Player says: what do the records say",
+  "calls": [
+   {
+    "backend": "jev",
+    "role": "primary",
+    "used": true,
+    "cold": false,
+    "latency_ms": 300.0,
+    "error": null,
+    "input_tokens": 1400,
+    "output_tokens": 230,
+    "est_cost_usd": null,
+    "answers": {
+     "intent": {
+      "verdict": "records",
+      "confidence": 0.9
+     },
+     "target": {
+      "verdict": "suspect_2",
+      "confidence": 0.9
+     },
+     "weight": {
+      "verdict": "1.00",
+      "confidence": 0.6
+     }
+    }
+   },
+   {
+    "backend": "nimble",
+    "role": "shadow",
+    "used": false,
+    "cold": false,
+    "latency_ms": 8000.0,
+    "error": null,
+    "input_tokens": 3900,
+    "output_tokens": 4,
+    "est_cost_usd": null,
+    "answers": {
+     "intent": {
+      "verdict": "meta",
+      "confidence": 0.9
+     },
+     "target": {
+      "verdict": "none",
+      "confidence": 0.9
+     },
+     "weight": {
+      "verdict": "1.20",
+      "confidence": 0.3
+     }
+    }
+   }
+  ],
+  "agrees": {
+   "intent": false,
+   "target": false,
+   "weight": true
+  }
+ }
+]

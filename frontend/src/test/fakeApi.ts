@@ -2,8 +2,13 @@ import { vi } from 'vitest';
 import type { Api } from '../api/client';
 import { ApiError } from '../api/errors';
 import { readEvents } from '../api/sse';
-import type { GameState, TurnEvent, TurnRecord } from '../api/types';
+import type { DecisionView, GameState, StatsReport, TurnEvent, TurnRecord } from '../api/types';
+import disagreementsJson from './disagreements-fixture.json';
 import { brief, healthOn, meta, states } from './fixtures';
+import statsJson from './stats-fixture.json';
+
+export const statsReport = statsJson as unknown as StatsReport;
+export const disagreements = disagreementsJson as unknown as DecisionView[];
 import { sseText, streamOf } from './streams';
 
 export function eventsOf(events: TurnEvent[]): AsyncGenerator<TurnEvent> {
@@ -33,6 +38,8 @@ export function fakeApi(init: { state?: GameState; turns?: TurnRecord[] } = {}) 
     turns: vi.fn<Api['turns']>(async () => init.turns ?? []),
     save: vi.fn<Api['save']>(async () => ({ name: '0123456789abcdef' })),
     deleteGame: vi.fn<Api['deleteGame']>(async () => undefined),
+    stats: vi.fn<Api['stats']>(async () => statsReport),
+    disagreements: vi.fn<Api['disagreements']>(async () => disagreements),
     decision: vi.fn<Api['decision']>(async (id: string) => {
       throw new ApiError(404, 'not_recorded_yet', `no ${id}`);
     }),

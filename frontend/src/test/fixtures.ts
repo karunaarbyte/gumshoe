@@ -229,5 +229,6 @@ export function decision(id: string, verdicts: [string, string] = ['search', 'se
       { backend: 'jev', role: 'primary', used: true, cold: false, latency_ms: 120, error: null, input_tokens: 900, output_tokens: 12, est_cost_usd: 0.0004, answers: { intent: { verdict: verdicts[0], confidence: 0.93 }, confirms_pending: { verdict: 'no', confidence: 0.1 } } },
       { backend: 'nimble', role: 'shadow', used: false, cold: true, latency_ms: 480, error: null, input_tokens: 950, output_tokens: 15, est_cost_usd: 0.0001, answers: { intent: { verdict: verdicts[1], confidence: 0.71 }, confirms_pending: { verdict: 'no', confidence: 0.2 } } },
     ],
+    agrees: { intent: verdicts[0] === verdicts[1], confirms_pending: true },
   };
 }

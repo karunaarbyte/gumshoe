@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type Route = { name: 'title' } | { name: 'desk'; game: string };
+export type Route = { name: 'title' } | { name: 'desk'; game: string } | { name: 'stats' };
 
 /** `#/game/<id>` opens a desk, so a page reload reopens the same game; anything else is the title. */
 export function parseRoute(hash: string): Route {
+  if (hash === '#/stats') return { name: 'stats' };
   const match = /^#\/game\/([^/]+)$/.exec(hash);
   if (match?.[1] !== undefined) {
     try {
@@ -16,6 +17,7 @@ export function parseRoute(hash: string): Route {
 }
 
 export function routeHash(route: Route): string {
+  if (route.name === 'stats') return '#/stats';
   return route.name === 'desk' ? `#/game/${encodeURIComponent(route.game)}` : '#/';
 }
 

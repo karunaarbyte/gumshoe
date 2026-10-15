@@ -7,6 +7,8 @@ describe('route', () => {
   test('a game hash opens the desk; anything else is the title', () => {
     expect(parseRoute('#/game/abc123')).toEqual({ name: 'desk', game: 'abc123' });
     expect(parseRoute('')).toEqual({ name: 'title' });
+    expect(parseRoute('#/stats')).toEqual({ name: 'stats' });
+    expect(routeHash({ name: 'stats' })).toBe('#/stats');
     expect(parseRoute('#/game/')).toEqual({ name: 'title' });
     expect(parseRoute('#/game/%E0%A4%A')).toEqual({ name: 'title' });
   });

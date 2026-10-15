@@ -92,6 +92,19 @@ describe('App', () => {
     expect(await screen.findByText(/dialogue model is offline/)).toBeInTheDocument();
   });
 
+  test('the stats page opens from the title and works while the game is off', async () => {
+    window.location.hash = '#/';
+    const client = fakeApi();
+    client.health.mockResolvedValue(healthOff);
+    renderApp(client);
+    await userEvent.click(await screen.findByRole('button', { name: 'Stats' }));
+    expect(window.location.hash).toBe('#/stats');
+    expect(await screen.findByRole('main', { name: 'Stats' })).toBeInTheDocument();
+    expect(await screen.findByTestId('compared-understand')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(window.location.hash).toBe('#/');
+  });
+
   test('unknown_game: back to the title with the ended banner', async () => {
     window.location.hash = '#/game/gone';
     const client = fakeApi();

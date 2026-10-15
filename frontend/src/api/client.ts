@@ -3,12 +3,15 @@ import { readEvents } from './sse';
 import type {
   ConfirmBody,
   DecisionView,
+  DisagreementParams,
   GameCreated,
   GameState,
   GameSummary,
   Health,
   Meta,
   SaveSummary,
+  StatsParams,
+  StatsReport,
   TurnBody,
   TurnEvent,
   TurnRecord,
@@ -68,6 +71,20 @@ export const api = {
     (await (await send(`${g(game)}/save`, { method: 'POST' })).json()) as { name: string },
   deleteGame: async (game: string): Promise<void> => {
     await send(g(game), { method: 'DELETE' });
+  },
+  stats: (params: StatsParams = {}) => {
+    const q = new URLSearchParams();
+    if (params.since) q.set('since', params.since);
+    if (params.includeCold) q.set('include_cold', 'true');
+    const query = q.toString();
+    return getJson<StatsReport>(`/api/stats/decisions${query === '' ? '' : `?${query}`}`);
+  },
+  disagreements: (params: DisagreementParams = {}) => {
+    const q = new URLSearchParams({ disagree: 'true', limit: String(params.limit ?? 20) });
+    if (params.node) q.set('node', params.node);
+    if (params.question) q.set('question', params.question);
+    if (params.since) q.set('since', params.since);
+    return getJson<DecisionView[]>(`/api/decisions?${q.toString()}`);
   },
   decision: (id: string) => getJson<DecisionView>(`/api/decisions/${encodeURIComponent(id)}`),
   turn: (game: string, body: TurnBody, signal?: AbortSignal) =>

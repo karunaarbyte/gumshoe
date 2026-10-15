@@ -269,6 +269,65 @@ export interface DecisionView {
   fallback: boolean;
   state_preview: string;
   calls: CallView[];
+  /** Per question both backends answered: do they agree by the server's rule? Empty unless the
+   * decision is a fair head-to-head. */
+  agrees: Record<string, boolean>;
+}
+
+export interface LatencyStats {
+  p50: number | null;
+  p95: number | null;
+  mean: number | null;
+}
+
+export interface BackendStats {
+  backend: string;
+  role: 'primary' | 'shadow';
+  calls: number;
+  errors: number;
+  cold_calls: number;
+  used_calls: number;
+  latency_ms: LatencyStats;
+  error_latency_ms: LatencyStats;
+  mean_input_tokens: number | null;
+  mean_output_tokens: number | null;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  est_cost_usd: number;
+  mean_confidence: number | null;
+}
+
+export interface NodeStats {
+  node: string;
+  decisions: number;
+  fallbacks: number;
+  compared: number;
+  shadow_errors: number;
+  question_agreement: Record<string, number>;
+  /** primary intent -> shadow intent -> decisions; the shadow key "(error)" is its failed calls. */
+  intent_confusion: Record<string, Record<string, number>>;
+  score_offset: Record<string, number>;
+  agreement_rate: number | null;
+  backends: BackendStats[];
+}
+
+export interface StatsReport {
+  generated_at: string;
+  since: string | null;
+  include_cold: boolean;
+  nodes: NodeStats[];
+}
+
+export interface StatsParams {
+  since?: string;
+  includeCold?: boolean;
+}
+
+export interface DisagreementParams {
+  node?: string;
+  question?: string;
+  since?: string;
+  limit?: number;
 }
 
 export interface ErrorBody {
