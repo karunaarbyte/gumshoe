@@ -138,18 +138,18 @@ async def _guarded(
             if isinstance(event, GameOver):
                 ctx.outcome = event.outcome
             yield event
-    except TimeoutError:
+    except TimeoutError as exc:
         if budget is not None and budget.expired():
             logger.warning("a turn ran out of time after %s s", deps.config.turn_timeout_s)
         else:
-            logger.exception("turn failed")
+            logger.error("turn failed: %s", describe_failure(exc))
         yield Clarify(reason="error", text=APOLOGY)
     except ToolFailure as exc:
         if exc.code != "unknown_game":
-            logger.error("turn failed: %s", exc)
+            logger.error("turn failed: %s (%s)", describe_failure(exc), exc.code)
             yield Clarify(reason="error", text=APOLOGY)
-    except Exception:
-        logger.exception("turn failed")
+    except Exception as exc:
+        logger.error("turn failed: %s", describe_failure(exc))
         yield Clarify(reason="error", text=APOLOGY)
     yield Done(turn_ms=round((time.perf_counter() - started) * 1000, 1))
 

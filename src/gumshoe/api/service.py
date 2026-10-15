@@ -30,6 +30,7 @@ from gumshoe.agent import (
 from gumshoe.agent.events import Clarify, Done
 from gumshoe.api.errors import ApiError
 from gumshoe.cases import NotebookView, PlayerCaseView, RevealView
+from gumshoe.decider import describe_failure
 
 logger = logging.getLogger(__name__)
 
@@ -322,7 +323,7 @@ class AgentService:
     def _finished(self, task: "asyncio.Task[None]") -> None:
         self._tasks.discard(task)
         if not task.cancelled() and (error := task.exception()) is not None:
-            logger.error("a turn task died", exc_info=error)
+            logger.error("a turn task died: %s", describe_failure(error))
 
     async def save_game(self, game: str) -> SaveView:
         slot = self._slot(game)

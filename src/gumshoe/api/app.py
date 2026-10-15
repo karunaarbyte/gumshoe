@@ -20,7 +20,7 @@ from gumshoe.api.limits import BodyLimit
 from gumshoe.api.service import AgentService
 from gumshoe.api.wiring import default_service
 from gumshoe.config import Settings, get_settings
-from gumshoe.decider import DeciderConfigError
+from gumshoe.decider import DeciderConfigError, describe_failure
 from gumshoe.stats import (
     DecisionView,
     Price,
@@ -66,7 +66,7 @@ def create_app(
                 app.state.service = await stack.enter_async_context(factory(store))
                 app.state.game_off = None
             except DeciderConfigError as exc:
-                logger.warning("the game endpoints are off: %s", exc)
+                logger.warning("the game endpoints are off: %s", describe_failure(exc))
                 app.state.service = None
                 app.state.game_off = f"the decider is not configured: {exc.message}"
             yield

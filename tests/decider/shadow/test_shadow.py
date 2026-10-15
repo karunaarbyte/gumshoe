@@ -229,8 +229,8 @@ async def test_two_crashing_backends_are_both_logged_and_end_in_all_failed(resul
     with caplog.at_level(logging.ERROR), pytest.raises(DeciderAllFailedError):
         await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
     messages = [r.getMessage() for r in caplog.records]
-    assert "shadow call crashed (nimble)" in messages
-    assert "primary call crashed (jev)" in messages
+    assert "shadow call crashed (nimble): RuntimeError" in messages
+    assert "primary call crashed (jev): RuntimeError" in messages
     assert len(recorder.batches[0]) == 2
 
 
@@ -364,3 +364,18 @@ async def test_a_recorded_failure_carries_class_backend_and_status_never_the_bod
     error = {r.role: r for r in batch}["primary"].error
     assert error == "DeciderAPIError (nimble, HTTP 502)"
     assert "sk-secret" not in str(error)
+
+
+async def test_a_crashing_backend_and_a_broken_recorder_log_classes_only(result, caplog):
+    primary = FakeDecider("jev", error=RuntimeError("secret sk-xyz"))
+    shadow = FakeDecider("nimble", error=ValueError("secret sk-abc"))
+    decider, _ = make(primary, shadow, FakeRecorder(error=OSError("secret sk-rec")))
+    with caplog.at_level(logging.DEBUG):
+        with pytest.raises(DeciderError):
+            await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+        await decider.drain()
+    assert caplog.records
+    assert all(r.exc_info is None and r.exc_text is None for r in caplog.records)
+    assert "sk-" not in caplog.text
+    for name in ("RuntimeError", "ValueError", "OSError"):
+        assert name in caplog.text

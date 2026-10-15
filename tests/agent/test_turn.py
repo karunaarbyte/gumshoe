@@ -270,6 +270,50 @@ async def test_a_bug_in_a_stage_is_the_apology_and_the_turn_still_ends(monkeypat
     assert "deadbeef" not in "".join(e.model_dump_json() for e in events)
 
 
+def assert_logged_class_only(caplog, name, *secrets):
+    """Every record is free of a traceback and of the exception's text; one names its class."""
+    assert caplog.records
+    assert all(r.exc_info is None and r.exc_text is None for r in caplog.records)
+    for secret in secrets:
+        assert secret not in caplog.text
+    assert name in caplog.text
+
+
+async def test_a_crashing_stage_logs_its_class_never_its_text_or_traceback(monkeypatch, caplog):
+    script = Script().understand(intent="notebook")
+    async with playing(script) as h:
+
+        async def boom(game):
+            raise RuntimeError("secret player text sk-xyz")
+
+        monkeypatch.setattr(h.deps.client, "notebook", boom)
+        with caplog.at_level(logging.DEBUG):
+            await turn(h, "notes")
+    assert_logged_class_only(caplog, "RuntimeError", "sk-xyz", "secret player text", "Traceback")
+
+
+async def test_a_refused_game_call_logs_its_code_never_its_message(monkeypatch, caplog):
+    script = Script().understand(intent="notebook")
+    async with playing(script) as h:
+        monkeypatch.setattr(h.deps.client, "notebook", failing("internal", "secret sk-xyz"))
+        with caplog.at_level(logging.DEBUG):
+            await turn(h, "notes")
+    assert_logged_class_only(caplog, "ToolFailure", "sk-xyz")
+
+
+async def test_a_turn_timeout_that_is_not_the_budget_logs_the_class_only(monkeypatch, caplog):
+    script = Script().understand(intent="notebook")
+    async with playing(script) as h:
+
+        async def boom(game):
+            raise TimeoutError("secret sk-xyz")
+
+        monkeypatch.setattr(h.deps.client, "notebook", boom)
+        with caplog.at_level(logging.DEBUG):
+            await turn(h, "notes")
+    assert_logged_class_only(caplog, "TimeoutError", "sk-xyz")
+
+
 async def test_an_unknown_game_ends_the_stream_quietly():
     script = Script()
     async with playing(script) as h:

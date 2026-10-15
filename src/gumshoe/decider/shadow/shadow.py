@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from gumshoe.decider.contract.base import Decider
-from gumshoe.decider.contract.errors import DeciderAllFailedError, DeciderError
+from gumshoe.decider.contract.errors import DeciderAllFailedError, DeciderError, describe_failure
 from gumshoe.decider.contract.models import DecisionResult, Question
 from gumshoe.decider.shadow.records import CallOutcome, Recorder, Role, build_record
 
@@ -22,7 +22,7 @@ DRAIN_GRACE_S = 5.0
 def _log_if_crashed(task: "asyncio.Task[CallOutcome]") -> None:
     """Done-callback: retrieve and log an unexpected exception so it is never left unretrieved."""
     if not task.cancelled() and (exc := task.exception()) is not None:
-        logger.error("shadow call crashed", exc_info=exc)
+        logger.error("shadow call crashed: %s", describe_failure(exc))
 
 
 class ShadowDecider:
@@ -111,7 +111,7 @@ class ShadowDecider:
     ) -> CallOutcome:
         """One backend call. Any failure becomes part of the outcome, so fallback and recording
         never depend on a backend classifying its errors perfectly. An exception that is not a
-        DeciderError is a backend bug: it is logged with its traceback and recorded as a failure."""
+        DeciderError is a backend bug: it is logged by class and recorded as a failure."""
         started = self._clock()
         last_end = self._last_end.get(decider.name)
         cold = last_end is None or started - last_end > self.cold_after_s
@@ -124,7 +124,7 @@ class ShadowDecider:
         except DeciderError as exc:
             failure = exc
         except Exception as exc:
-            logger.error("%s call crashed (%s)", role, decider.name, exc_info=exc)
+            logger.error("%s call crashed (%s): %s", role, decider.name, describe_failure(exc))
             failure = DeciderError(decider.name, f"unexpected {type(exc).__name__}")
             failure.__cause__ = exc
         finally:
@@ -221,8 +221,8 @@ class ShadowDecider:
         ]
         try:
             await self._recorder.record(records)
-        except Exception:  # a broken stats store must never break the game
-            logger.exception("could not record decision %s", decision_id)
+        except Exception as exc:  # a broken stats store must never break the game
+            logger.error("could not record decision %s: %s", decision_id, describe_failure(exc))
 
     def _spawn(self, coro: Coroutine[Any, Any, None]) -> None:
         task = asyncio.create_task(coro)

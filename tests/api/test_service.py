@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from dataclasses import replace
 from datetime import datetime
 from typing import Literal
@@ -174,6 +175,19 @@ async def test_a_turn_that_crashes_still_ends_the_stream():
         script.understand(intent="notebook")  # the service still works: a second turn runs
         again = await collect(s.service, new.game, "show my notebook")
     assert kinds(again)[-1] == "done" and "tool_result" in kinds(again)
+
+
+async def test_a_dead_turn_task_logs_its_class_never_a_traceback(caplog):
+    script = Script()  # empty: ScriptExhausted escapes take_turn and kills the task
+    with caplog.at_level(logging.DEBUG):
+        async with serving(script) as s:
+            new = await s.service.new_game(1)
+            await collect(s.service, new.game, "secret player text sk-xyz")
+            await asyncio.wait_for(idle(s.service), timeout=5.0)
+    assert caplog.records
+    assert all(r.exc_info is None and r.exc_text is None for r in caplog.records)
+    assert "sk-xyz" not in caplog.text and "Traceback" not in caplog.text
+    assert "ScriptExhausted" in caplog.text
 
 
 async def test_save_and_load_register_the_loaded_game(tmp_path):
