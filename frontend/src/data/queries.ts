@@ -1,0 +1,47 @@
+import { useQuery } from '@tanstack/react-query';
+import { isApiError } from '../api/errors';
+import { useApi } from './ApiContext';
+
+export const keys = {
+  health: ['health'] as const,
+  meta: ['meta'] as const,
+  saves: ['saves'] as const,
+  games: ['games'] as const,
+  decision: (id: string) => ['decision', id] as const,
+};
+
+export function useHealth() {
+  const client = useApi();
+  return useQuery({ queryKey: keys.health, queryFn: client.health });
+}
+
+export function useMeta() {
+  const client = useApi();
+  return useQuery({ queryKey: keys.meta, queryFn: client.meta, staleTime: Infinity });
+}
+
+export function useSaves() {
+  const client = useApi();
+  return useQuery({ queryKey: keys.saves, queryFn: client.saves });
+}
+
+export function useGames() {
+  const client = useApi();
+  return useQuery({ queryKey: keys.games, queryFn: client.games });
+}
+
+export const DECISION_RETRIES = 4;
+export const DECISION_RETRY_BASE_MS = 300;
+
+/** One decision. `not_recorded_yet` is retried a few times with a short backoff (the primary's
+ * row can land a moment after its event); every other error is final. */
+export function useDecision(id: string, retryBaseMs: number = DECISION_RETRY_BASE_MS) {
+  const client = useApi();
+  return useQuery({
+    queryKey: keys.decision(id),
+    queryFn: () => client.decision(id),
+    staleTime: Infinity,
+    retry: (failures, error) => isApiError(error, 'not_recorded_yet') && failures < DECISION_RETRIES,
+    retryDelay: (attempt) => retryBaseMs * 2 ** attempt,
+  });
+}

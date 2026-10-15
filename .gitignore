@@ -19,6 +19,7 @@ htmlcov/
 # Project runtime data
 *.jsonl
 data/
+!frontend/src/data/
 logs/
 
 # OS / editor
