@@ -30,6 +30,7 @@ class Health(BaseModel):
     primary: str
     shadow: str | None
     persona_models: PersonaModels
+    personas: Literal["up", "down"]  # whether the persona model server answers; down = stock lines
 
 
 class Meta(BaseModel):

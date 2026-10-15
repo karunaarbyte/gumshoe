@@ -1,7 +1,7 @@
 """FastAPI app: the comparative decision stats and the game."""
 
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from datetime import datetime
 
@@ -17,6 +17,7 @@ from gumshoe.api.games import MAX_TURN_CHARS, saves_router
 from gumshoe.api.games import router as games_router
 from gumshoe.api.info import MAX_ATTEMPTS, Health, Meta, PersonaModels, presets
 from gumshoe.api.limits import BodyLimit
+from gumshoe.api.probe import PersonaProbe
 from gumshoe.api.service import AgentService
 from gumshoe.api.wiring import default_service
 from gumshoe.config import Settings, get_settings
@@ -54,8 +55,10 @@ def create_app(
     *,
     make_service: ServiceFactory | None = None,
     settings: Settings | None = None,
+    personas_up: Callable[[], Awaitable[bool]] | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
+    personas_up = personas_up or PersonaProbe(settings.ollama_base_url).up
     prices = prices_of(settings)
     factory: ServiceFactory = make_service or (lambda s: default_service(s, settings))
 
@@ -112,7 +115,7 @@ def create_app(
 
     # Plain `def` handlers run in FastAPI's thread pool, which suits blocking SQLite calls.
     @app.get("/api/health")
-    def health(request: Request) -> Health:
+    async def health(request: Request) -> Health:
         off: str | None = getattr(request.app.state, "game_off", NOT_STARTED)
         return Health(
             game="off" if off else "on",
@@ -122,6 +125,7 @@ def create_app(
             persona_models=PersonaModels(
                 default=settings.persona_model_default, dramatic=settings.persona_model_dramatic
             ),
+            personas="up" if await personas_up() else "down",
         )
 
     @app.get("/api/meta")

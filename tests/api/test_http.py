@@ -23,9 +23,16 @@ def store(tmp_path):
     return SqliteStatsStore(tmp_path / "decisions.db")
 
 
-def app_for(store, **settings):
+async def personas_up():
+    return True
+
+
+def app_for(store, *, personas=personas_up, **settings):
     return create_app(
-        store, make_service=fake_factory(Script()), settings=Settings(_env_file=None, **settings)
+        store,
+        make_service=fake_factory(Script()),
+        settings=Settings(_env_file=None, **settings),
+        personas_up=personas,
     )
 
 
@@ -145,8 +152,19 @@ def test_health_says_the_game_is_on_and_which_backends_and_models_serve_it(store
         "primary": "jev",
         "shadow": "nimble",
         "persona_models": {"default": "ministral-3:14b", "dramatic": "gemma4:12b"},
+        "personas": "up",
     }
     assert "sk-very-secret" not in response.text
+
+
+def test_health_says_when_the_persona_models_are_down(store):
+    async def down():
+        return False
+
+    with TestClient(app_for(store, personas=down, jev_api_key=SecretStr("sk"))) as client:
+        body = client.get("/api/health").json()
+    # the game still runs (suspects fall back to stock lines), but a UI can say so
+    assert (body["game"], body["personas"]) == ("on", "down")
 
 
 def test_health_says_why_the_game_is_off(store):
