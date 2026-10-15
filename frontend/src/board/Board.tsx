@@ -35,6 +35,7 @@ export function Board({ game, state }: { game: string; state: GameState }) {
   const board = useBoard(game);
   const cards = useMemo(() => buildCards(state), [state]);
   const strings = useMemo(() => gameStrings(state), [state]);
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [gesture, setGesture] = useState<Gesture | null>(null);
   // the card being dragged follows the pointer in local state; it is stored once, on release
   const dragAt = gesture?.kind === "drag" ? gesture : null;
@@ -108,6 +109,14 @@ export function Board({ game, state }: { game: string; state: GameState }) {
       (gesture.at.x !== gesture.origin.x || gesture.at.y !== gesture.origin.y)
     ) {
       board.move(gesture.id, gesture.at);
+    } else if (gesture?.kind === "drag") {
+      // pressed and released in place: a click, which opens or closes the card
+      const id = gesture.id;
+      setOpen((all) => {
+        const next = new Set(all);
+        if (!next.delete(id)) next.add(id);
+        return next;
+      });
     }
     setGesture(null);
   };
@@ -117,7 +126,10 @@ export function Board({ game, state }: { game: string; state: GameState }) {
       <button
         type="button"
         className="absolute top-2 right-4 z-20 border border-ink bg-card-light px-2 py-1 text-xs font-bold tracking-widest uppercase shadow-hard"
-        onClick={board.tidy}
+        onClick={() => {
+          board.tidy();
+          setOpen(new Set());
+        }}
       >
         Tidy up
       </button>
@@ -157,6 +169,7 @@ export function Board({ game, state }: { game: string; state: GameState }) {
                 at={at}
                 onGrab={grab}
                 onPin={startLink}
+                expanded={open.has(card.id)}
               />
             );
           })}

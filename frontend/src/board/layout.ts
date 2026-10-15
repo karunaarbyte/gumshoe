@@ -1,14 +1,14 @@
 import type { BoardCard } from './cards';
 import { jitter } from './seed';
 
-export const CARD_W = 200;
-export const CARD_H = 170;
-const GAP_X = 36;
-const MARGIN = 32;
-const ROW_SUSPECTS = 32;
-const ROW_PLACES = 242;
-const ROW_EVIDENCE = 452;
-const FACT_STEP_Y = 190;
+export const CARD_W = 168;
+export const CARD_H = 84;
+const GAP_X = 28;
+const MARGIN = 24;
+const ROW_SUSPECTS = 24;
+const ROW_PLACES = 134;
+const ROW_EVIDENCE = 244;
+const FACT_STEP_Y = 102;
 
 export interface Point {
   x: number;

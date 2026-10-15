@@ -1,9 +1,9 @@
-import { motion } from 'framer-motion';
-import { type PointerEvent, useState } from 'react';
-import { Chip } from '../ui/Button';
-import { usePrefersReducedMotion } from '../ui/motion';
-import type { BoardCard } from './cards';
-import { CARD_H, CARD_W, type Placement } from './layout';
+import { motion } from "framer-motion";
+import { type PointerEvent, useState } from "react";
+import { Chip } from "../ui/Button";
+import { usePrefersReducedMotion } from "../ui/motion";
+import type { BoardCard } from "./cards";
+import { CARD_H, CARD_W, type Placement } from "./layout";
 
 interface Props {
   card: BoardCard;
@@ -12,38 +12,63 @@ interface Props {
   at: Placement;
   onGrab: (card: BoardCard, event: PointerEvent<HTMLElement>) => void;
   onPin: (card: BoardCard, event: PointerEvent<HTMLElement>) => void;
+  /** Click to read the whole card: it grows over its neighbours until clicked again. */
+  expanded?: boolean;
 }
 
 /** One index card. A locked card lies face down and flips over when it unlocks. */
-export function Card({ card, domKey, at, onGrab, onPin }: Props) {
+export function Card({
+  card,
+  domKey,
+  at,
+  onGrab,
+  onPin,
+  expanded = false,
+}: Props) {
+  const open = expanded && !card.locked;
   const still = usePrefersReducedMotion();
   // flip only a card that was face down when it was first drawn and has since unlocked
   const [startedLocked] = useState(card.locked);
   const flip = !still && startedLocked && !card.locked;
-  const face = card.type === 'record' ? 'bg-card-light' : 'bg-card';
+  const face = card.type === "record" ? "bg-card-light" : "bg-card";
   return (
     <div
       data-card-id={domKey}
       data-testid={`card-${domKey}`}
       data-flipped={flip}
+      data-expanded={open}
       className="absolute touch-none select-none"
-      style={{ left: at.x, top: at.y, width: CARD_W, height: CARD_H, transform: `rotate(${at.rotate}deg)`, perspective: 600 }}
+      style={{
+        left: at.x,
+        top: at.y,
+        width: open ? CARD_W + 72 : CARD_W,
+        ...(open ? { minHeight: CARD_H } : { height: CARD_H }),
+        zIndex: open ? 30 : undefined,
+        transform: `rotate(${open ? 0 : at.rotate}deg)`,
+        perspective: 600,
+      }}
       onPointerDown={(e) => {
         if (e.button > 0) return; // primary button, touch or pen only
         onGrab(card, e);
       }}
     >
       <motion.article
-        key={card.locked ? 'down' : 'up'}
+        key={card.locked ? "down" : "up"}
         initial={flip ? { rotateY: 180 } : false}
         animate={{ rotateY: 0 }}
         transition={{ duration: 0.6 }}
-        aria-label={card.locked ? `${card.label}, locked` : `${card.label}: ${card.title}`}
-        className={`relative h-full w-full overflow-hidden border border-ink p-2 shadow-hard ${card.locked ? 'bg-ink/80' : face}`}
+        aria-label={
+          card.locked ? `${card.label}, locked` : `${card.label}: ${card.title}`
+        }
+        className={`relative ${open ? "min-h-[84px]" : "h-full"} w-full overflow-hidden border border-ink p-2 shadow-hard ${card.locked ? "bg-ink/80" : face}`}
       >
         <button
           type="button"
-          aria-label={card.locked ? `Pin on ${card.label.toLowerCase()}, locked` : `Pin on ${card.label.toLowerCase()} ${card.type === 'fact' ? card.body : card.title}`}
+          aria-label={
+            card.locked
+              ? `Pin on ${card.label.toLowerCase()}, locked`
+              : `Pin on ${card.label.toLowerCase()} ${card.type === "fact" ? card.body : card.title}`
+          }
           className="absolute top-0 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center"
           onPointerDown={(e) => {
             e.stopPropagation();
@@ -51,21 +76,32 @@ export function Card({ card, domKey, at, onGrab, onPin }: Props) {
             onPin(card, e);
           }}
         >
-          <span aria-hidden="true" className="h-3 w-3 rounded-full border border-ink bg-stamp" />
+          <span
+            aria-hidden="true"
+            className="h-3 w-3 rounded-full border border-ink bg-stamp"
+          />
         </button>
         <div className="mt-2">
           <Chip>{card.label}</Chip>
         </div>
         {card.locked ? (
-          <p className="mt-3 font-display text-lg tracking-widest text-card-light">REDACTED</p>
+          <p className="mt-3 font-display text-lg tracking-widest text-card-light">
+            REDACTED
+          </p>
         ) : (
           <>
-            {card.type === 'fact' ? (
-              <p className="mt-1 truncate text-xs font-bold uppercase">{card.speaker !== null ? `${card.speaker} said` : `Found in ${card.source ?? 'the case'}`}</p>
+            {card.type === "fact" ? (
+              <p className="mt-1 truncate text-xs font-bold uppercase">
+                {card.speaker !== null
+                  ? `${card.speaker} said`
+                  : `Found in ${card.source ?? "the case"}`}
+              </p>
             ) : (
-              <h3 className="mt-1 truncate font-bold uppercase">{card.title}</h3>
+              <h3 className="mt-1 truncate font-bold uppercase">
+                {card.title}
+              </h3>
             )}
-            <p className={`${card.type === 'fact' ? 'line-clamp-5' : 'line-clamp-4'} text-xs`} title={card.body}>
+            <p className={`${open ? "" : "line-clamp-1"} text-xs`}>
               {card.body}
             </p>
           </>

@@ -1,56 +1,80 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { type ApiError, isApiError } from '../api/errors';
-import { Board } from '../board/Board';
-import { copyBoard, gameKey, hasBoard, removeBoard, saveKey } from '../board/storage';
-import { Ceremony } from '../ceremony/Ceremony';
-import { Chat } from '../chat/Chat';
-import { useApi } from '../data/ApiContext';
-import { keys, useHealth, useMeta } from '../data/queries';
-import { CONNECTION_LOST_NOTICE, type SessionHandlers, type SessionOptions, useGameSession } from '../game/session';
-import { Notebook } from '../notebook/Notebook';
-import { TraceDrawer } from '../trace/TraceDrawer';
-import { InkButton } from '../ui/Button';
-import { useToast } from '../ui/toast';
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { type ApiError, isApiError } from "../api/errors";
+import { HelpModal } from "../ui/HelpModal";
+import { Board } from "../board/Board";
+import {
+  copyBoard,
+  gameKey,
+  hasBoard,
+  removeBoard,
+  saveKey,
+} from "../board/storage";
+import { Ceremony } from "../ceremony/Ceremony";
+import { Chat } from "../chat/Chat";
+import { useApi } from "../data/ApiContext";
+import { keys, useHealth, useMeta } from "../data/queries";
+import {
+  CONNECTION_LOST_NOTICE,
+  type SessionHandlers,
+  type SessionOptions,
+  useGameSession,
+} from "../game/session";
+import { Notebook } from "../notebook/Notebook";
+import { TraceDrawer } from "../trace/TraceDrawer";
+import { InkButton } from "../ui/Button";
+import { useToast } from "../ui/toast";
 
 interface Props {
   game: string;
   onExit: () => void;
   onError: (error: ApiError) => void;
-  session?: Omit<SessionOptions, 'client'>;
+  session?: Omit<SessionOptions, "client">;
 }
 
-export const ACCUSE_DRAFT = 'I accuse ';
+export const ACCUSE_DRAFT = "I accuse ";
 
 /** The main screen: notebook | corkboard | chat, with the trace drawer below. */
-export function Desk({ game, onExit, onError, session: sessionOptions }: Props) {
+export function Desk({
+  game,
+  onExit,
+  onError,
+  session: sessionOptions,
+}: Props) {
   const client = useApi();
   const toast = useToast();
   const queryClient = useQueryClient();
   const health = useHealth();
   const meta = useMeta();
-  const handlers = useMemo<SessionHandlers>(() => ({ onError, onNotice: (m) => toast.show(m, 'notice') }), [onError, toast]);
+  const handlers = useMemo<SessionHandlers>(
+    () => ({ onError, onNotice: (m) => toast.show(m, "notice") }),
+    [onError, toast],
+  );
   const session = useGameSession(game, handlers, { ...sessionOptions, client });
   const { view } = session;
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState("");
   const [ceremonyClosed, setCeremonyClosed] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const mounted = useRef(true);
   const saving = useRef(false);
   const [notebookOpen, setNotebookOpen] = useState(() => {
     try {
-      return window.localStorage.getItem('gumshoe:notebook') !== 'closed';
+      return window.localStorage.getItem("gumshoe:notebook") !== "closed";
     } catch {
       return true;
     }
   });
   useEffect(() => {
     try {
-      window.localStorage.setItem('gumshoe:notebook', notebookOpen ? 'open' : 'closed');
+      window.localStorage.setItem(
+        "gumshoe:notebook",
+        notebookOpen ? "open" : "closed",
+      );
     } catch {
       // a per-viewer convenience; the desk works without it
     }
   }, [notebookOpen]);
+  const [helpOpen, setHelpOpen] = useState(false);
   const answerButton = useRef<HTMLButtonElement>(null);
   const exitButton = useRef<HTMLButtonElement>(null);
   const focusAfterClose = useRef(false);
@@ -75,7 +99,7 @@ export function Desk({ game, onExit, onError, session: sessionOptions }: Props) 
       // the arrangement travels with the save name; a reused name must not keep an older game's board
       if (hasBoard(gameKey(game))) copyBoard(gameKey(game), saveKey(name));
       else removeBoard(saveKey(name));
-      toast.show(`Saved as ${name}.`, 'notice');
+      toast.show(`Saved as ${name}.`, "notice");
       void queryClient.invalidateQueries({ queryKey: keys.saves });
     },
     onSettled: () => {
@@ -89,11 +113,25 @@ export function Desk({ game, onExit, onError, session: sessionOptions }: Props) 
   if (!session.ready || view.state === null) {
     if (session.loadError) {
       return (
-        <div role="alert" className="grid h-screen place-content-center gap-4 p-10 text-center">
+        <div
+          role="alert"
+          className="grid h-screen place-content-center gap-4 p-10 text-center"
+        >
           <h1 className="font-display text-3xl">Couldn't open the case file</h1>
-          <p>The game server did not answer. Try again, or go back to the case files.</p>
+          <p>
+            The game server did not answer. Try again, or go back to the case
+            files.
+          </p>
           <div className="flex justify-center gap-3">
-            <InkButton onClick={() => void session.reload().catch(() => toast.show(CONNECTION_LOST_NOTICE, 'notice'))}>Retry</InkButton>
+            <InkButton
+              onClick={() =>
+                void session
+                  .reload()
+                  .catch(() => toast.show(CONNECTION_LOST_NOTICE, "notice"))
+              }
+            >
+              Retry
+            </InkButton>
             <InkButton onClick={onExit}>Case files</InkButton>
           </div>
         </div>
@@ -102,21 +140,31 @@ export function Desk({ game, onExit, onError, session: sessionOptions }: Props) 
     return <p className="p-10 font-display text-2xl">Opening the case file…</p>;
   }
   const state = view.state;
-  const over = view.outcome !== 'playing';
+  const over = view.outcome !== "playing";
   const ceremonyOpen = over && view.reveal !== null && !ceremonyClosed;
 
   return (
     <>
-      <div inert={ceremonyOpen} className="grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
+      <div
+        inert={ceremonyOpen || helpOpen}
+        className="grid h-screen grid-rows-[auto_auto_minmax(0,1fr)_auto]"
+      >
         <header className="flex items-center gap-4 border-b-2 border-ink bg-card px-4 py-2">
           <h1 className="text-2xl">GUMSHOE</h1>
-          <p className="line-clamp-1 flex-1 text-sm italic">{state.brief.intro}</p>
+          <span className="flex-1" />
           {over && view.reveal === null && (
             <p role="status" className="text-sm">
               This case is closed. The answer is not available for this file.
             </p>
           )}
-          {over && view.reveal !== null && ceremonyClosed && <InkButton ref={answerButton} onClick={() => setCeremonyClosed(false)}>Show the answer</InkButton>}
+          {over && view.reveal !== null && ceremonyClosed && (
+            <InkButton
+              ref={answerButton}
+              onClick={() => setCeremonyClosed(false)}
+            >
+              Show the answer
+            </InkButton>
+          )}
           <InkButton
             disabled={save.isPending}
             onClick={() => {
@@ -127,40 +175,73 @@ export function Desk({ game, onExit, onError, session: sessionOptions }: Props) 
           >
             Save
           </InkButton>
-          <InkButton ref={exitButton} onClick={onExit}>Case files</InkButton>
+          <InkButton ref={exitButton} onClick={onExit}>
+            Case files
+          </InkButton>
         </header>
-        <div className={`grid min-h-0 ${notebookOpen ? 'grid-cols-[280px_minmax(0,1fr)_380px]' : 'grid-cols-[72px_minmax(0,1fr)_380px]'}`}>
+        <section
+          aria-label="The case"
+          className="border-b-2 border-ink bg-card-light px-6 py-3"
+        >
+          <span className="mr-3 inline-block bg-stamp px-2 py-0.5 text-xs tracking-[0.2em] text-card-light uppercase">
+            The case
+          </span>
+          <span className="font-display text-xl">{state.brief.intro}</span>
+        </section>
+        <div
+          className={`grid min-h-0 ${notebookOpen ? "grid-cols-[280px_minmax(0,1fr)_380px]" : "grid-cols-[72px_minmax(0,1fr)_380px]"}`}
+        >
           <Notebook
             state={state}
             collapsed={!notebookOpen}
             onToggle={() => setNotebookOpen((o) => !o)}
-            canAccuse={view.outcome === 'playing' && !session.busy}
+            canAccuse={view.outcome === "playing" && !session.busy}
             onAccuse={() => {
-              if (draft === '') setDraft(ACCUSE_DRAFT);
+              if (draft === "") setDraft(ACCUSE_DRAFT);
               input.current?.focus();
             }}
           />
           <Board game={game} state={state} />
-          <div className="min-h-0 border-l border-ink">
-            <Chat
-              view={view}
-              busy={session.busy}
-              maxChars={meta.data?.max_turn_chars ?? 1000}
-              draft={draft}
-              onDraft={setDraft}
-              onSend={(t) => session.send(t)}
-              onAnswer={(a) => void session.answer(a)}
-              inputRef={input}
-            />
+          <div className="flex min-h-0 flex-col border-l border-ink">
+            <div className="flex shrink-0 items-center justify-between border-b border-ink bg-card px-3 py-1">
+              <span className="text-xs tracking-widest uppercase">Chat</span>
+              <button
+                type="button"
+                aria-label="How to play"
+                title="How to play"
+                onClick={() => setHelpOpen(true)}
+                className="h-7 w-7 border border-ink bg-card-light font-display text-lg leading-none"
+              >
+                ?
+              </button>
+            </div>
+            <div className="min-h-0 flex-1">
+              <Chat
+                view={view}
+                busy={session.busy}
+                maxChars={meta.data?.max_turn_chars ?? 1000}
+                draft={draft}
+                onDraft={setDraft}
+                onSend={(t) => session.send(t)}
+                onAnswer={(a) => void session.answer(a)}
+                inputRef={input}
+              />
+            </div>
           </div>
         </div>
         <TraceDrawer turns={view.turns} health={health.data} />
       </div>
-      {ceremonyOpen && view.reveal !== null && view.outcome !== 'playing' && (
-        <Ceremony outcome={view.outcome} reveal={view.reveal} onNewCase={onExit} onClose={() => {
+      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
+      {ceremonyOpen && view.reveal !== null && view.outcome !== "playing" && (
+        <Ceremony
+          outcome={view.outcome}
+          reveal={view.reveal}
+          onNewCase={onExit}
+          onClose={() => {
             focusAfterClose.current = true;
             setCeremonyClosed(true);
-          }} />
+          }}
+        />
       )}
     </>
   );

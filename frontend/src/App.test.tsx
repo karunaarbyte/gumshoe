@@ -252,12 +252,12 @@ describe('App follow-up fixes', () => {
     expect(window.location.hash).toBe('#/');
   });
 
-  test('the no-reveal notice lives in the header, so the grid keeps its three rows', async () => {
+  test('the no-reveal notice lives in the header, so the grid keeps its four rows', async () => {
     window.location.hash = '#/game/g1';
     const { container } = render(<App client={fakeApi({ state: { ...states[10]!, outcome: 'won', reveal: null }, turns: transcript })} queryClient={testQueryClient()} session={{ pollMs: 5 }} />);
     const notice = await screen.findByText(/This case is closed/);
     expect(notice.closest('header')).not.toBeNull();
-    expect(container.querySelector('.h-screen')!.children).toHaveLength(3);
+    expect(container.querySelector('.h-screen')!.children).toHaveLength(4);
   });
 
   function liveEnd() {

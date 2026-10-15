@@ -151,3 +151,15 @@ describe('Board', () => {
     expect(screen.queryAllByTestId('player-thread')).toHaveLength(0);
   });
 });
+
+test('clicking a card opens it in full and clicking again closes it', async () => {
+  render(<Board game="g1" state={states[2]!} />);
+  const card = screen.getByTestId(/^card-fact:Long gallery/);
+  expect(card).toHaveAttribute('data-expanded', 'false');
+  fireEvent.pointerDown(card, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+  fireEvent.pointerUp(screen.getByTestId('board'), { clientX: 10, clientY: 10, pointerId: 1 });
+  expect(screen.getByTestId(/^card-fact:Long gallery/)).toHaveAttribute('data-expanded', 'true');
+  fireEvent.pointerDown(screen.getByTestId(/^card-fact:Long gallery/), { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+  fireEvent.pointerUp(screen.getByTestId('board'), { clientX: 10, clientY: 10, pointerId: 1 });
+  expect(screen.getByTestId(/^card-fact:Long gallery/)).toHaveAttribute('data-expanded', 'false');
+});

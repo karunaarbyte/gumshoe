@@ -109,8 +109,8 @@ describe('layout', () => {
 
   test('the board is big enough for every card', () => {
     const size = boardSize(initialLayout(buildCards(state)));
-    expect(size.width).toBeGreaterThan(600);
-    expect(size.height).toBeGreaterThan(500);
+    expect(size.width).toBeGreaterThan(500);
+    expect(size.height).toBeGreaterThan(300);
   });
 });
 
