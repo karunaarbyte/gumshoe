@@ -41,14 +41,15 @@ export function initialLayout(cards: BoardCard[]): Record<string, Placement> {
   cards.filter((c) => c.type === 'suspect').forEach((c, i) => columnOf.set(c.title, i));
   row2.forEach((c, i) => columnOf.set(c.title, i));
   let next = Math.max(cards.filter((c) => c.type === 'suspect').length, row2.length);
-  const perSource = new Map<string, number>();
+  const perColumn = new Map<number, number>(); // a suspect and a place can share a column
   for (const c of cards) {
     if (c.type !== 'fact') continue;
     const source = c.source ?? '';
     if (!columnOf.has(source)) columnOf.set(source, next++);
-    const row = perSource.get(source) ?? 0;
-    perSource.set(source, row + 1);
-    place(c, column(columnOf.get(source) ?? 0), ROW_EVIDENCE + row * FACT_STEP_Y);
+    const col = columnOf.get(source) ?? 0;
+    const row = perColumn.get(col) ?? 0;
+    perColumn.set(col, row + 1);
+    place(c, column(col), ROW_EVIDENCE + row * FACT_STEP_Y);
   }
   return out;
 }
