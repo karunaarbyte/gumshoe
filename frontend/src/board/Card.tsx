@@ -41,8 +41,10 @@ export function Card({
       style={{
         left: at.x,
         top: at.y,
-        width: open ? CARD_W + 72 : CARD_W,
-        ...(open ? { minHeight: CARD_H } : { height: CARD_H }),
+        // open: only as big as the text needs, between the closed width and a readable maximum
+        ...(open
+          ? { width: "max-content", minWidth: CARD_W, maxWidth: 300 }
+          : { width: CARD_W, height: CARD_H }),
         zIndex: open ? 30 : undefined,
         transform: `rotate(${open ? 0 : at.rotate}deg)`,
         perspective: 600,
@@ -60,7 +62,7 @@ export function Card({
         aria-label={
           card.locked ? `${card.label}, locked` : `${card.label}: ${card.title}`
         }
-        className={`relative ${open ? "min-h-[84px]" : "h-full"} w-full overflow-hidden border border-ink p-2 shadow-hard ${card.locked ? "bg-ink/80" : face}`}
+        className={`relative ${open ? "" : "h-full"} w-full overflow-hidden border border-ink p-2 shadow-hard ${card.locked ? "bg-ink/80" : face}`}
       >
         <button
           type="button"
@@ -91,13 +93,17 @@ export function Card({
         ) : (
           <>
             {card.type === "fact" ? (
-              <p className="mt-1 truncate text-xs font-bold uppercase">
+              <p
+                className={`mt-1 ${open ? "" : "truncate"} text-xs font-bold uppercase`}
+              >
                 {card.speaker !== null
                   ? `${card.speaker} said`
                   : `Found in ${card.source ?? "the case"}`}
               </p>
             ) : (
-              <h3 className="mt-1 truncate font-bold uppercase">
+              <h3
+                className={`mt-1 ${open ? "" : "truncate"} font-bold uppercase`}
+              >
                 {card.title}
               </h3>
             )}
