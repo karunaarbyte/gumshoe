@@ -38,6 +38,13 @@ export function Strings({ width, height, placements, strings, threads, draft, on
               data-testid="player-thread"
               role="button"
               aria-label="Delete thread"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onCut(t.id);
+                }
+              }}
               className="pointer-events-auto cursor-pointer"
               x1={e.a.x}
               y1={e.a.y}

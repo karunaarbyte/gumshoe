@@ -1,5 +1,6 @@
+import userEvent from '@testing-library/user-event';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { states } from '../test/fixtures';
 import { preferReducedMotion } from '../test/render';
 import { Board } from './Board';
@@ -90,5 +91,63 @@ describe('Board', () => {
     render(<Board game="g1" state={state} />);
     expect(screen.getByTestId(`card-${S1}`).style.left).toBe('7px');
     expect(screen.getAllByTestId('player-thread')).toHaveLength(1);
+  });
+
+  test('a drag writes storage once, on release', () => {
+    preferReducedMotion(true);
+    render(<Board game="g1" state={state} />);
+    const start = initialLayout(buildCards(state))[S1]!;
+    const spy = vi.spyOn(Storage.prototype, 'setItem');
+    const board = screen.getByTestId('board');
+    fireEvent.pointerDown(screen.getByTestId(`card-${S1}`), { clientX: 100, clientY: 100, pointerId: 1 });
+    for (const dx of [10, 20, 30, 40]) fireEvent.pointerMove(board, { clientX: 100 + dx, clientY: 100, pointerId: 1 });
+    expect(spy).not.toHaveBeenCalledWith(gameKey('g1'), expect.anything());
+    fireEvent.pointerUp(board, { clientX: 140, clientY: 100, pointerId: 1 });
+    expect(spy.mock.calls.filter(([k]) => k === gameKey('g1'))).toHaveLength(1);
+    expect(loadBoard(gameKey('g1')).positions[S1]).toEqual({ x: start.x + 40, y: start.y });
+    spy.mockRestore();
+  });
+
+  test('loading a game does not rewrite its storage', () => {
+    preferReducedMotion(true);
+    const spy = vi.spyOn(Storage.prototype, 'setItem');
+    render(<Board game="g1" state={state} />);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  test('a lost mouse-up ends the drag', () => {
+    preferReducedMotion(true);
+    render(<Board game="g1" state={state} />);
+    const card = screen.getByTestId(`card-${S1}`);
+    const board = screen.getByTestId('board');
+    fireEvent.pointerDown(card, { clientX: 100, clientY: 100, pointerId: 1, pointerType: 'mouse', buttons: 1 });
+    fireEvent.pointerMove(board, { clientX: 120, clientY: 100, pointerId: 1, pointerType: 'mouse', buttons: 1 });
+    const before = card.style.left;
+    fireEvent.pointerMove(board, { clientX: 200, clientY: 100, pointerId: 1, pointerType: 'mouse', buttons: 0 });
+    fireEvent.pointerMove(board, { clientX: 300, clientY: 100, pointerId: 1, pointerType: 'mouse', buttons: 1 });
+    expect(card.style.left).not.toBe(before); // the cancelled drag snaps back
+    const after = card.style.left;
+    fireEvent.pointerMove(board, { clientX: 400, clientY: 100, pointerId: 1, pointerType: 'mouse', buttons: 1 });
+    expect(card.style.left).toBe(after);
+  });
+
+  test('a right-button press starts no drag', () => {
+    preferReducedMotion(true);
+    render(<Board game="g1" state={state} />);
+    const card = screen.getByTestId(`card-${S1}`);
+    const before = card.style.left;
+    fireEvent.pointerDown(card, { clientX: 100, clientY: 100, pointerId: 1, button: 2 });
+    fireEvent.pointerMove(screen.getByTestId('board'), { clientX: 160, clientY: 100, pointerId: 1 });
+    expect(card.style.left).toBe(before);
+  });
+
+  test('a thread can be deleted from the keyboard', async () => {
+    preferReducedMotion(true);
+    window.localStorage.setItem(gameKey('g1'), JSON.stringify({ positions: {}, threads: [{ id: 't', from: S1, to: S2 }] }));
+    render(<Board game="g1" state={state} />);
+    screen.getByRole('button', { name: 'Delete thread' }).focus();
+    await userEvent.keyboard('{Enter}');
+    expect(screen.queryAllByTestId('player-thread')).toHaveLength(0);
   });
 });

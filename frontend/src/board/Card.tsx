@@ -28,7 +28,10 @@ export function Card({ card, domKey, at, onGrab, onPin }: Props) {
       data-flipped={flip}
       className="absolute touch-none select-none"
       style={{ left: at.x, top: at.y, width: CARD_W, height: CARD_H, transform: `rotate(${at.rotate}deg)`, perspective: 600 }}
-      onPointerDown={(e) => onGrab(card, e)}
+      onPointerDown={(e) => {
+        if (e.button > 0) return; // primary button, touch or pen only
+        onGrab(card, e);
+      }}
     >
       <motion.article
         key={card.locked ? 'down' : 'up'}
@@ -41,12 +44,15 @@ export function Card({ card, domKey, at, onGrab, onPin }: Props) {
         <button
           type="button"
           aria-label={card.locked ? `Pin on ${card.label.toLowerCase()}, locked` : `Pin on ${card.label.toLowerCase()} ${card.type === 'fact' ? card.body : card.title}`}
-          className="absolute top-1 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border border-ink bg-stamp"
+          className="absolute top-0 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center"
           onPointerDown={(e) => {
             e.stopPropagation();
+            if (e.button > 0) return;
             onPin(card, e);
           }}
-        />
+        >
+          <span aria-hidden="true" className="h-3 w-3 rounded-full border border-ink bg-stamp" />
+        </button>
         <div className="mt-2">
           <Chip>{card.label}</Chip>
         </div>
