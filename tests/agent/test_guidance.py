@@ -36,11 +36,6 @@ def test_the_short_nudge_gives_two_real_examples_from_what_is_open():
     assert len(text) < 200
 
 
-def test_the_short_nudge_rotates_its_examples_so_it_is_not_wallpaper():
-    b = brief(places=PLACES, suspects=PEOPLE)
-    assert guidance.short_nudge(b, round=0) != guidance.short_nudge(b, round=1)
-
-
 def test_the_nudge_copes_with_nothing_open_to_name():
     assert "search" in guidance.short_nudge(brief(places=(("Cellar", True),), suspects=PEOPLE[2:]))
     assert "ask" not in guidance.short_nudge(brief(places=PLACES, suspects=PEOPLE[2:]))
@@ -74,13 +69,13 @@ def test_the_full_help_counts_suspects_still_to_be_found_without_naming_them():
 
 def test_a_locked_name_never_appears_in_any_guidance():
     b = brief(places=PLACES, suspects=PEOPLE)
-    texts = [guidance.short_nudge(b, round=r) for r in range(4)] + [
+    texts = [guidance.short_nudge(b)] + [
         guidance.full_help(b),
         guidance.which_text(b, "search"),
         guidance.which_text(b, "interrogate"),
         guidance.which_text(b, "records"),
-        guidance.mismatch_text(b, "search", "s3"),
-        guidance.mismatch_text(b, "interrogate", "p3"),
+        guidance.mismatch_text(b, "s3"),
+        guidance.mismatch_text(b, "p3"),
         guidance.tailored(b, "search"),
         guidance.tailored(b, "records"),
     ]
@@ -102,9 +97,9 @@ def test_which_lists_only_what_is_open_for_the_kind_of_move():
 
 def test_mismatch_says_what_the_named_thing_is_and_what_to_do_with_it():
     b = brief(places=PLACES, suspects=PEOPLE)
-    assert "Maud the clerk is a suspect" in guidance.mismatch_text(b, "search", "s1")
-    assert "Kitchen is a place" in guidance.mismatch_text(b, "interrogate", "p2")
-    assert guidance.mismatch_text(b, "search", "nope") == guidance.GENERIC_MISMATCH
+    assert "Maud the clerk is a suspect" in guidance.mismatch_text(b, "s1")
+    assert "Kitchen is a place" in guidance.mismatch_text(b, "p2")
+    assert guidance.mismatch_text(b, "nope") == guidance.GENERIC_MISMATCH
 
 
 def test_a_tailored_line_matches_the_move_the_model_half_read():
@@ -140,13 +135,13 @@ async def test_no_guidance_text_from_a_real_game_gives_away_anything_hidden():
             + [m.label for m in case.motives]
             + [f.text for f in case.facts]
         )
-        texts = [guidance.full_help(b), *(guidance.short_nudge(b, round=r) for r in range(6))]
+        texts = [guidance.full_help(b), guidance.short_nudge(b)]
         for intent in ("search", "interrogate", "talk", "records", "accuse"):
             texts += [guidance.which_text(b, intent), guidance.tailored(b, intent) or ""]
         for s in b.suspects + b.locations:  # every possible mismatch, locked or not
             texts += [
-                guidance.mismatch_text(b, "search", s.handle),
-                guidance.mismatch_text(b, "interrogate", s.handle),
+                guidance.mismatch_text(b, s.handle),
+                guidance.mismatch_text(b, s.handle),
             ]
         for text in texts:
             for secret in secrets:

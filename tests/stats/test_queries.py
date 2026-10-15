@@ -597,3 +597,16 @@ def test_each_question_reports_how_many_decisions_it_was_compared_on():
     )
     [node] = build_report(calls + [extra, extra_shadow]).nodes
     assert node.question_counts == {"intent": 2, "weight": 1}  # an optional question is asked less
+
+
+def test_a_window_where_the_roles_swapped_still_has_one_primary_and_one_shadow():
+    # before: jev decided with nimble shadowing; after SHADOW_RUN toggled: nimble decided alone
+    before = pair("d1") + pair("d2") + pair("d3")
+    after = [
+        make_record(decision_id="d4", backend="nimble", role="primary", used=True),
+        make_record(decision_id="d5", backend="nimble", role="primary", used=True),
+    ]
+    [node] = build_report(before + after).nodes
+    roles = {b.backend: b.role for b in node.backends}
+    assert sorted(roles.values()) == ["primary", "shadow"]
+    assert roles["jev"] == "primary"  # it decided more of the node's decisions

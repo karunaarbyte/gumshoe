@@ -305,3 +305,25 @@ def test_nimble_alone_needs_no_jev_key():
 
     s = Settings(_env_file=None, shadow_run=False)  # no key anywhere
     assert make_decider(s).name == "nimble"
+
+
+def test_a_contradicting_role_setting_is_overridden_with_a_warning(monkeypatch, caplog):
+    import logging
+
+    monkeypatch.setenv("SHADOW_RUN", "false")
+    monkeypatch.setenv("DECIDER_PRIMARY", "jev")
+    with caplog.at_level(logging.WARNING):
+        s = Settings(_env_file=None)
+    assert (s.decider_primary, s.decider_shadow) == ("nimble", None)
+    assert any(
+        "SHADOW_RUN=false" in r.message and "DECIDER_PRIMARY" in r.message for r in caplog.records
+    )
+
+
+def test_no_warning_when_the_roles_were_not_set(monkeypatch, caplog):
+    import logging
+
+    monkeypatch.setenv("SHADOW_RUN", "false")
+    with caplog.at_level(logging.WARNING):
+        Settings(_env_file=None)
+    assert not caplog.records

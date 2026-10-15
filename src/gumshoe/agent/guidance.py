@@ -37,13 +37,10 @@ def _names(names: list[str]) -> str:
     return shown[0] if len(shown) == 1 else ", ".join(shown[:-1]) + " or " + shown[-1]
 
 
-def _pick(names: list[str], round: int) -> str | None:
-    return names[round % len(names)] if names else None
-
-
-def _examples(brief: PlayerCaseView, round: int) -> list[str]:
-    place = _pick(_open(brief.locations), round)
-    who = _pick(_open(brief.suspects), round)
+def _examples(brief: PlayerCaseView) -> list[str]:
+    places, people = _open(brief.locations), _open(brief.suspects)
+    place = places[0] if places else None
+    who = people[0] if people else None
     out = []
     if place is not None:
         out.append(f"“search the {place}”")
@@ -52,9 +49,9 @@ def _examples(brief: PlayerCaseView, round: int) -> list[str]:
     return out
 
 
-def short_nudge(brief: PlayerCaseView, *, round: int = 0) -> str:
+def short_nudge(brief: PlayerCaseView) -> str:
     """The first answer to a message we could not read: two real examples and the way out."""
-    examples = _examples(brief, round)
+    examples = _examples(brief)
     if not examples:
         return "I did not catch that. Try searching a place, or type help."
     return f"I did not catch that. Try {' or '.join(examples)}, or type help."
@@ -107,7 +104,7 @@ def _kind_of(brief: PlayerCaseView, handle: str) -> tuple[str, str, bool] | None
     return None
 
 
-def mismatch_text(brief: PlayerCaseView, intent: str, handle: str) -> str:
+def mismatch_text(brief: PlayerCaseView, handle: str) -> str:
     """The model read a move and a target that do not go together ("search Maud")."""
     found = _kind_of(brief, handle)
     if found is None or found[2]:

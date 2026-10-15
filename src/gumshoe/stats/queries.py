@@ -299,33 +299,44 @@ def _node_stats(
         intent_confusion={a: dict(sorted(b.items())) for a, b in sorted(confusion.items())},
         score_offset={q: round(sum(v) / len(v), 4) for q, v in sorted(offsets.items())},
         agreement_rate=sum(agreeing.values()) / all_pairs if all_pairs else None,
-        backends=[
-            _backend_stats(
-                name, [r for r in rows if r.backend == name], include_cold, prices.get(name)
-            )
-            for name in sorted({r.backend for r in rows})
-        ],
+        backends=_backends(rows, include_cold, prices),
     )
 
 
+def _primary_answer(group: Sequence[CallRecord]) -> CallRecord | None:
+    """The primary's call, when it answered."""
+    return next((c for c in group if c.role == "primary" and c.answers), None)
+
+
 def _shadow_failed(group: Sequence[CallRecord]) -> bool:
-    """A decision with no fallback whose shadow call failed (so it never reached `compared`)."""
-    if any(c.fallback for c in group):
-        return False
-    # the primary must have answered: otherwise the decision is incomplete, not a shadow failure
-    if _primary_intent_present(group) is False:
+    """A decision with no fallback whose shadow call failed (so it never reached `compared`).
+    The primary must have answered: otherwise the decision is incomplete, not a shadow failure."""
+    if any(c.fallback for c in group) or _primary_answer(group) is None:
         return False
     return any(c.role == "shadow" and c.error is not None for c in group)
 
 
-def _primary_intent_present(group: Sequence[CallRecord]) -> bool:
-    return any(c.role == "primary" and c.answers for c in group)
-
-
 def _primary_intent(group: Sequence[CallRecord]) -> str | None:
-    primary = next((c for c in group if c.role == "primary" and c.answers is not None), None)
+    primary = _primary_answer(group)
     said = primary.answers.get("intent") if primary is not None and primary.answers else None
     return said.choice if isinstance(said, ChoiceAnswer) else None
+
+
+def _backends(
+    rows: list[CallRecord], include_cold: bool, prices: Mapping[str, Price]
+) -> list[BackendStats]:
+    names = sorted({r.backend for r in rows})
+    stats = [
+        _backend_stats(n, [r for r in rows if r.backend == n], include_cold, prices.get(n))
+        for n in names
+    ]
+    # Roles can swap inside a window (SHADOW_RUN toggled): one backend decided most of the node's
+    # decisions and is its primary; every other one is a shadow.
+    decided = {n: sum(r.role == "primary" for r in rows if r.backend == n) for n in names}
+    lead = max(names, key=lambda n: (decided[n], n == names[0])) if names else None
+    return [
+        s.model_copy(update={"role": "primary" if s.backend == lead else "shadow"}) for s in stats
+    ]
 
 
 def _latency(rows: list[CallRecord], include_cold: bool) -> LatencyStats:

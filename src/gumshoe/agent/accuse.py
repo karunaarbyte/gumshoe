@@ -50,12 +50,17 @@ def missing_text(plan: AccusationPlan, who_name: str | None = None) -> str:
     return " ".join(parts)
 
 
-def problems_of(plan: AccusationPlan) -> tuple[AccusationProblem, ...]:
-    """The plan's problems as event data: the axis, why, and the candidates nameable now."""
+def problems_of(plan: AccusationPlan, who_name: str | None = None) -> tuple[AccusationProblem, ...]:
+    """The plan's problems as event data: the axis, why, and the candidates nameable now. A who
+    the player may not know by name reads as `unclear`, like a made-up name, so the event data
+    cannot be used to probe for hidden suspects any more than the text can."""
     return tuple(
         AccusationProblem(
             axis=cast(Literal["who", "how", "why"], problem.axis),
-            reason=cast(Literal["unclear", "not_permitted"], problem.reason),
+            reason=cast(
+                Literal["unclear", "not_permitted"],
+                "unclear" if problem.axis == "who" and who_name is None else problem.reason,
+            ),
             options=tuple(ProblemOption(handle=c.handle, name=c.name) for c in problem.options),
         )
         for problem in plan.problems

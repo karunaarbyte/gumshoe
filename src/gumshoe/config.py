@@ -10,6 +10,7 @@ shared with other tools. The flip side is that a misspelled variable is silently
 check the spelling against `.env.example`.
 """
 
+import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, Self
@@ -17,6 +18,8 @@ from urllib.parse import urlsplit
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 Backend = Literal["jev", "nimble"]
 
@@ -138,6 +141,12 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _roles_must_differ(self) -> Self:
         if not self.shadow_run:
+            said = {"decider_primary", "decider_shadow"} & self.model_fields_set
+            if (self.decider_primary, self.decider_shadow) != ("nimble", None) and said:
+                logger.warning(
+                    "SHADOW_RUN=false overrides DECIDER_PRIMARY and DECIDER_SHADOW: "
+                    "Nimble alone decides"
+                )
             self.decider_primary, self.decider_shadow = "nimble", None
             return self
         if self.decider_shadow == self.decider_primary:

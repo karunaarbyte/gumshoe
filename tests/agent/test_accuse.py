@@ -94,3 +94,14 @@ def test_a_gated_how_reads_exactly_like_an_unknown_one():
     unknown = plan_with(AxisProblem(axis="how", reason="unclear", options=options))
     assert missing_text(gated, None) == missing_text(unknown, None)
     assert "lead" not in missing_text(gated, None) and "yet" not in missing_text(gated, None)
+
+
+def test_the_event_data_hides_a_locked_name_the_same_way_the_text_does():
+    from gumshoe.agent.accuse import problems_of
+
+    gated = plan_with(AxisProblem(axis="who", reason="not_permitted", options=()))
+    # a name that is not the player's to know: the reason must not tell it from a made-up one
+    assert problems_of(gated, None)[0].reason == "unclear"
+    assert problems_of(gated, "Maud the clerk")[0].reason == "not_permitted"
+    other = plan_with(AxisProblem(axis="how", reason="unclear", options=()))
+    assert problems_of(other, None)[0].reason == "unclear"

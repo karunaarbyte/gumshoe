@@ -307,8 +307,9 @@ async def _process(
         }[name]
         if handle not in allowed:
             ctx.unclear += 1
-            yield Clarify(reason="mismatch", text=guidance.mismatch_text(brief, name, handle))
+            yield Clarify(reason="mismatch", text=guidance.mismatch_text(brief, handle))
             return
+    ctx.unclear = 0  # it is a move we understood, whatever it then leads to
     if name == "search" and handle is not None:
         found, searched, fatal = await _tool(
             "search", {"game": game, "location": handle}, lambda: deps.client.search(game, handle)
@@ -382,7 +383,7 @@ async def _process(
         yield confirm_event(ctx.pending)
         _remember(ctx, text, "asked to confirm giving up")
     elif name == "accuse":
-        async for event in _start_accusation(deps, ctx, text):
+        async for event in _start_accusation(deps, ctx, text, brief):
             yield event
     else:  # meta and other
         yield Reply(speaker=None, text=guidance.full_help(brief), source="help")
@@ -452,18 +453,25 @@ async def _parse_accusation(
     return None, parsed, decision_id
 
 
-async def _start_accusation(deps: Deps, ctx: TurnContext, text: str) -> AsyncIterator[TurnEvent]:
+async def _start_accusation(
+    deps: Deps, ctx: TurnContext, text: str, brief: PlayerCaseView
+) -> AsyncIterator[TurnEvent]:
     apology, parsed, decision_id = await _parse_accusation(deps, ctx.game, text)
     if parsed is None:
         assert apology is not None
         yield apology
         return
-    async for event in _plan_accusation(deps, ctx, text, parsed, decision_id):
+    async for event in _plan_accusation(deps, ctx, text, parsed, decision_id, brief):
         yield event
 
 
 async def _plan_accusation(
-    deps: Deps, ctx: TurnContext, text: str, parsed: ParsedAccusation, decision_id: str
+    deps: Deps,
+    ctx: TurnContext,
+    text: str,
+    parsed: ParsedAccusation,
+    decision_id: str,
+    brief: PlayerCaseView | None = None,
 ) -> AsyncIterator[TurnEvent]:
     plan = await deps.client.describe_accusation(ctx.game, parsed.who, parsed.how, parsed.why)
     if plan.repeat:
@@ -482,11 +490,12 @@ async def _plan_accusation(
         yield confirm_event(ctx.pending, decision_id)
         _remember(ctx, text, "asked to confirm an accusation")
     elif plan.problems:
+        named = await _named_suspect(deps, ctx, parsed, brief)
         yield Clarify(
             reason="accusation",
-            text=accusation.missing_text(plan, await _named_suspect(deps, ctx, parsed)),
+            text=accusation.missing_text(plan, named),
             decision_id=decision_id,
-            problems=accusation.problems_of(plan),
+            problems=accusation.problems_of(plan, named),
         )
     else:
         yield Clarify(
@@ -496,11 +505,14 @@ async def _plan_accusation(
         )
 
 
-async def _named_suspect(deps: Deps, ctx: TurnContext, parsed: ParsedAccusation) -> str | None:
-    """The suspect the player named, by name, only if the board already shows that name."""
+async def _named_suspect(
+    deps: Deps, ctx: TurnContext, parsed: ParsedAccusation, brief: PlayerCaseView | None
+) -> str | None:
+    """The suspect the player named, by name, only if the board already shows that name. The turn's
+    own brief is used when it has one, so the name and the plan agree on the same state."""
     if parsed.who is None:
         return None
-    brief = await deps.client.case_brief(ctx.game)
+    brief = brief if brief is not None else await deps.client.case_brief(ctx.game)
     return next((s.name for s in brief.suspects if s.handle == parsed.who and not s.locked), None)
 
 

@@ -694,6 +694,8 @@ async def test_naming_a_locked_suspect_reads_like_naming_nobody_and_never_says_t
         and "I could not tell what you meant for the who" in clarify.text
     )
     assert locked.name not in clarify.text and "lead" not in clarify.text
+    # the event data too: a locked name's reason must equal a made-up name's (no probing)
+    assert [(p.axis, p.reason) for p in clarify.problems if p.axis == "who"] == [("who", "unclear")]
     assert h.ctx.pending is None
 
 
@@ -1081,3 +1083,20 @@ async def test_a_bare_typed_yes_with_the_wrong_pending_id_shows_the_confirmation
         shown = only(await turn(h, "accuse"), Confirm)
         events = await turn(h, "yes", pending_id="not-the-id")
     assert only(events, Confirm).pending_id == shown.pending_id and h.ctx.pending is not None
+
+
+async def test_an_accusation_attempt_ends_a_run_of_unclear_messages():
+    script = (
+        Script()
+        .understand(intent="other", intent_p=0.2)
+        .understand(intent="accuse")
+        .parse(who=None, how=None, why=None)
+        .understand(intent="other", intent_p=0.2)
+    )
+    async with playing(script) as h:
+        await turn(h, "hmm")
+        assert h.ctx.unclear == 1
+        await turn(h, "I accuse someone")
+        assert h.ctx.unclear == 0  # an accusation clarify is a message we understood
+        after = only(await turn(h, "hmm again"), Clarify).text
+    assert "Here is what you can do" not in after  # a fresh miss, not the long help
