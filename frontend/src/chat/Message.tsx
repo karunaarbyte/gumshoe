@@ -1,3 +1,4 @@
+import { summariseTool } from './toolSummary';
 import type { PendingView } from '../api/types';
 import type { ChatMessage } from '../game/model';
 import { ConfirmCard } from './ConfirmCard';
@@ -44,13 +45,25 @@ export function Message({ message: m, pending, busy, stale = false, onSend, onAn
     }
     case 'tool': {
       const failed = m.result !== null && !m.result.ok;
+      const summary = failed || m.result === null ? null : summariseTool(m.result.data);
       return (
-        <details className={`my-1 text-xs ${failed ? 'text-stamp' : 'opacity-80'}`} data-kind="tool">
+        <details className={`my-1 text-xs ${failed ? 'text-stamp' : 'opacity-80'}`} data-kind="tool" open={summary !== null}>
           <summary>
             CASE FILE: {m.call.tool}
             {m.result === null ? ' …' : failed ? ` failed: ${m.result.message ?? m.result.code ?? 'error'}` : ' ok'}
           </summary>
-          <pre className="overflow-x-auto whitespace-pre-wrap">{JSON.stringify({ args: m.call.args, result: m.result?.data ?? null }, null, 1)}</pre>
+          {summary !== null && (
+            <div className="my-1 border-l-4 border-ink bg-card px-3 py-2 text-sm opacity-100" data-kind="tool-summary">
+              <p className="font-bold">{summary.heading}</p>
+              {summary.lines.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+            </div>
+          )}
+          <details>
+            <summary>raw data</summary>
+            <pre className="overflow-x-auto whitespace-pre-wrap">{JSON.stringify({ args: m.call.args, result: m.result?.data ?? null }, null, 1)}</pre>
+          </details>
         </details>
       );
     }
