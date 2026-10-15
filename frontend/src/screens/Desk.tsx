@@ -131,7 +131,7 @@ export function Desk({ game, onExit, onError, session: sessionOptions }: Props) 
               maxChars={meta.data?.max_turn_chars ?? 1000}
               draft={draft}
               onDraft={setDraft}
-              onSend={(t) => void session.send(t)}
+              onSend={(t) => session.send(t)}
               onAnswer={(a) => void session.answer(a)}
               inputRef={input}
             />
