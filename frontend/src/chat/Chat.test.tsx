@@ -45,13 +45,14 @@ describe('Chat rendering', () => {
     expect(screen.getByText(/CASE FILE: interrogate failed: no such suspect/)).toBeInTheDocument();
   });
 
-  test('accusation pickers send exactly the option name', async () => {
+  test('how and why pickers send a sentence, who sends the bare name', async () => {
     const onSend = vi.fn();
     render(<Harness view={at(5)} onSend={onSend} />);
     const how = screen.getByRole('group', { name: 'How?' });
     await userEvent.click(within(how).getByRole('button', { name: 'poisoned port' }));
-    expect(onSend).toHaveBeenCalledWith('poisoned port');
-    expect(pickerText({ handle: 'w1', name: 'an unpaid inheritance' }, 'why')).toBe('an unpaid inheritance');
+    expect(onSend).toHaveBeenCalledWith('I think it was poisoned port');
+    expect(pickerText({ handle: 'w1', name: 'an unpaid inheritance' }, 'why')).toBe('I think it was an unpaid inheritance');
+    expect(pickerText({ handle: 's1', name: 'Mr Grey' }, 'who')).toBe('Mr Grey');
   });
 
   test('pickers are disabled while a turn runs', () => {

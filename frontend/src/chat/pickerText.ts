@@ -1,8 +1,8 @@
 import type { Problem, ProblemOption } from '../api/types';
 
-/** The turn text a picker button sends: exactly the option's name. The agent parses it against
- * the accusation in progress. If the first real-backend run shows the agent needs a sentence
- * for `how` or `why`, this is the one line to change (see frontend/README.md). */
-export function pickerText(option: ProblemOption, _axis: Problem['axis']): string {
-  return option.name;
+/** The turn text a picker button sends. The first real-backend run showed the agent rejects a
+ * bare option name for `how` (low-confidence clarify) and accepts a sentence, so how and why are
+ * sent as `I think it was <name>`. The who axis still sends the bare name (not yet verified live). */
+export function pickerText(option: ProblemOption, axis: Problem['axis']): string {
+  return axis === 'how' || axis === 'why' ? `I think it was ${option.name}` : option.name;
 }
