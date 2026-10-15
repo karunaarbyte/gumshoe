@@ -8,6 +8,7 @@ export interface BoardStore {
   move: (cardId: string, to: Point) => void;
   link: (from: string, to: string) => void;
   unlink: (threadId: string) => void;
+  tidy: () => void; // forget dragged positions, keep the threads
 }
 
 /** The player's arrangement for one game, kept in localStorage under the game id. */
@@ -40,6 +41,7 @@ export function useBoard(game: string): BoardStore {
         }),
       [update],
     ),
+    tidy: useCallback(() => update((d) => ({ ...d, positions: {} })), [update]),
     unlink: useCallback((id) => update((d) => ({ ...d, threads: removeThread(d.threads, id) })), [update]),
   };
 }

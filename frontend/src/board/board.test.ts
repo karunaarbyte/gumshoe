@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { states } from '../test/fixtures';
 import { buildCards, factCard, gameStrings, locationCard, suspectCard } from './cards';
-import { boardSize, initialLayout, placeCards } from './layout';
+import { CARD_H, CARD_W, boardSize, initialLayout, placeCards } from './layout';
 import { hashString, jitter } from './seed';
 import { copyBoard, gameKey, loadBoard, saveKey, storeBoard } from './storage';
 import { addThread, removeThread } from './threads';
@@ -39,6 +39,16 @@ describe('cards', () => {
     const doubled = { ...state, notebook: { ...state.notebook, sections: state.notebook.sections.map((x) => (x === section ? { ...x, facts: [...x.facts, x.facts[0]!] } : x)) } };
     const ids = buildCards(doubled).map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test('the starting layout never overlaps two cards', () => {
+    const at = Object.values(initialLayout(buildCards(state)));
+    for (const [i, a] of at.entries()) {
+      for (const b of at.slice(i + 1)) {
+        const apart = Math.abs(a.x - b.x) >= CARD_W || Math.abs(a.y - b.y) >= CARD_H;
+        expect(apart).toBe(true);
+      }
+    }
   });
 
   test('game strings: contradictions and relates_to by suspect name', () => {
