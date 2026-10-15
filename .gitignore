@@ -27,8 +27,8 @@ logs/
 .idea/
 .vscode/
 
-# Design docs and plans (kept local; commit manually when ready)
-# docs/
+# Design docs are committed; implementation plans stay local (large, and served their purpose)
+docs/superpowers/plans/
 
 # MCP server saves (they hold the full solution)
 saves/
