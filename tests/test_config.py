@@ -1,5 +1,5 @@
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 import gumshoe.mcp_server.saves as saves_module
 from gumshoe.agent import AgentConfig
@@ -327,3 +327,40 @@ def test_no_warning_when_the_roles_were_not_set(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING):
         Settings(_env_file=None)
     assert not caplog.records
+
+
+def test_public_mode_is_off_by_default():
+    s = Settings(_env_file=None)
+    assert s.public_origin == "" and s.public_mode is False
+
+
+def test_public_origin_must_be_an_explicit_https_origin():
+    secret = SecretStr("s" * 32)
+    ok = Settings(
+        _env_file=None, public_origin="https://gumshoe.example.com", session_secret=secret
+    )
+    assert ok.public_mode is True
+    bad_origins = (
+        "http://gumshoe.example.com",
+        "https://x.example/path",
+        "https://*.example.com",
+        "gumshoe",
+    )
+    for bad in bad_origins:
+        with pytest.raises(ValidationError, match="PUBLIC_ORIGIN"):
+            Settings(_env_file=None, public_origin=bad, session_secret=secret)
+
+
+def test_public_mode_needs_a_long_session_secret():
+    with pytest.raises(ValidationError, match="SESSION_SECRET"):
+        Settings(_env_file=None, public_origin="https://gumshoe.example.com")
+    with pytest.raises(ValidationError, match="SESSION_SECRET"):
+        Settings(
+            _env_file=None,
+            public_origin="https://gumshoe.example.com",
+            session_secret=SecretStr("short"),
+        )
+
+
+def test_a_short_secret_is_fine_outside_public_mode():
+    assert Settings(_env_file=None, session_secret=SecretStr("short")).public_mode is False

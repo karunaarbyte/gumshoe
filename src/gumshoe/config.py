@@ -104,6 +104,11 @@ class Settings(BaseSettings):
     api_port: int = Field(8000, ge=1, le=65535)
     turn_timeout_s: float = Field(120.0, gt=0, allow_inf_nan=False)
     max_body_bytes: int = Field(16384, ge=1024)
+    # Public mode. PUBLIC_ORIGIN is the site's own https origin; setting it turns on the
+    # Secure `__Host-` cookie, the strict Origin check and the startup checks. SESSION_SECRET
+    # signs the session cookie and keys the save owners (32+ characters in public mode).
+    public_origin: str = ""
+    session_secret: SecretStr = SecretStr("")
 
     @field_validator("decider_shadow", mode="before")
     @classmethod
@@ -138,6 +143,29 @@ class Settings(BaseSettings):
                 _origin(item.strip())
         return value
 
+    @field_validator("public_origin", mode="after")
+    @classmethod
+    def _public_origin_is_an_https_origin(cls, value: str) -> str:
+        if not value:
+            return value
+        try:
+            origin = _origin(value)
+        except ValueError as exc:
+            raise ValueError(f"PUBLIC_ORIGIN: {exc}") from exc
+        if urlsplit(origin).scheme != "https":
+            raise ValueError(
+                "PUBLIC_ORIGIN must be an https origin like https://gumshoe.example.com"
+            )
+        return origin
+
+    @model_validator(mode="after")
+    def _public_mode_needs_a_secret(self) -> Self:
+        if self.public_origin and len(self.session_secret.get_secret_value()) < 32:
+            raise ValueError(
+                "SESSION_SECRET must be at least 32 characters when PUBLIC_ORIGIN is set"
+            )
+        return self
+
     @model_validator(mode="after")
     def _roles_must_differ(self) -> Self:
         if not self.shadow_run:
@@ -158,6 +186,10 @@ class Settings(BaseSettings):
                 "(leave it blank to disable shadowing)"
             )
         return self
+
+    @property
+    def public_mode(self) -> bool:
+        return bool(self.public_origin)
 
     @property
     def cors_origin_list(self) -> tuple[str, ...]:
