@@ -12,6 +12,8 @@ STATUS = {
     "too_many_games": 429,
 }
 OTHER = 409  # game_over, not_over, state_mismatch and anything new
+UNKNOWN_GAME = "no such game"
+BAD_SAVE_MESSAGE = "that save cannot be read"
 
 
 class ApiError(Exception):
