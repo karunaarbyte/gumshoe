@@ -4,7 +4,6 @@ import os
 import pytest
 from mcp.client import Client
 from pydantic import SecretStr
-from starlette.testclient import TestClient
 
 import gumshoe.api.wiring as wiring
 from gumshoe.agent import AgentConfig
@@ -18,6 +17,7 @@ from gumshoe.mcp_server import GameHost
 from gumshoe.mcp_server.host import MAX_TEXT
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script, ScriptedDecider, ScriptedLlm
+from tests.api.client import TestClient
 from tests.mcp_server.helpers import SeqIds
 
 

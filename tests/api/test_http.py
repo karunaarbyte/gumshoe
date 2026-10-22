@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 
 import pytest
 from pydantic import SecretStr
-from starlette.testclient import TestClient
 
 from gumshoe.api import create_app
 from gumshoe.cases.play.state import MAX_ATTEMPTS
@@ -13,6 +12,7 @@ from gumshoe.config import Settings
 from gumshoe.decider import DeciderConfigError
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script
+from tests.api.client import TestClient
 from tests.api.helpers import fake_factory
 
 CAP = 1024  # the smallest MAX_BODY_BYTES the settings accept

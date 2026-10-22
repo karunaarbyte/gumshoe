@@ -19,6 +19,8 @@ from gumshoe.api.info import MAX_ATTEMPTS, Health, Meta, PersonaModels, presets
 from gumshoe.api.limits import BodyLimit
 from gumshoe.api.probe import PersonaProbe
 from gumshoe.api.service import AgentService
+from gumshoe.api.session import Sessions
+from gumshoe.api.shield import OriginCheck
 from gumshoe.api.wiring import default_service
 from gumshoe.config import Settings, get_settings
 from gumshoe.decider import DeciderConfigError, describe_failure
@@ -82,7 +84,13 @@ def create_app(
 
     app = FastAPI(title="Gumshoe API", lifespan=lifespan)
     app.state.game_off = NOT_STARTED  # until the lifespan has run
+    app.state.sessions = Sessions.from_settings(settings)
     app.add_middleware(BodyLimit, max_bytes=settings.max_body_bytes)
+    allowed_origins = (
+        *settings.cors_origin_list,
+        *([settings.public_origin] if settings.public_origin else []),
+    )
+    app.add_middleware(OriginCheck, allowed=allowed_origins, local=not settings.public_mode)
     if origins := settings.cors_origin_list:  # added last, so it is outermost: 413s carry it too
         app.add_middleware(
             CORSMiddleware,

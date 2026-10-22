@@ -364,3 +364,12 @@ def test_public_mode_needs_a_long_session_secret():
 
 def test_a_short_secret_is_fine_outside_public_mode():
     assert Settings(_env_file=None, session_secret=SecretStr("short")).public_mode is False
+
+
+def test_public_origin_rejects_userinfo():
+    with pytest.raises(ValueError, match="PUBLIC_ORIGIN"):
+        Settings(
+            _env_file=None,
+            public_origin="https://user@gumshoe.example.com",
+            session_secret=SecretStr("s" * 32),
+        )

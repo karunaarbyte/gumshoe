@@ -1,11 +1,10 @@
 from contextlib import asynccontextmanager
 
-from starlette.testclient import TestClient
-
 from gumshoe.api import create_app
 from gumshoe.decider import DeciderConfigError
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script
+from tests.api.client import TestClient
 from tests.api.helpers import fake_factory
 
 

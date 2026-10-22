@@ -152,6 +152,8 @@ class Settings(BaseSettings):
             origin = _origin(value)
         except ValueError as exc:
             raise ValueError(f"PUBLIC_ORIGIN: {exc}") from exc
+        if urlsplit(origin).username is not None:
+            raise ValueError("PUBLIC_ORIGIN must not contain a username or password")
         if urlsplit(origin).scheme != "https":
             raise ValueError(
                 "PUBLIC_ORIGIN must be an https origin like https://gumshoe.example.com"

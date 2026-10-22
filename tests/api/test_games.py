@@ -2,7 +2,6 @@ import asyncio
 from contextlib import asynccontextmanager
 
 import pytest
-from starlette.testclient import TestClient
 
 from gumshoe.agent.events import EVENT_ADAPTER, Done
 from gumshoe.api import create_app
@@ -10,6 +9,7 @@ from gumshoe.api.errors import status_for
 from gumshoe.api.games import PING, sse, with_pings
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script, ScriptedDecider
+from tests.api.client import TestClient
 from tests.api.helpers import fake_factory, parse_sse, serving
 
 

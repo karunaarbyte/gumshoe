@@ -18,7 +18,9 @@ def store(tmp_path):
 @pytest.fixture
 async def client(store):
     transport = httpx.ASGITransport(app=create_app(store))
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test", headers={"origin": "http://test"}
+    ) as c:
         yield c
 
 
@@ -196,7 +198,9 @@ async def test_costs_use_the_configured_prices(store):
     settings = Settings(_env_file=None, jev_usd_per_mtok_in=1.0, jev_usd_per_mtok_out=1.0)
     seed(store, "d1")
     transport = httpx.ASGITransport(app=create_app(store, settings=settings))
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test", headers={"origin": "http://test"}
+    ) as c:
         [decision] = (await c.get("/api/decisions")).json()
         report = (await c.get("/api/stats/decisions")).json()
     jev = decision["calls"][0]
@@ -293,7 +297,9 @@ async def test_the_weight_threshold_comes_from_the_settings(store):
     settings = Settings(_env_file=None, dramatic_from=3.0)
     seed_weighed(store, "d", minute="01", weight=(2.8, 3.2))  # one band under the default 2.5
     transport = httpx.ASGITransport(app=create_app(store, settings=settings))
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test", headers={"origin": "http://test"}
+    ) as c:
         [view] = (await c.get("/api/decisions")).json()
         [node] = (await c.get("/api/stats/decisions")).json()["nodes"]
     assert view["agrees"]["weight"] is False and node["question_agreement"]["weight"] == 0.0
