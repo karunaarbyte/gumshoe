@@ -92,7 +92,7 @@ def current_owner(request: Request) -> str:
     """The caller's session id; with no valid session, the answer a missing game gets."""
     sessions = sessions_of(request)
     session_id = sessions.read(request.cookies.get(sessions.cookie_name))
-    if session_id is None:
+    if not session_id:  # None or empty: no session
         raise ToolFailure("unknown_game", UNKNOWN_GAME)
     return session_id
 
@@ -101,10 +101,16 @@ def issue_owner(request: Request, response: Response) -> str:
     """The caller's session id, issuing a session (and its cookie) when there is none."""
     sessions = sessions_of(request)
     session_id = sessions.read(request.cookies.get(sessions.cookie_name))
-    if session_id is None:
+    if not session_id:
         session_id, value = sessions.issue()
         sessions.set_cookie(response, value)
     return session_id
+
+
+def optional_owner(request: Request) -> str | None:
+    """The caller's session id, or None: for the one route where no session is not an error."""
+    sessions = sessions_of(request)
+    return sessions.read(request.cookies.get(sessions.cookie_name)) or None
 
 
 Owner = Annotated[str, Depends(current_owner)]

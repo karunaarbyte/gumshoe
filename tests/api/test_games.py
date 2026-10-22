@@ -163,7 +163,7 @@ def test_a_save_write_failure_is_500(store):
     from tests.api.helpers import serving
 
     class Failing(AgentService):
-        async def save_game(self, game):
+        async def save_game(self, game, *, owner):
             raise ToolFailure("bad_save", "could not write the save")
 
     @asynccontextmanager
@@ -203,7 +203,7 @@ def test_an_unexpected_error_is_a_500_with_code_and_message_only(store):
     from tests.api.helpers import serving
 
     class Broken(AgentService):
-        async def state(self, game):
+        async def state(self, game, *, owner):
             raise RuntimeError("secret detail")
 
     @asynccontextmanager
@@ -213,7 +213,8 @@ def test_an_unexpected_error_is_a_500_with_code_and_message_only(store):
 
     app = create_app(store, make_service=factory)
     with TestClient(app, raise_server_exceptions=False) as client:
-        response = client.get("/api/games/x")
+        game = client.post("/api/games", json={"seed": 1}).json()["game"]  # makes a session
+        response = client.get(f"/api/games/{game}")
     assert response.status_code == 500
     assert response.json() == {"code": "internal", "message": "something went wrong"}
 

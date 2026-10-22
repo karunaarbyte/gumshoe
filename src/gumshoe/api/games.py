@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt
 from gumshoe.agent import EVENT_ADAPTER, SaveView, ToolFailure, TurnEvent
 from gumshoe.api.errors import ApiError
 from gumshoe.api.service import AgentService, GameState, GameSummary, SaveSummary, TurnRecord
+from gumshoe.api.session import NewOwner, Owner, optional_owner
 from gumshoe.cases import PlayerCaseView
 
 router = APIRouter(prefix="/api/games")
@@ -77,25 +78,29 @@ def sse(event: TurnEvent) -> bytes:
 
 
 @router.post("")
-async def create(body: NewGameBody, service: Service) -> GameCreated:
-    view = await service.new_game(body.seed, body.preset)
+async def create(body: NewGameBody, service: Service, owner: NewOwner) -> GameCreated:
+    view = await service.new_game(body.seed, body.preset, owner=owner)
     return GameCreated(game=view.game, brief=view.brief, preset=body.preset)
 
 
 @router.get("")
-async def open_games(service: Service) -> list[GameSummary]:
-    return await service.games()
+async def open_games(
+    service: Service, owner: Annotated[str | None, Depends(optional_owner)]
+) -> list[GameSummary]:
+    if not owner:  # a visitor with no session has no games, which is not an error
+        return []
+    return await service.games(owner=owner)
 
 
 @router.post("/load")
-async def load(body: LoadBody, service: Service) -> GameCreated:
-    view = await service.load_game(body.name)
+async def load(body: LoadBody, service: Service, owner: NewOwner) -> GameCreated:
+    view = await service.load_game(body.name, owner=owner)
     return GameCreated(game=view.game, brief=view.brief, preset=None)
 
 
 @router.get("/{game}")
-async def read(game: str, service: Service) -> GameState:
-    return await service.state(game)
+async def read(game: str, service: Service, owner: Owner) -> GameState:
+    return await service.state(game, owner=owner)
 
 
 async def _pinged(events: AsyncIterator[TurnEvent], interval_s: float) -> AsyncGenerator[bytes]:
@@ -163,26 +168,30 @@ def event_stream(events: AsyncIterator[TurnEvent]) -> StreamingResponse:
 
 
 @router.post("/{game}/turn")
-async def play(game: str, body: TurnBody, service: Service) -> StreamingResponse:
+async def play(game: str, body: TurnBody, service: Service, owner: Owner) -> StreamingResponse:
     # an unknown game (404) or a turn in progress (409) raises here, before streaming starts
-    return event_stream(service.start_turn(game, body.text, pending_id=body.pending_id))
+    return event_stream(
+        service.start_turn(game, body.text, owner=owner, pending_id=body.pending_id)
+    )
 
 
 @router.post("/{game}/confirm")
-async def confirm(game: str, body: ConfirmBody, service: Service) -> StreamingResponse:
+async def confirm(
+    game: str, body: ConfirmBody, service: Service, owner: Owner
+) -> StreamingResponse:
     """The confirm and cancel buttons: no decision, the same events as a turn."""
-    return event_stream(service.start_confirm(game, body.pending_id, body.answer))
+    return event_stream(service.start_confirm(game, body.pending_id, body.answer, owner=owner))
 
 
 @router.get("/{game}/turns")
-async def transcript(game: str, service: Service) -> list[TurnRecord]:
-    return service.turns(game)
+async def transcript(game: str, service: Service, owner: Owner) -> list[TurnRecord]:
+    return service.turns(game, owner=owner)
 
 
 @router.post("/{game}/save")
-async def save(game: str, service: Service) -> SaveView:
+async def save(game: str, service: Service, owner: Owner) -> SaveView:
     try:
-        return await service.save_game(game)
+        return await service.save_game(game, owner=owner)
     except ToolFailure as exc:
         if exc.code == "bad_save":  # the write failed: the server's fault, not the request's
             raise ApiError(500, exc.code, exc.message) from exc
@@ -190,8 +199,8 @@ async def save(game: str, service: Service) -> SaveView:
 
 
 @router.delete("/{game}", status_code=204)
-async def delete(game: str, service: Service) -> Response:
-    await service.delete_game(game)
+async def delete(game: str, service: Service, owner: Owner) -> Response:
+    await service.delete_game(game, owner=owner)
     return Response(status_code=204)
 
 
