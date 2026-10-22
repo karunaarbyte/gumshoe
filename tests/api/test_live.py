@@ -8,6 +8,7 @@ from gumshoe.api.service import AgentService
 from gumshoe.api.wiring import default_service
 from gumshoe.config import Settings
 from gumshoe.stats import SqliteStatsStore
+from tests.api.helpers import OWNER
 
 pytestmark = pytest.mark.live
 
@@ -21,7 +22,7 @@ TURNS = [
 
 
 async def play(service: AgentService, game: str, text: str):
-    return [event async for event in service.start_turn(game, text)]
+    return [event async for event in service.start_turn(game, text, owner=OWNER)]
 
 
 async def test_five_free_text_turns_against_real_backends(tmp_path):
@@ -30,7 +31,7 @@ async def test_five_free_text_turns_against_real_backends(tmp_path):
         pytest.skip("JEV_API_KEY not set")
     store = SqliteStatsStore(tmp_path / "live.db")
     async with default_service(store, settings) as service:
-        new = await service.new_game(1)
+        new = await service.new_game(1, owner=OWNER)
         transcript = []
         for text in TURNS:
             events = await play(service, new.game, text)

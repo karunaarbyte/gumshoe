@@ -17,6 +17,8 @@ from tests.agent.fakes import Script, ScriptedDecider, ScriptedLlm
 from tests.agent.harness import raw_client
 from tests.mcp_server.helpers import SeqIds
 
+OWNER = "owner-1"
+
 
 class GatedDecider(ScriptedDecider):
     """Holds every decide() call until `release` is set; `started` counts the calls that began."""

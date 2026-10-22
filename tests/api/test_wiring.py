@@ -18,6 +18,7 @@ from gumshoe.mcp_server.host import MAX_TEXT
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script, ScriptedDecider, ScriptedLlm
 from tests.api.client import TestClient
+from tests.api.helpers import OWNER
 from tests.mcp_server.helpers import SeqIds
 
 
@@ -57,10 +58,10 @@ async def test_default_service_builds_a_working_service_with_nimble_only(tmp_pat
     settings = Settings(_env_file=None, decider_primary="nimble", decider_shadow=None)
     store = SqliteStatsStore(tmp_path / "d.db")
     async with default_service(store, settings) as service:
-        new = await service.new_game(1)
-        state = await service.state(new.game)
+        new = await service.new_game(1, owner=OWNER)
+        state = await service.state(new.game, owner=OWNER)
         assert state.brief == new.brief
-        await service.delete_game(new.game)
+        await service.delete_game(new.game, owner=OWNER)
 
 
 def test_the_default_app_without_a_key_serves_stats_and_503s_games(tmp_path):
@@ -124,7 +125,7 @@ async def test_default_service_records_into_the_store_and_closes_in_order(tmp_pa
     settings = Settings(_env_file=None, ollama_base_url="http://ollama:1/v1", llm_timeout_s=7.0)
     store = SqliteStatsStore(tmp_path / "d.db")
     async with default_service(store, settings) as service:
-        await service.new_game(1)
+        await service.new_game(1, owner=OWNER)
     assert seen == {"recorder": store, "ollama": ("http://ollama:1/v1", 7.0)}
     assert log == ["service", "client", "decider", "llm"]
 
@@ -159,8 +160,8 @@ async def test_default_service_saves_into_the_configured_folder(tmp_path):
     )
     store = SqliteStatsStore(tmp_path / "d.db")
     async with default_service(store, settings) as service:
-        new = await service.new_game(1)
-        saved = await service.save_game(new.game)
+        new = await service.new_game(1, owner=OWNER)
+        saved = await service.save_game(new.game, owner=OWNER)
         listed = await service.saves()
     assert (tmp_path / f"{saved.name}.json").is_file()
     assert [s.name for s in listed] == [saved.name]

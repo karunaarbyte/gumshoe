@@ -7,6 +7,7 @@ lock. The reader of a turn only drains a queue.
 """
 
 import asyncio
+import hmac
 import logging
 import uuid
 from collections import deque
@@ -28,13 +29,12 @@ from gumshoe.agent import (
     take_turn,
 )
 from gumshoe.agent.events import Clarify, Done
-from gumshoe.api.errors import ApiError
+from gumshoe.api.errors import UNKNOWN_GAME, ApiError
 from gumshoe.cases import NotebookView, PlayerCaseView, RevealView
 from gumshoe.decider import describe_failure
 
 logger = logging.getLogger(__name__)
 
-_UNKNOWN = "no such game"
 SHUTTING_DOWN = "The game server is shutting down. Please try again in a moment."
 MAX_TURNS_KEPT = 200  # per game, for the transcript; the oldest are dropped first
 
@@ -109,6 +109,7 @@ def _transcript() -> "deque[TurnRecord]":
 @dataclass
 class _Slot:
     ctx: TurnContext
+    owner: str
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     gone: bool = False
     busy: bool = False  # a turn is running or waiting for the lock: the next one is refused
@@ -147,21 +148,23 @@ class AgentService:
         self._slots: dict[str, _Slot] = {}
         self._tasks: set[asyncio.Task[None]] = set()
 
-    def _slot(self, game: str) -> _Slot:
+    def _slot(self, game: str, owner: str) -> _Slot:
+        """The game's slot for its owner. A missing game and someone else's game fail alike, so a
+        game id tells a stranger nothing."""
         slot = self._slots.get(game)
-        if slot is None:
-            raise ToolFailure("unknown_game", _UNKNOWN)
+        if slot is None or not hmac.compare_digest(slot.owner.encode(), owner.encode()):
+            raise ToolFailure("unknown_game", UNKNOWN_GAME)
         return slot
 
-    def _register(self, view: NewGameView, preset: str | None) -> NewGameView:
-        self._slots[view.game] = _Slot(TurnContext(game=view.game), preset=preset)
+    def _register(self, view: NewGameView, preset: str | None, owner: str) -> NewGameView:
+        self._slots[view.game] = _Slot(TurnContext(game=view.game), owner, preset=preset)
         return view
 
-    async def new_game(self, seed: int, preset: str = "standard") -> NewGameView:
-        return self._register(await self._deps.client.new_game(seed, preset), preset)
+    async def new_game(self, seed: int, preset: str = "standard", *, owner: str) -> NewGameView:
+        return self._register(await self._deps.client.new_game(seed, preset), preset, owner)
 
-    async def load_game(self, name: str) -> NewGameView:
-        return self._register(await self._deps.client.load_game(name), None)
+    async def load_game(self, name: str, *, owner: str) -> NewGameView:
+        return self._register(await self._deps.client.load_game(name), None, owner)
 
     @staticmethod
     def _outcome(slot: _Slot, brief: PlayerCaseView) -> Outcome:
@@ -171,8 +174,8 @@ class AgentService:
             return slot.ctx.outcome
         return "won" if brief.status == "won" else "lost"
 
-    async def state(self, game: str) -> GameState:
-        slot = self._slot(game)
+    async def state(self, game: str, *, owner: str) -> GameState:
+        slot = self._slot(game, owner)
         brief = await self._deps.client.case_brief(game)
         notebook = await self._deps.client.notebook(game)
         outcome = self._outcome(slot, brief)
@@ -194,10 +197,15 @@ class AgentService:
             preset=slot.preset,
         )
 
-    async def games(self) -> list[GameSummary]:
+    async def games(self, *, owner: str) -> list[GameSummary]:
         """The open games, oldest first."""
+        mine = [
+            (game, slot)
+            for game, slot in self._slots.items()
+            if hmac.compare_digest(slot.owner.encode(), owner.encode())
+        ]
         found = []
-        for game, slot in list(self._slots.items()):
+        for game, slot in mine:
             try:
                 brief = await self._deps.client.case_brief(game)
             except ToolFailure as exc:
@@ -220,15 +228,15 @@ class AgentService:
             return []
         return await asyncio.to_thread(self._list_saves)
 
-    def turns(self, game: str) -> list[TurnRecord]:
+    def turns(self, game: str, *, owner: str) -> list[TurnRecord]:
         """The game's transcript, oldest first; a running turn is the last, not yet complete."""
-        return list(self._slot(game).turns)
+        return list(self._slot(game, owner).turns)
 
     def start_turn(
-        self, game: str, text: str, *, pending_id: str | None = None
+        self, game: str, text: str, *, owner: str, pending_id: str | None = None
     ) -> AsyncGenerator[TurnEvent]:
         """Raises at once (before any streaming) for an unknown game or a turn in progress."""
-        slot = self._slot(game)
+        slot = self._slot(game, owner)
         return self._start(
             slot,
             lambda: take_turn(self._deps, slot.ctx, text, pending_id=pending_id),
@@ -237,11 +245,11 @@ class AgentService:
         )
 
     def start_confirm(
-        self, game: str, pending_id: str, answer: Literal["yes", "no"]
+        self, game: str, pending_id: str, answer: Literal["yes", "no"], *, owner: str
     ) -> AsyncGenerator[TurnEvent]:
         """The confirm button. Raises at once for an unknown game, a turn in progress, or a
         confirmation that is not the one waiting (409 `no_such_pending`)."""
-        slot = self._slot(game)
+        slot = self._slot(game, owner)
         self._ensure_free(slot)
         pending = slot.ctx.pending
         if pending is None or pending.id != pending_id:
@@ -325,18 +333,18 @@ class AgentService:
         if not task.cancelled() and (error := task.exception()) is not None:
             logger.error("a turn task died: %s", describe_failure(error))
 
-    async def save_game(self, game: str) -> SaveView:
-        slot = self._slot(game)
+    async def save_game(self, game: str, *, owner: str) -> SaveView:
+        slot = self._slot(game, owner)
         async with slot.lock:  # wait for a running turn: the save is a clean state
             if slot.gone:
-                raise ToolFailure("unknown_game", _UNKNOWN)
+                raise ToolFailure("unknown_game", UNKNOWN_GAME)
             return await self._deps.client.save_game(game)
 
-    async def delete_game(self, game: str) -> None:
-        slot = self._slot(game)
+    async def delete_game(self, game: str, *, owner: str) -> None:
+        slot = self._slot(game, owner)
         async with slot.lock:  # never orphan a running turn
             if slot.gone:
-                raise ToolFailure("unknown_game", _UNKNOWN)
+                raise ToolFailure("unknown_game", UNKNOWN_GAME)
             try:
                 await self._deps.client.close_game(game)
             except ToolFailure as exc:
