@@ -23,7 +23,10 @@ Written from the code after plan 4d-2 (tasks 1-12). Interactive docs for the pla
 | `unknown_handle` | 422 | a handle the player's case does not have |
 | `bad_save` | 422 | a save name that is missing or unreadable; 500 when writing the save failed |
 | `bad_request` | 422 | the body, query or path did not validate (message says where and what, never the input); also `ids` of the wrong size, and HTTP 400 |
-| `too_many_games` | 429 | 1000 games are open in the engine; delete one first |
+| `too_many_games` | 429 | the engine's game cap is reached (`MAX_GAMES`: 1000 locally, 200 in public mode); delete one first |
+| `rate_limited` | 429 | a request, new-session, game-creation or turn rate is exceeded; carries `Retry-After` (section 6a) |
+| `quota` | 429 | too many games open for this session or IP; finish or delete one |
+| `busy` | 429 | too many turns running for the IP, or the turn queue is full; carries `Retry-After: 5` |
 | `turn_in_progress` | 409 | a turn or confirm button press is still running for this game |
 | `no_such_pending` | 409 | `POST /confirm` with an id that is not the confirmation waiting |
 | `game_over` | 409 | the action needs a game still being played |
@@ -117,7 +120,7 @@ Everything needed to redraw a game after a reload:
 
 Body `{text: string (1-1000 chars), pending_id?: string (1-64 chars)}`. Answers 200
 `text/event-stream` (section 4). Before streaming starts it can fail (as a plain JSON error):
-404 `unknown_game`, 409 `turn_in_progress`, 422 `bad_request`, 503 `unavailable`.
+404 `unknown_game`, 409 `turn_in_progress`, 422 `bad_request`, 429 `rate_limited` / `busy`, 503 `unavailable`.
 Send `pending_id` when a confirmation is on screen (section 5).
 
 ### `POST /api/games/{game}/confirm`
@@ -213,6 +216,7 @@ Both `POST .../turn` and `POST .../confirm` answer `200 text/event-stream` (head
 | `confirm` | `pending: accuse \| give_up`, `pending_id: string`, `text: string`, `warnings: string[]`, `decision_id: string \| null` |
 | `cancelled` | (none) |
 | `game_over` | `outcome: won \| lost \| gave_up`, `reveal: {culprit, method, motive, secret}` |
+| `queued` | `position: int` (1 = next in line) |
 | `done` | `turn_ms: number \| null` |
 
 Notes:
@@ -267,6 +271,28 @@ button press is running, a second `turn` or `confirm` for that game is refused a
 arrived. `GameSummary.turn_running` says whether a turn is running, for a second tab.
 Save and delete wait for the running turn instead of being refused. Different games do not block
 each other.
+
+## 6a. Limits
+
+Every limit is a setting (`.env.example`); `0` = unlimited.
+
+- **429 with `Retry-After`** (whole seconds, also in the JSON error): `rate_limited` (a rate was
+  exceeded: requests per IP, new sessions per IP, games created per session, turns per session or
+  IP) and `busy` (retry after 5). `quota` (too many games open for the session or IP) is a 429 too.
+  The body is the usual `{code, message}`.
+- **`GET /api/health` counts** against the per-IP request budget like any other API request.
+- **The new-session quota counts attempts**, not only sessions that were created.
+- **A full limiter table fails closed**: each table keeps at most `LIMITER_MAX_KEYS` keys and only
+  evicts expired ones; when every key is live, a new client gets 429 until entries expire.
+- **The `queued` event**: when the turn gate (`MAX_PARALLEL_TURNS`) is full and the turn is allowed
+  to wait (`TURN_QUEUE_SIZE`), the stream starts with `event: queued`, `data: {"kind":"queued",
+  "position":N}` (approximate, 1 = next). The turn then runs as usual. A turn that is waiting for
+  a place or for its game's lock still counts in the queue, but holds no running place.
+- **The busy ending**: if no place frees within `TURN_QUEUE_WAIT_S`, the stream ends with a `clarify`
+  (`reason: "error"`, text "The detectives are busy right now. Please try again in a moment.") and
+  `done`. The turn did not run and cost nothing; send it again later.
+- **409 `turn_in_progress`** is also what a second turn from the same session gets while one of its
+  turns runs (`SESSION_TURNS_IN_FLIGHT`, default 1), even in another game.
 
 ## 7. Stats
 

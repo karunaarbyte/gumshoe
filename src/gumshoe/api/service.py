@@ -7,9 +7,9 @@ lock. The reader of a turn only drains a queue.
 
 The limits: open games per session and per IP, turns in flight per session and per IP, the
 creation and turn rates (`Quotas`), and the gate (`TurnGate`) that caps the turns processed at
-once across every game. A turn takes its gate place only once it holds its game's lock, so a
-long save never holds one. Every place a refused, finished, failed or abandoned turn held is
-given back exactly once (the task's done callbacks).
+once across every game. A turn waiting on its game's lock (for example behind a long save) still
+counts in `gate.queued`, but it never holds a running place. Every place a refused, finished,
+failed or abandoned turn held is given back exactly once (the task's done callbacks).
 """
 
 import asyncio

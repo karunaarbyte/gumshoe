@@ -80,3 +80,36 @@ async def test_a_failing_primary_with_a_skipped_shadow_surfaces_its_error(result
     assert decider.shadow_skipped == 1
     release.set()
     await decider.drain()
+
+
+async def test_the_place_is_freed_when_the_shadow_raises(result):
+    decider = ShadowDecider(
+        FakeDecider("jev", result),
+        FakeDecider("nimble", error=DeciderError("nimble", "down")),
+        FakeRecorder(),
+        shadow_parallel=1,
+    )
+    for _ in range(3):
+        await asyncio.wait_for(decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent"), 5)
+        await asyncio.wait_for(decider.drain(), 5)
+    assert decider.shadow_skipped == 0
+
+
+async def test_the_place_is_freed_when_the_primary_is_cancelled(result):
+    primary_gate = asyncio.Event()
+    shadow_gate = asyncio.Event()
+    primary = FakeDecider("jev", result, gate=primary_gate)
+    shadow = FakeDecider("nimble", result, gate=shadow_gate)
+    decider = ShadowDecider(primary, shadow, FakeRecorder(), shadow_parallel=1)
+    first = asyncio.create_task(decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent"))
+    await asyncio.sleep(0)  # both calls start; the shadow holds the one place
+    await asyncio.sleep(0)
+    assert primary.nodes and shadow.nodes
+    first.cancel()
+    await asyncio.wait_for(shadow.cancelled.wait(), 5)  # the shadow was cancelled with the primary
+    await asyncio.sleep(0)  # let its done callback run
+    primary_gate.set()
+    shadow_gate.set()
+    await asyncio.wait_for(decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent"), 5)
+    await asyncio.wait_for(decider.drain(), 5)
+    assert decider.shadow_skipped == 0
