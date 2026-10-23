@@ -15,7 +15,8 @@ class WindowLimiter:
 
     The table holds at most `max_keys` keys. Only keys whose window has passed are ever evicted;
     when every key is live a new key is refused (fail closed), so a flood of fresh keys cannot
-    push a real client's counter out."""
+    push a real client's counter out. A full table therefore fails closed: new clients get a 429
+    until some entry expires. The table is swept at most once per expiry, not once per request."""
 
     def __init__(
         self,
@@ -30,6 +31,7 @@ class WindowLimiter:
         self._clock = clock
         self._max_keys = max_keys
         self._hits: dict[str, deque[float]] = {}
+        self._next_sweep = 0.0  # nothing can expire before this, so a full table need not be swept
 
     def _expire(self, key: str, now: float) -> deque[float] | None:
         hits = self._hits.get(key)
@@ -45,6 +47,7 @@ class WindowLimiter:
     def _sweep(self, now: float) -> None:
         for key in list(self._hits):
             self._expire(key, now)
+        self._next_sweep = min((h[0] + self._window for h in self._hits.values()), default=0.0)
 
     def hit(self, key: str) -> int | None:
         """None when allowed (the hit is recorded); else the seconds until it would be."""
@@ -53,10 +56,10 @@ class WindowLimiter:
         now = self._clock()
         hits = self._expire(key, now)
         if hits is None:
-            if len(self._hits) >= self._max_keys:
+            if len(self._hits) >= self._max_keys and now >= self._next_sweep:
                 self._sweep(now)
             if len(self._hits) >= self._max_keys:
-                return math.ceil(self._window)
+                return max(1, math.ceil(self._next_sweep - now))
             hits = self._hits[key] = deque()
         if len(hits) >= self._limit:
             return max(1, math.ceil(hits[0] + self._window - now))

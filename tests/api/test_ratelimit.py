@@ -126,3 +126,55 @@ def test_each_quota_counts_its_own_thing():
     q.turn("carol", "1.1.1.1")
     with pytest.raises(ApiError):  # the IP's turns: 3 used (alice, bob, carol)
         q.turn("dave", "1.1.1.1")
+
+
+def full_table(clock, spy):
+    lim = limiter(limit=1, clock=clock, max_keys=100)
+    for i in range(100):
+        lim.hit(f"k{i}")
+    original = lim._sweep
+
+    def counting(now):
+        spy.append(now)
+        original(now)
+
+    lim._sweep = counting
+    return lim
+
+
+def test_a_full_table_is_not_swept_again_before_anything_can_expire():
+    clock = FakeClock()
+    sweeps: list[float] = []
+    lim = full_table(clock, sweeps)
+    assert lim.hit("new0") is not None  # first refusal sweeps once, frees nothing
+    for i in range(1, 50):
+        clock.advance(1)
+        assert lim.hit(f"new{i}") is not None
+    assert len(sweeps) == 1
+
+
+def test_the_refusal_says_when_the_earliest_entry_expires():
+    clock = FakeClock()
+    lim = full_table(clock, [])
+    clock.advance(20)
+    assert lim.hit("newcomer") == 40
+
+
+def test_after_expiry_the_sweep_runs_and_a_new_key_is_admitted():
+    clock = FakeClock()
+    sweeps: list[float] = []
+    lim = full_table(clock, sweeps)
+    assert lim.hit("newcomer") is not None
+    clock.advance(60)
+    assert lim.hit("newcomer") is None
+    assert len(sweeps) == 2
+
+
+def test_a_hit_exactly_one_window_old_has_expired():
+    clock = FakeClock()
+    lim = limiter(limit=1, clock=clock)
+    lim.hit("a")
+    clock.advance(59.9)
+    assert lim.hit("a") == 1
+    clock.advance(0.1)
+    assert lim.hit("a") is None
