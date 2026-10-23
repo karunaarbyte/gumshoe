@@ -5,6 +5,8 @@ from gumshoe.decider.backends.client import SystemOneClient
 from gumshoe.decider.backends.profile import BackendProfile
 from gumshoe.decider.contract.base import Decider
 from gumshoe.decider.contract.errors import DeciderConfigError
+from gumshoe.decider.contract.usage import UsageLedger
+from gumshoe.decider.shadow.budget import BudgetDecider, MeteredDecider, UsageMeter
 from gumshoe.decider.shadow.records import Recorder
 from gumshoe.decider.shadow.shadow import ShadowDecider
 
@@ -25,12 +27,17 @@ def make_decider(
     settings: Settings | None = None,
     backend: Backend | None = None,
     recorder: Recorder | None = None,
+    ledger: UsageLedger | None = None,
 ) -> Decider:
     """A Decider for `backend` (default: the configured primary).
 
     With a recorder, every call is recorded; unless `backend` is given explicitly, the configured
     shadow backend (if any) runs alongside the primary. A misconfigured backend (say a missing Jev
     key) fails here, at construction, not on the first request, and before any client is created.
+
+    With a usage ledger too, a Jev primary and a daily cap set (`jev_daily_tokens` or
+    `jev_ip_daily_tokens`), the result is a `BudgetDecider`: only the Jev client is metered, and
+    over a cap calls go to Nimble alone. Await its `load()` once before serving.
     """
     settings = settings or get_settings()
     primary_profile = build_profile(settings, backend or settings.decider_primary)
@@ -38,14 +45,40 @@ def make_decider(
         return _client(settings, primary_profile)
     shadow_backend = settings.decider_shadow if backend is None else None
     shadow_profile = build_profile(settings, shadow_backend) if shadow_backend else None
+    budgeted = (
+        ledger is not None
+        and backend is None
+        and primary_profile.name == "jev"
+        and (settings.jev_daily_tokens > 0 or settings.jev_ip_daily_tokens > 0)
+    )
+    nimble_profile = build_profile(settings, "nimble") if budgeted else None
+    drain_grace_s = settings.request_timeout_s + DRAIN_SLACK_S
+    meter = UsageMeter(ledger)
+    primary = _client(settings, primary_profile)
     shadow = _client(settings, shadow_profile) if shadow_profile else None
-    return ShadowDecider(
-        _client(settings, primary_profile),
+    normal = ShadowDecider(
+        MeteredDecider(primary, meter) if budgeted else primary,
         shadow,
         recorder,
         cold_after_s=settings.cold_after_s,
-        drain_grace_s=settings.request_timeout_s + DRAIN_SLACK_S,
+        drain_grace_s=drain_grace_s,
         shadow_parallel=settings.shadow_parallel,
+    )
+    if nimble_profile is None:
+        return normal
+    nimble_alone = ShadowDecider(
+        _client(settings, nimble_profile),
+        None,
+        recorder,
+        cold_after_s=settings.cold_after_s,
+        drain_grace_s=drain_grace_s,
+    )
+    return BudgetDecider(
+        normal,
+        nimble_alone,
+        meter,
+        daily_tokens=settings.jev_daily_tokens,
+        ip_tokens=settings.jev_ip_daily_tokens,
     )
 
 

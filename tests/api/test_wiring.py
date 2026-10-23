@@ -1,19 +1,21 @@
 import asyncio
 import json
 import os
+from datetime import UTC, datetime
 
 import pytest
 from mcp.client import Client
 from pydantic import SecretStr
 
 import gumshoe.api.wiring as wiring
+import gumshoe.decider.backends.factory as factory
 from gumshoe.agent import AgentConfig
 from gumshoe.api import create_app
 from gumshoe.api.games import MAX_TURN_CHARS
 from gumshoe.api.service import AgentService, Caps
 from gumshoe.api.wiring import agent_config, default_service, save_index
 from gumshoe.config import Settings
-from gumshoe.decider import DeciderConfigError
+from gumshoe.decider import BudgetDecider, DeciderConfigError
 from gumshoe.mcp_server import GameHost
 from gumshoe.mcp_server.host import MAX_TEXT
 from gumshoe.stats import SqliteStatsStore
@@ -134,8 +136,9 @@ async def test_default_service_records_into_the_store_and_closes_in_order(tmp_pa
         async def aclose(self) -> None:
             log.append("llm")
 
-    def make_decider(settings, *, recorder=None):
+    def make_decider(settings, *, recorder=None, ledger=None):
         seen["recorder"] = recorder
+        seen["ledger"] = ledger
         return Decider(Script())
 
     def ollama(base_url, *, timeout):
@@ -161,7 +164,7 @@ async def test_default_service_records_into_the_store_and_closes_in_order(tmp_pa
     store = SqliteStatsStore(tmp_path / "d.db")
     async with default_service(store, settings) as service:
         await service.new_game(1, owner=OWNER)
-    assert seen == {"recorder": store, "ollama": ("http://ollama:1/v1", 7.0)}
+    assert seen == {"recorder": store, "ledger": store, "ollama": ("http://ollama:1/v1", 7.0)}
     assert log == ["service", "client", "decider", "llm"]
 
 
@@ -236,3 +239,52 @@ async def test_default_service_applies_the_limit_settings(tmp_path):
         assert service._caps == Caps.from_settings(settings)
         assert service._gate is not None and (service._gate.parallel, service._gate.queue) == (3, 5)
         assert service._quotas is not None
+
+
+async def test_default_service_resumes_the_jev_budget_before_serving_and_closes_it(
+    tmp_path, monkeypatch
+):
+    """No network: the clients are fakes. The store is the usage ledger; today's count is read
+    from it once before the service is handed out; on exit the metered Jev stack closes before
+    Ollama."""
+    log: list[str] = []
+    made: dict[str, object] = {}
+
+    class Closing(ScriptedDecider):
+        def __init__(self, name):
+            super().__init__(Script())
+            self.name = name
+
+        async def aclose(self) -> None:
+            log.append(f"close {self.name}")
+
+    real_make = wiring.make_decider
+
+    def make_decider(settings, *, recorder=None, ledger=None):
+        made["decider"] = real_make(settings, recorder=recorder, ledger=ledger)
+        return made["decider"]
+
+    class Llm(ScriptedLlm):
+        async def aclose(self) -> None:
+            log.append("llm")
+
+    monkeypatch.setattr(factory, "_client", lambda settings, profile: Closing(profile.name))
+    monkeypatch.setattr(wiring, "make_decider", make_decider)
+    monkeypatch.setattr(wiring, "OllamaLlm", lambda base_url, *, timeout: Llm([]))
+    settings = Settings(
+        _env_file=None, jev_api_key=SecretStr("k"), jev_daily_tokens=100, saves_dir=tmp_path
+    )
+    store = SqliteStatsStore(tmp_path / "d.db")
+    store.add_usage(
+        datetime.now(UTC).date().isoformat(), "203.0.113.9", 100
+    )  # today's cap already spent
+    reads: list[str] = []
+    real_totals = store.usage_totals
+    monkeypatch.setattr(store, "usage_totals", lambda day: reads.append(day) or real_totals(day))
+    async with default_service(store, settings):
+        decider = made["decider"]
+        assert isinstance(decider, BudgetDecider)
+        assert len(reads) == 1 and decider.mode == "slow"
+    assert len(reads) == 1
+    # the Jev primary and its shadow close first, then Nimble alone, then the Ollama client
+    assert log == ["close jev", "close nimble", "close nimble", "llm"]

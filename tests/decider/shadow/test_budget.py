@@ -539,3 +539,40 @@ async def test_drain_reaches_the_inner_deciders_that_have_one(result):
     decider = BudgetDecider(normal, fallback, meter, daily_tokens=1, ip_tokens=0)
     await decider.drain()
     assert normal.drained
+
+
+async def test_drain_reaches_the_fallback_even_if_the_normal_drain_fails(result):
+    class Drainable(FakeDecider):
+        drained = False
+
+        async def drain(self, grace_s=None):
+            self.drained = True
+
+    class BrokenDrain(FakeDecider):
+        async def drain(self, grace_s=None):
+            raise RuntimeError("drain failed")
+
+    normal, fallback = BrokenDrain("jev", result), Drainable("nimble", result)
+    meter = UsageMeter(None, now=Clock(NOON))
+    decider = BudgetDecider(normal, fallback, meter, daily_tokens=1, ip_tokens=0)
+    with pytest.raises(RuntimeError):
+        await decider.drain()
+    assert fallback.drained
+
+
+async def test_a_load_after_counting_began_logs_a_warning(caplog):
+    meter = UsageMeter(MemoryLedger(), now=Clock(NOON))
+    meter.note("203.0.113.9", 5)  # counted before startup's load: a wiring mistake
+    with caplog.at_level(logging.WARNING, logger="gumshoe.decider.shadow.budget"):
+        await meter.load()
+    await meter.flush()
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1 and "load" in warnings[0].getMessage()
+    assert "203.0.113.9" not in caplog.text  # no client key in the log
+
+
+async def test_a_load_before_any_count_logs_nothing(caplog):
+    meter = UsageMeter(MemoryLedger(), now=Clock(NOON))
+    with caplog.at_level(logging.WARNING, logger="gumshoe.decider.shadow.budget"):
+        await meter.load()
+    assert caplog.records == []

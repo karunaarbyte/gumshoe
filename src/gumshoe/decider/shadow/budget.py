@@ -50,6 +50,8 @@ class UsageMeter:
             self._loaded = True
             return
         self._loaded = True
+        if self._by_key:  # counted before startup's load: the wiring awaited it too late
+            logger.warning("usage meter loaded after counting began")
         day = self.day()
         try:
             stored = await asyncio.to_thread(self._ledger.usage_totals, day)
@@ -210,10 +212,20 @@ class BudgetDecider:
         return await self._choose().decide(state, questions, node=node, decision_id=decision_id)
 
     async def drain(self, grace_s: float | None = None) -> None:
-        for inner in (self._normal, self._fallback):
-            drain = getattr(inner, "drain", None)
-            if drain is not None:
-                await drain(grace_s)
+        try:
+            await self._drain(self._normal, grace_s)
+        finally:
+            await self._drain(self._fallback, grace_s)
+
+    async def load(self) -> None:
+        """Resume today's count from the ledger. Await it once at startup, before serving."""
+        await self._meter.load()
+
+    @staticmethod
+    async def _drain(inner: Decider, grace_s: float | None) -> None:
+        drain = getattr(inner, "drain", None)
+        if drain is not None:
+            await drain(grace_s)
 
     async def aclose(self) -> None:
         try:

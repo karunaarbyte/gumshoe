@@ -17,7 +17,7 @@ from gumshoe.api.saveowners import SaveOwners
 from gumshoe.api.service import AgentService, Caps, SaveSummary
 from gumshoe.api.session import Sessions
 from gumshoe.config import Settings, get_settings
-from gumshoe.decider import make_decider
+from gumshoe.decider import BudgetDecider, make_decider
 from gumshoe.mcp_server import GameError, GameHost
 from gumshoe.mcp_server.saves import NAME, read_save
 from gumshoe.mcp_server.tools import build_server
@@ -76,10 +76,11 @@ async def default_service(
     sessions: Sessions | None = None,
     quotas: Quotas | None = None,
 ) -> AsyncIterator[AgentService]:
-    """The service the app runs on. The injected store doubles as the decision recorder (never a
-    second store on the same file). A missing Jev key raises `DeciderConfigError` before
-    anything is opened. On exit: turns are cancelled, then the MCP client closes, then the
-    decider (so background records drain), then the Ollama client. `quotas` is the app's own
+    """The service the app runs on. The injected store doubles as the decision recorder and the
+    Jev usage ledger (never a second store on the same file); a Jev budget resumes today's count
+    from it before serving. A missing Jev key raises `DeciderConfigError` before anything is
+    opened. On exit: turns are cancelled, then the MCP client closes, then the decider (so
+    background records and usage counts drain), then the Ollama client. `quotas` is the app's own
     (shared with its middleware); a fresh one is made when none is given. The maintenance loop
     (idle-game expiry, save purge) runs as a task for the service's life and stops first."""
     settings = settings or get_settings()
@@ -88,11 +89,13 @@ async def default_service(
     gate = TurnGate(
         settings.max_parallel_turns, settings.turn_queue_size, settings.turn_queue_wait_s
     )
-    decider = make_decider(settings, recorder=store)
+    decider = make_decider(settings, recorder=store, ledger=store)
     llm = OllamaLlm(settings.ollama_base_url, timeout=settings.llm_timeout_s)
     async with AsyncExitStack() as stack:
         stack.push_async_callback(llm.aclose)
-        stack.push_async_callback(decider.aclose)
+        stack.push_async_callback(decider.aclose)  # flushes the Jev usage counts, too
+        if isinstance(decider, BudgetDecider):
+            await decider.load()  # today's Jev spend so far, read once before serving
         host = GameHost(saves_dir=settings.saves_dir, max_games=settings.effective_max_games)
         raw = await stack.enter_async_context(Client(build_server(host)))
         service = AgentService(

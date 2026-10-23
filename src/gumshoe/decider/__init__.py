@@ -46,6 +46,7 @@ from gumshoe.decider.contract.models import (
 )
 from gumshoe.decider.contract.samples import DEMO_PLAYER_INPUTS, DEMO_QUESTIONS
 from gumshoe.decider.contract.usage import UsageLedger, client_key, estimate_tokens
+from gumshoe.decider.shadow.budget import BudgetDecider
 from gumshoe.decider.shadow.records import CallRecord, Recorder
 from gumshoe.decider.shadow.shadow import ShadowDecider
 
@@ -53,6 +54,7 @@ __all__ = [
     "DEMO_PLAYER_INPUTS",
     "DEMO_QUESTIONS",
     "Answer",
+    "BudgetDecider",
     "CallRecord",
     "ChoiceAnswer",
     "ChoiceQuestion",
