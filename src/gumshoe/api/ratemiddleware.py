@@ -6,13 +6,17 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from gumshoe.api.errors import ApiError, error_body
 from gumshoe.api.ratelimit import Quotas, client_ip
+from gumshoe.api.refusals import log_scope_refusal
 
 
 class RequestRate:
-    def __init__(self, app: ASGIApp, *, quotas: Quotas, trust_proxy: bool) -> None:
+    def __init__(
+        self, app: ASGIApp, *, quotas: Quotas, trust_proxy: bool, cookie_name: str = "gs_session"
+    ) -> None:
         self.app = app
         self.quotas = quotas
         self.trust_proxy = trust_proxy
+        self.cookie_name = cookie_name  # for the refusal's log line only
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -24,6 +28,9 @@ class RequestRate:
         try:
             self.quotas.request(ip)
         except ApiError as exc:
+            log_scope_refusal(
+                exc.code, scope, trust_proxy=self.trust_proxy, cookie_name=self.cookie_name
+            )
             response = JSONResponse(
                 error_body(exc.code, exc.message),
                 status_code=exc.status,

@@ -33,9 +33,10 @@ from gumshoe.api.info import (
 )
 from gumshoe.api.limits import BodyLimit
 from gumshoe.api.probe import PersonaProbe
-from gumshoe.api.ratelimit import Quotas
+from gumshoe.api.ratelimit import Quotas, request_ip
 from gumshoe.api.ratemiddleware import RequestRate
 from gumshoe.api.redact import for_player
+from gumshoe.api.refusals import REFUSED, log_refusal
 from gumshoe.api.service import AgentService
 from gumshoe.api.session import Owner, Sessions
 from gumshoe.api.shield import OriginCheck
@@ -127,13 +128,26 @@ def create_app(
     app.state.quotas = quotas
     app.state.trust_proxy = settings.trust_proxy
     app.state.admin_token = admin_token_of(settings.admin_token.get_secret_value())
-    app.add_middleware(BodyLimit, max_bytes=settings.max_body_bytes)
+    # the refusal middlewares need these two for their log line
+    trust_proxy, cookie_name = settings.trust_proxy, sessions.cookie_name
+    app.add_middleware(
+        BodyLimit,
+        max_bytes=settings.max_body_bytes,
+        trust_proxy=trust_proxy,
+        cookie_name=cookie_name,
+    )
     allowed_origins = (
         *settings.cors_origin_list,
         *([settings.public_origin] if settings.public_origin else []),
     )
-    app.add_middleware(OriginCheck, allowed=allowed_origins, local=not settings.public_mode)
-    app.add_middleware(RequestRate, quotas=quotas, trust_proxy=settings.trust_proxy)
+    app.add_middleware(
+        OriginCheck,
+        allowed=allowed_origins,
+        local=not settings.public_mode,
+        trust_proxy=trust_proxy,
+        cookie_name=cookie_name,
+    )
+    app.add_middleware(RequestRate, quotas=quotas, trust_proxy=trust_proxy, cookie_name=cookie_name)
     if origins := settings.cors_origin_list:  # outside the limits, so 413s carry it too
         app.add_middleware(
             CORSMiddleware,
@@ -144,16 +158,30 @@ def create_app(
     # Outermost of all, so every refusal above (413, 403, 429) carries the headers too.
     app.add_middleware(SecurityHeaders, hsts=settings.public_mode)
 
+    def log_refused(request: Request, code: str) -> None:
+        """The refusal's one log line; never raises (log_refusal swallows its own errors)."""
+        try:
+            cookie = request.cookies.get(sessions.cookie_name)
+            route = f"{request.method} {request.url.path}"  # the path only: never the query
+            log_refusal(code, route, request_ip(request), cookie)
+        except Exception:
+            pass
+
     @app.exception_handler(ApiError)
     async def api_error(request: Request, exc: ApiError) -> JSONResponse:
         headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after is not None else None
         body = error_body(exc.code, exc.message)
-        return JSONResponse(body, status_code=exc.status, headers=headers)
+        response = JSONResponse(body, status_code=exc.status, headers=headers)
+        if exc.code in REFUSED:  # never the admin gate's `not_found`: it logs its own line
+            log_refused(request, exc.code)
+        return response
 
     @app.exception_handler(ToolFailure)
     async def tool_failure(request: Request, exc: ToolFailure) -> JSONResponse:
         if exc.code == "internal":
             logger.error("the game server failed: %s", exc.message)
+        if exc.code in REFUSED:
+            log_refused(request, exc.code)
         return JSONResponse(error_body(exc.code, exc.message), status_code=status_for(exc.code))
 
     @app.exception_handler(RequestValidationError)
@@ -180,6 +208,8 @@ def create_app(
             except ApiError as refused:
                 return await api_error(request, refused)
         body = error_body(http_code(exc.status_code), str(exc.detail))
+        if exc.status_code == 413:  # a chunked body over the cap (BodyLimit logs the rest)
+            log_refused(request, "too_large")
         return JSONResponse(body, status_code=exc.status_code, headers=exc.headers)
 
     @app.exception_handler(Exception)
