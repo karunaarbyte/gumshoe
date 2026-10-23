@@ -38,3 +38,13 @@ describe('classify', () => {
     expect(ENDED_MESSAGE).toMatch(/server may have restarted/);
   });
 });
+
+describe('classify, the exposure codes', () => {
+  test.each(['busy', 'rate_limited', 'quota'])('%s is a notice with the server message', (code) => {
+    expect(classify(new ApiError(429, code, 'slow down'))).toEqual({ kind: 'notice', message: 'slow down' });
+  });
+
+  test('cold is its own action', () => {
+    expect(classify(new ApiError(410, 'cold', 'x'))).toEqual({ kind: 'cold' });
+  });
+});

@@ -7,7 +7,7 @@ import { ApiProvider } from './data/ApiContext';
 import { keys, useHealth } from './data/queries';
 import type { SessionOptions } from './game/session';
 import { Desk } from './screens/Desk';
-import { ENDED_MESSAGE, classify } from './screens/errorPolicy';
+import { COLD_MESSAGE, ENDED_MESSAGE, classify } from './screens/errorPolicy';
 import { GameOff } from './screens/GameOff';
 import { useRoute } from './screens/route';
 import { StatsPage } from './stats/StatsPage';
@@ -32,6 +32,11 @@ function Shell({ session }: { session?: Omit<SessionOptions, 'client'> }) {
           return;
         case 'ended':
           setBanner(ENDED_MESSAGE);
+          void queryClient.invalidateQueries({ queryKey: keys.games });
+          go({ name: 'title' });
+          return;
+        case 'cold':
+          setBanner(COLD_MESSAGE);
           void queryClient.invalidateQueries({ queryKey: keys.games });
           go({ name: 'title' });
           return;

@@ -77,6 +77,8 @@ export interface GameView {
   reveal: Reveal | null;
   status: TurnStatus;
   nextId: number;
+  /** Place in line while the turn waits for the gate (1 = next); null otherwise. Never a transcript item. */
+  queued: number | null;
 }
 
 export type GameAction =
@@ -99,5 +101,6 @@ export function emptyView(game: string): GameView {
     reveal: null,
     status: 'idle',
     nextId: 0,
+    queued: null,
   };
 }

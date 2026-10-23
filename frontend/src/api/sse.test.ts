@@ -80,4 +80,8 @@ describe('parseBlock', () => {
   test('a comment-only block is skipped', () => {
     expect(parseBlock(': ping')).toBeNull();
   });
+
+  test('a queued event is read', () => {
+    expect(parseBlock('event: queued\ndata: {"kind":"queued","position":2}')).toEqual({ kind: 'queued', position: 2 });
+  });
 });

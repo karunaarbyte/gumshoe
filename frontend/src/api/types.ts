@@ -8,6 +8,7 @@ export type PendingKind = 'accuse' | 'give_up';
 export interface Health {
   status: 'ok';
   game: 'on' | 'off';
+  mode: 'normal' | 'slow';
   reason: string | null;
   primary: string;
   shadow: string | null;
@@ -198,8 +199,23 @@ export interface DoneEvent {
   turn_ms: number | null;
 }
 
+export interface QueuedEvent {
+  kind: 'queued';
+  position: number; // 1 = next in line
+}
+
 export type TurnEvent =
-  IntentEvent | ClarifyEvent | ToolCallEvent | ToolResultEvent | ReplyEvent | PostCheckEvent | ConfirmEvent | CancelledEvent | GameOverEvent | DoneEvent;
+  | IntentEvent
+  | ClarifyEvent
+  | ToolCallEvent
+  | ToolResultEvent
+  | ReplyEvent
+  | PostCheckEvent
+  | ConfirmEvent
+  | CancelledEvent
+  | GameOverEvent
+  | QueuedEvent
+  | DoneEvent;
 
 export type EventKind = TurnEvent['kind'];
 
@@ -213,6 +229,7 @@ export const EVENT_KINDS: readonly EventKind[] = [
   'confirm',
   'cancelled',
   'game_over',
+  'queued',
   'done',
 ];
 

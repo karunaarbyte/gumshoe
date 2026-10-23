@@ -10,6 +10,7 @@ export const meta: Meta = {
 export const healthOn: Health = {
   status: 'ok',
   game: 'on',
+  mode: 'normal',
   reason: null,
   primary: 'jev',
   shadow: 'nimble',

@@ -58,6 +58,7 @@ function decisionIdOf(event: TurnEvent): string | null {
     case 'tool_result':
     case 'cancelled':
     case 'game_over':
+    case 'queued':
     case 'done':
       return null;
   }
@@ -72,7 +73,10 @@ function pendingOf(event: ConfirmEvent): PendingView {
   };
 }
 
-function foldEvent(view: GameView, event: TurnEvent): GameView {
+function foldEvent(current: GameView, event: TurnEvent): GameView {
+  // a waiting position is shown, never kept as a turn item; any later event clears it
+  if (event.kind === 'queued') return { ...current, queued: event.position };
+  const view = current.queued === null ? current : { ...current, queued: null };
   const id = decisionIdOf(event);
   let next = updateCurrentTurn(view, (t) => ({
     ...t,
@@ -141,7 +145,7 @@ export function gameReducer(view: GameView, action: GameAction): GameView {
     case 'event':
       return foldEvent(view, action.event);
     case 'stream_ended':
-      return action.sawDone ? view : { ...view, status: 'lost' };
+      return action.sawDone ? view : { ...view, status: 'lost', queued: null };
     case 'turn_closed':
       return { ...updateCurrentTurn(view, (t) => ({ ...t, complete: true })), status: 'idle' };
     case 'remote_running':
@@ -152,6 +156,7 @@ export function gameReducer(view: GameView, action: GameAction): GameView {
       const closed = setOpenConfirms(view, 'closed', (m) => m.event.pending_id !== keep);
       return {
         ...closed,
+        queued: null,
         state,
         pending: state.pending,
         outcome: state.outcome,

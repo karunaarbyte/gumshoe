@@ -176,3 +176,25 @@ describe('reload equals live', () => {
     expect(view.messages.some((m) => m.kind === 'confirm' && m.state === 'open')).toBe(false);
   });
 });
+
+describe('gameReducer, the waiting position', () => {
+  test('a queued event sets the waiting position and is not kept in the turn', () => {
+    const view = fold([start, ev({ kind: 'queued', position: 2 })]);
+    expect(view.queued).toBe(2);
+    expect(view.turns[0]!.events).toEqual([]);
+  });
+
+  test('the first real event, done, or a dropped stream clears the waiting position', () => {
+    const intent = ev({ kind: 'intent', decision_id: 'd', intent: 'search', target: null, confidence: 0.9 });
+    expect(fold([start, ev({ kind: 'queued', position: 1 }), intent]).queued).toBeNull();
+    expect(fold([start, ev({ kind: 'queued', position: 1 }), ev({ kind: 'done', turn_ms: 1 })]).queued).toBeNull();
+    expect(fold([start, ev({ kind: 'queued', position: 1 }), { type: 'stream_ended', sawDone: false }]).queued).toBeNull();
+  });
+
+  test('a queued event does not mutate the previous view', () => {
+    const before = fold([start]);
+    const snapshot = structuredClone(before);
+    gameReducer(before, ev({ kind: 'queued', position: 3 }));
+    expect(before).toEqual(snapshot);
+  });
+});

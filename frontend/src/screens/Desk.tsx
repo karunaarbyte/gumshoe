@@ -181,6 +181,16 @@ export function Desk({ game, onExit, onError, session: sessionOptions }: Props) 
               The dialogue model is offline, so suspects can only give stock lines until it is back.
             </p>
           )}
+          {health.data?.mode === 'slow' && (
+            <p role="status" className="shrink-0 border-b border-ink bg-card-light px-3 py-1 text-xs italic">
+              The detectives are working slowly today.
+            </p>
+          )}
+          {view.queued !== null && (
+            <p role="status" className="shrink-0 border-b border-ink bg-card-light px-3 py-1 text-xs italic">
+              {view.queued <= 1 ? 'You are next…' : `Waiting for a detective… (${view.queued - 1} ahead)`}
+            </p>
+          )}
           <div className="min-h-0 flex-1">
             <Chat
               view={view}

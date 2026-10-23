@@ -120,6 +120,46 @@ describe('App', () => {
     expect(window.location.hash).toBe('#/');
   });
 
+  test('cold: back to the title with the cold banner', async () => {
+    window.location.hash = '#/game/old';
+    const client = fakeApi();
+    client.state.mockRejectedValue(apiError('cold', 410, 'raw server text'));
+    renderApp(client);
+    expect(await screen.findByText('That case went cold. Start a new game.')).toBeInTheDocument();
+    expect(screen.queryByText('raw server text')).not.toBeInTheDocument();
+    expect(window.location.hash).toBe('#/');
+  });
+
+  test('slow mode is said in the chat column', async () => {
+    window.location.hash = '#/game/g1';
+    const client = fakeApi();
+    client.health.mockResolvedValue({ ...healthOn, mode: 'slow' });
+    renderApp(client);
+    expect(await screen.findByText('The detectives are working slowly today.')).toBeInTheDocument();
+  });
+
+  test('queued: the waiting line shows while the stream is open and goes after done', async () => {
+    window.location.hash = '#/game/g1';
+    const client = fakeApi();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    client.turn.mockImplementationOnce(async () =>
+      (async function* () {
+        yield { kind: 'queued', position: 2 } as const;
+        await gate;
+        yield { kind: 'done', turn_ms: 1 } as const;
+      })(),
+    );
+    renderApp(client);
+    const box = await screen.findByRole('textbox', { name: 'Message' });
+    await userEvent.type(box, 'hello{Enter}');
+    expect(await screen.findByText('Waiting for a detective… (1 ahead)')).toBeInTheDocument();
+    release();
+    await waitFor(() => expect(screen.queryByText(/Waiting for a detective/)).not.toBeInTheDocument());
+  });
+
   test('turn_in_progress: a soft notice, the input stays disabled until the turn ends', async () => {
     window.location.hash = '#/game/g1';
     const client = fakeApi();
