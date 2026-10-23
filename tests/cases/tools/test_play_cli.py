@@ -20,8 +20,8 @@ def play(inputs: list[str]) -> tuple[int, str]:
 
 
 def test_a_scripted_win_by_numbers():
-    # 1 search -> The study (3); 3 records -> Boris (5) -> all kinds (1); 5 accuse -> 1,1,1 -> y
-    code, text = play(["1", "3", "3", "5", "1", "5", "1", "1", "1", "y"])
+    # 1 search -> The study (2); 3 records -> Boris (5) -> all kinds (1); 5 accuse -> 1,1,1 -> y
+    code, text = play(["1", "2", "3", "5", "1", "5", "1", "1", "1", "y"])
     assert code == 0
     assert "Boris's monogrammed cufflink lies beside the body." in text
     assert "The ledger shows Boris owes a ruinous gambling debt." in text
@@ -30,13 +30,13 @@ def test_a_scripted_win_by_numbers():
 
 
 def test_typed_names_resolve_and_hedged_text_asks_again():
-    script = ["1", "3", "3", "5", "1", "5", "it wasn't Boris", "Boris", "poison", "debt", "y"]
+    script = ["1", "2", "3", "5", "1", "5", "it wasn't Boris", "Boris", "poison", "debt", "y"]
     code, text = play(script)
     assert code == 0 and "I can't tell which you mean" in text and "You solved the case!" in text
 
 
 def test_a_locked_place_and_an_early_accusation_are_explained_not_fatal():
-    code, text = play(["1", "1", "5", "q"])
+    code, text = play(["1", "3", "5", "q"])  # 3: the cellar
     assert code == 0
     assert "You can't get in there yet" in text
     assert "don't have enough to name anyone" in text
@@ -49,7 +49,7 @@ def test_give_up_asks_first_then_reveals():
 
 
 def test_declining_the_confirmation_withdraws_without_using_an_attempt():
-    code, text = play(["1", "3", "3", "5", "1", "5", "1", "1", "1", "n", "q"])
+    code, text = play(["1", "2", "3", "5", "1", "5", "1", "1", "1", "n", "q"])
     assert code == 0 and "Accusation withdrawn" in text and "3 attempts left" in text
 
 
@@ -73,7 +73,7 @@ def test_the_notebook_renders_sections_relations_and_contradictions():
 def test_typed_names_only_match_what_the_player_may_name():
     # After only the study search, Anna is a real candidate but not nameable yet: typing her
     # must re-prompt (no probing); Boris, who is nameable, resolves.
-    code, text = play(["1", "3", "5", "Anna", "1", "1", "q"])
+    code, text = play(["1", "2", "5", "Anna", "1", "1", "q"])
     assert code == 0
     assert text.count("I can't tell which you mean") == 1
     assert "How was it done?" in text  # Boris was accepted on the who question
@@ -113,14 +113,14 @@ def test_non_ascii_digits_re_prompt_instead_of_crashing():
     # '²'.isdigit() is True but int('²') raises; '١' (Arabic-Indic one) int()s to 1
     code, text = play(["1", "²", "١", "", "5", "q"])
     assert code == 0 and text.count("Pick one of the numbers above.") == 2
-    code, text = play(["1", "3", "3", "5", "1", "5", "²", "١", "", "q"])
+    code, text = play(["1", "2", "3", "5", "1", "5", "²", "١", "", "q"])
     assert code == 0 and text.count("I can't tell which you mean") == 2
 
 
 def test_a_typed_method_the_player_may_not_name_yet_re_prompts():
     # after only the study search the rope is a real method but not nameable: typing it must
     # look like nonsense; the poison, which is nameable, resolves
-    code, text = play(["1", "3", "5", "Boris", "the rope", "poison", "q"])
+    code, text = play(["1", "2", "5", "Boris", "the rope", "poison", "q"])
     assert code == 0
     assert text.count("I can't tell which you mean") == 1
     assert 'enough to name anyone for "Why was it done?"' in text

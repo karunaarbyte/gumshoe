@@ -27,20 +27,75 @@ def handle_of(items, name):
     return next(i.handle for i in items if i.name == name)
 
 
-def test_the_brief_lists_everyone_sorted_by_name_with_locked_flags():
+def renamed(case, names):
+    """The case with other suspect and place names (the skin), its skeleton untouched."""
+    return case.model_copy(
+        update={
+            "suspects": tuple(
+                s.model_copy(update={"display_name": names[s.id]}) for s in case.suspects
+            ),
+            "locations": tuple(
+                loc.model_copy(update={"name": names[loc.id]}) for loc in case.locations
+            ),
+        }
+    )
+
+
+def test_the_brief_lists_everyone_numbered_with_locked_flags():
     brief = session().brief()
-    assert [(x.number, x.name, x.locked) for x in brief.locations] == [
-        (1, "The cellar", True),
-        (2, "The garden", False),
-        (3, "The study", False),
+    assert sorted((x.name, x.locked) for x in brief.locations) == [
+        ("The cellar", True),
+        ("The garden", False),
+        ("The study", False),
     ]
-    assert [(x.number, x.name) for x in brief.suspects] == [(1, "Anna"), (2, "Boris"), (3, "Clara")]
+    assert sorted(x.name for x in brief.suspects) == ["Anna", "Boris", "Clara"]
+    for items in (brief.locations, brief.suspects):
+        assert [x.number for x in items] == list(range(1, len(items) + 1))
     assert [(k.key, k.label) for k in brief.record_kinds] == [
         ("gate_log", "gate log"),
         ("ledger", "ledger"),
     ]
     assert brief.attempts_left == 3 and brief.status == "playing"
     assert brief.intro.startswith("A winter evening")
+
+
+def test_the_order_does_not_depend_on_names_so_a_locked_slot_tells_nothing():
+    """Sorting by name would put a locked entry between two open names and give its rank away.
+    The order comes from the case's skeleton instead: renaming everyone changes nothing."""
+    case = build_case()
+    reverse = {"s_anna": "Zed", "s_boris": "Yan", "s_clara": "Abe"}
+    reverse |= {"l_cellar": "Zone", "l_garden": "Alley", "l_study": "Mid"}
+    a, b = session(case).brief(), session(renamed(case, reverse)).brief()
+    for one, other in ((a.suspects, b.suspects), (a.locations, b.locations)):
+        assert [(x.number, x.handle, x.locked) for x in one] == [
+            (x.number, x.handle, x.locked) for x in other
+        ]
+
+
+def test_numbers_stay_put_when_an_entry_unlocks_and_under_another_salt():
+    s = session()
+    before = s.brief()
+    s.search(handle_of(before.locations, "The garden"))  # opens the cellar
+    after = s.brief()
+    assert not next(x for x in after.locations if x.name == "The cellar").locked
+    assert [(x.number, x.handle) for x in after.locations] == [
+        (x.number, x.handle) for x in before.locations
+    ]
+    other = session(salt="salt-2").brief()
+    assert [(x.number, x.name) for x in other.locations] == [
+        (x.number, x.name) for x in before.locations
+    ]
+    assert [(x.number, x.name) for x in other.suspects] == [
+        (x.number, x.name) for x in before.suspects
+    ]
+
+
+def test_records_about_a_locked_place_say_locked_and_never_name_it():
+    s = session()
+    cellar = handle_of(s.brief().locations, "The cellar")
+    for result in (s.check_records(cellar), s.check_records(cellar, "ledger")):
+        assert (result.status, result.label) == ("locked", "")
+        assert "cellar" not in result.model_dump_json().lower()
 
 
 def test_handles_are_opaque_deterministic_per_salt_and_differ_across_salts():

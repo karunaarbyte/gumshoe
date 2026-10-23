@@ -163,6 +163,10 @@ class GameSession:
         self._state = state
         self._handles = _make_handles(case, salt)
         self._ids = {handle: entity for entity, handle in self._handles.items()}
+        # the brief's order: from the skeleton, never from a name (a locked entry's slot among
+        # sorted names would give away its rank) nor from the salt (stable across a load)
+        entries = (*self._ix.suspects, *self._ix.locations)
+        self._order = {e: make_id("o", state.case_digest, e) for e in entries}
         self._prompt: AccusationPrompt | None = None
         self._pack = pack
         self._record_names = (
@@ -201,6 +205,11 @@ class GameSession:
     def _location_name(self, location_id: str) -> str:
         loc = self._ix.locations[location_id]
         return loc.name or loc.kind
+
+    def _subject_open(self, subject: str) -> bool:
+        """Is this suspect or place open to the player (its name shown on the board)?"""
+        kind = SourceKind.INTERROGATE if subject in self._ix.suspects else SourceKind.SEARCH
+        return is_open(self._ix, self._state.held, SourceRef(kind=kind, target=subject))
 
     def _record_name(self, kind: str) -> str:
         return self._record_names.get(kind) or _humanise(kind)
@@ -241,10 +250,9 @@ class GameSession:
         )
 
     def brief(self) -> PlayerCaseView:
-        held = self._state.held
         case = self._ix.case
-        locations = sorted(case.locations, key=lambda x: (self._location_name(x.id), x.id))
-        suspects = sorted(case.suspects, key=lambda x: (self._suspect_name(x.id), x.id))
+        locations = sorted(case.locations, key=lambda x: (self._order[x.id], x.id))
+        suspects = sorted(case.suspects, key=lambda x: (self._order[x.id], x.id))
         return PlayerCaseView(
             intro=case.intro,
             locations=tuple(
@@ -253,9 +261,7 @@ class GameSession:
                     handle=self._handles[loc.id],
                     name=self._location_name(loc.id),
                     description=loc.description,
-                    locked=not is_open(
-                        self._ix, held, SourceRef(kind=SourceKind.SEARCH, target=loc.id)
-                    ),
+                    locked=not self._subject_open(loc.id),
                 )
                 for n, loc in enumerate(locations, start=1)
             ),
@@ -265,9 +271,7 @@ class GameSession:
                     handle=self._handles[sus.id],
                     name=self._suspect_name(sus.id),
                     description=sus.description,
-                    locked=not is_open(
-                        self._ix, held, SourceRef(kind=SourceKind.INTERROGATE, target=sus.id)
-                    ),
+                    locked=not self._subject_open(sus.id),
                 )
                 for n, sus in enumerate(suspects, start=1)
             ),
@@ -358,7 +362,9 @@ class GameSession:
         still_open = {s for s in opened if available_facts(self._ix, self._state.held, s)}
         if SourceStatus.OK in statuses:
             status = SourceStatus.OK
-        elif SourceStatus.LOCKED in statuses:
+        elif SourceStatus.LOCKED in statuses or not self._subject_open(subject):
+            # nothing to read about a suspect or place still locked: say locked, which also
+            # keeps its name out of the label
             status = SourceStatus.LOCKED
         else:
             status = SourceStatus.NOTHING_NEW
