@@ -91,7 +91,7 @@ integer: a string, float or boolean fails validation with 422 `bad_request`; an 
 
 ### `GET /api/games` -> `GameSummary[]`
 
-The open games, oldest first: `{game, preset | null, outcome, attempts_left, turn_running}`.
+The open games of your session, oldest first (`[]` without a session): `{game, preset | null, outcome, attempts_left, turn_running}`.
 `outcome` is `playing | won | lost | gave_up`. `turn_running` is true while a turn runs (section 6).
 
 ### `GET /api/games/{game}` -> `GameState`
@@ -161,8 +161,17 @@ No body. Waits for a running turn. 404 `unknown_game`.
 
 ### `GET /api/saves` -> `SaveSummary[]`
 
-Newest first: `{name, created_at (UTC ISO 8601), pack, status: playing | won | lost}`. Never the case.
+Only your own saves, newest first (`[]` without a session): `{name, created_at (UTC ISO 8601), pack, status: playing | won | lost}`. Never the case.
 An empty list when the server has no saves folder wired.
+
+## Sessions
+
+`POST /api/games` and `POST /api/games/load` issue a signed session cookie (`gs_session`, or
+`__Host-gs_session` in public mode); the browser sends it automatically. A game or save belongs to
+the session that made it. A game that is missing and a game that is not yours both give the same
+404 `unknown_game`. `GET /api/games` and `GET /api/saves` return only your own, and `[]` without a
+session. A write whose `Origin` is not the site's own gets 403 `forbidden`; a write with a
+non-JSON body gets 415.
 
 ## 4. The event stream
 
