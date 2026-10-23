@@ -338,6 +338,11 @@ def test_a_symlink_inside_dist_is_served(tmp_path, dist):
         "index.html\x00",
         "x" * 5000,
         "assets",
+        "assets/app-abc123.js/",
+        "assets//app-abc123.js",
+        ".env",
+        "assets/.hidden",
+        "a/./b",
     ],
 )
 def test_file_inside_refuses_anything_but_a_file_in_root(dist, wanted):
@@ -415,3 +420,146 @@ def test_the_default_app_reads_ui_dist_from_the_environment(monkeypatch, tmp_pat
     )
     with TestClient(app) as client:
         assert client.get("/").text == INDEX
+
+
+# --- fix round 1: dotfiles, source trees, caching from the resolved file ---
+
+
+@pytest.fixture
+def dotted(dist):
+    # (a `.env` itself would stop the mount: a source-tree marker, tested below)
+    (dist / ".env.production").write_text("JEV_API_KEY=leak")
+    (dist / ".npmrc").write_text("token leak")
+    (dist / "assets" / ".hidden").write_text("hidden leak")
+    (dist / ".git").mkdir()
+    (dist / ".git" / "config").write_text("git leak")
+    (dist / ".well-known").mkdir()
+    (dist / ".well-known" / "security.txt").write_text("well-known leak")
+    (dist / "a").mkdir()
+    (dist / "a" / "b.txt").write_text("plain b")
+    (dist / "favicon.ico").write_text("icon")
+    return dist
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/.env",
+        "/.env.production",
+        "/.npmrc",
+        "/assets/.hidden",
+        "/.git/config",
+        "/.git",
+        "/.git/",
+        "/%2eenv",
+        "/%2eenv.production",
+        "/%2Enpmrc",
+        "/.well-known/security.txt",
+        "/assets/%2ehidden",
+    ],
+)
+def test_dotfiles_are_a_plain_404(tmp_path, dotted, path):
+    with client_for(tmp_path, dotted) as client:
+        r = client.get(path)
+        missing = client.get("/missing.png")
+    assert b"leak" not in r.content
+    assert shape(r) == shape(missing)
+
+
+@pytest.mark.parametrize(
+    "path", ["/a/./b.txt", "/./.npmrc", "/a/../.npmrc", "/assets/./.hidden", "/./"]
+)
+def test_dot_segments_sent_raw_are_a_404(tmp_path, dotted, path):
+    status, body = raw_get(app_for(tmp_path, dotted), path)
+    assert status == 404 and b"leak" not in body and b"plain b" not in body
+
+
+def test_a_symlink_to_a_dotfile_is_not_followed(tmp_path, dotted):
+    os.symlink(dotted / ".env.production", dotted / "visible.txt")
+    os.symlink(dotted / ".git", dotted / "gitdir")
+    with client_for(tmp_path, dotted) as client:
+        assert client.get("/visible.txt").status_code == 404
+        r = client.get("/gitdir/config")  # no dot in the last segment: a client route
+        assert b"leak" not in r.content and (r.status_code, r.text) == (200, INDEX)
+
+
+def test_a_normal_file_beside_dotfiles_is_still_served(tmp_path, dotted):
+    with client_for(tmp_path, dotted) as client:
+        assert client.get("/a/b.txt").text == "plain b"
+        assert client.get("/assets/app-abc123.js").text == "console.log(1)"
+
+
+def test_the_cache_rule_comes_from_the_resolved_file(tmp_path, dotted):
+    with client_for(tmp_path, dotted) as client:
+        icon = client.get("/assets/../favicon.ico")  # normalised by the client, but also raw:
+        assert (icon.text, icon.headers["cache-control"]) == ("icon", INDEX_CACHE)
+        assert client.get("/favicon.ico").headers["cache-control"] == INDEX_CACHE
+        asset = client.get("/assets/app-abc123.js")
+        assert asset.headers["cache-control"] == ASSET_CACHE
+        trailing = client.get("/assets/app-abc123.js/")
+        assert trailing.headers["cache-control"] != ASSET_CACHE
+        assert client.get("/assets//app-abc123.js").headers["cache-control"] != ASSET_CACHE
+
+
+def test_an_asset_reached_through_a_symlink_outside_assets_is_not_immutable(tmp_path, dist):
+    os.symlink(dist / "index.html", dist / "assets" / "page.html")
+    with client_for(tmp_path, dist) as client:
+        r = client.get("/assets/page.html")
+    assert r.status_code == 200 and r.headers["cache-control"] == INDEX_CACHE
+
+
+@pytest.mark.parametrize("marker", ["package.json", ".env", "src", "node_modules"], ids=lambda m: m)
+def test_a_source_tree_is_never_mounted(tmp_path, dist, marker, caplog):
+    from fastapi import FastAPI
+
+    if marker in ("src", "node_modules"):
+        (dist / marker).mkdir()
+    else:
+        (dist / marker).write_text("SECRET=do-not-log")
+    app = FastAPI()
+    before = list(app.router.routes)
+    with caplog.at_level("WARNING"):
+        assert mount_ui(app, dist) is False
+    assert app.router.routes == before
+    assert any(r.levelname == "WARNING" for r in caplog.records)
+    assert "do-not-log" not in caplog.text
+
+
+def test_a_source_tree_leaves_the_app_api_only(tmp_path, dist):
+    (dist / "package.json").write_text("{}")
+    with client_for(tmp_path, dist) as client:
+        assert client.get("/").status_code == 404
+        assert client.get("/package.json").status_code == 404
+
+
+@pytest.mark.parametrize("where", ["equal", "inside"])
+def test_the_project_root_or_above_is_never_mounted(monkeypatch, dist, where):
+    from fastapi import FastAPI
+
+    # a build-looking dir (index.html, no markers) that is, or holds, the project root
+    project = dist if where == "equal" else dist / "assets"
+    monkeypatch.setattr("gumshoe.api.static.PROJECT_ROOT", project.resolve())
+    app = FastAPI()
+    before = list(app.router.routes)
+    assert mount_ui(app, dist) is False
+    assert app.router.routes == before
+
+
+def test_the_real_project_root_and_above_are_never_mounted():
+    from fastapi import FastAPI
+
+    for candidate in (PROJECT_ROOT, PROJECT_ROOT.parent):
+        assert mount_ui(FastAPI(), candidate) is False, candidate
+
+
+def test_the_frontend_source_dir_is_never_mounted():
+    from fastapi import FastAPI
+
+    assert mount_ui(FastAPI(), PROJECT_ROOT / "frontend") is False
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_a_blank_ui_dist_means_the_default(monkeypatch, blank):
+    monkeypatch.setenv("UI_DIST", blank)
+    assert Settings(_env_file=None).ui_dist == PROJECT_ROOT / "frontend" / "dist"
+    assert Settings(_env_file=None, ui_dist=blank).ui_dist == PROJECT_ROOT / "frontend" / "dist"

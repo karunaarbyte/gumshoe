@@ -170,6 +170,12 @@ class Settings(BaseSettings):
     def _blank_saves_means_default(cls, value: Any) -> Any:
         return "saves" if value == "" else value
 
+    @field_validator("ui_dist", mode="before")
+    @classmethod
+    def _blank_ui_dist_means_default(cls, value: Any) -> Any:
+        # Never the project root (it holds the real .env), which a blank path would resolve to.
+        return "frontend/dist" if isinstance(value, str) and not value.strip() else value
+
     @field_validator("stats_db_path", "saves_dir", "ui_dist", mode="after")
     @classmethod
     def _resolve_against_the_project_root(cls, value: Path) -> Path:
