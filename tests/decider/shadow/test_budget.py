@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from gumshoe.decider import client_key
+from gumshoe.decider import client_key, estimate_tokens
 from gumshoe.decider.contract.errors import DeciderError
 from gumshoe.decider.contract.models import DecisionResult, Usage
 from gumshoe.decider.contract.samples import DEMO_QUESTIONS, DEMO_STATE
@@ -23,6 +23,18 @@ class MemoryLedger:
 
     def usage_totals(self, day):
         return {k: v for (d, k), v in self.rows.items() if d == day}
+
+
+class SpyLedger(MemoryLedger):
+    """A MemoryLedger that counts reads, to prove when the meter does (not) touch storage."""
+
+    def __init__(self):
+        super().__init__()
+        self.reads: list[str] = []
+
+    def usage_totals(self, day):
+        self.reads.append(day)
+        return super().usage_totals(day)
 
 
 class BrokenLedger:
@@ -66,6 +78,20 @@ class StartedDecider(FakeDecider):
         return await super().decide(state, questions, **kwargs)
 
 
+class GatedReadLedger(MemoryLedger):
+    """A ledger whose read signals it has begun, then blocks until the test releases it."""
+
+    def __init__(self):
+        super().__init__()
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+    def usage_totals(self, day):
+        self.entered.set()
+        assert self.release.wait(5), "the test never released the read"
+        return super().usage_totals(day)
+
+
 class Clock:
     def __init__(self, at):
         self.at = at
@@ -102,28 +128,58 @@ async def test_the_meter_writes_through_and_a_new_meter_resumes_the_day():
     await first.add("a", 40)
     assert ledger.rows == {("2026-10-16", "a"): 40}
     second = UsageMeter(ledger, now=Clock(NOON))  # a restart
+    await second.load()
     assert (second.total(), second.tokens("a")) == (40, 40)
     await second.add("a", 2)
     assert ledger.rows[("2026-10-16", "a")] == 42
 
 
-async def test_a_new_meter_that_adds_first_also_resumes_the_day():
+async def test_load_is_idempotent_and_the_only_read():
+    ledger = SpyLedger()
+    ledger.rows[("2026-10-16", "a")] = 40
+    meter = UsageMeter(ledger, now=Clock(NOON))
+    assert ledger.reads == []  # the constructor does no I/O
+    await meter.load()
+    await meter.load()
+    await meter.add("a", 2)
+    meter.note("a", 1)
+    assert (meter.total(), meter.tokens("a"), meter.tokens("b")) == (43, 43, 0)
+    assert ledger.reads == ["2026-10-16"]
+    await meter.flush()
+    assert ledger.rows[("2026-10-16", "a")] == 43
+
+
+async def test_reads_never_touch_the_ledger():
+    ledger = SpyLedger()
+    ledger.rows[("2026-10-16", "a")] = 40
+    meter = UsageMeter(ledger, now=Clock(NOON))
+    assert (meter.total(), meter.tokens("a")) == (0, 0)  # not loaded: memory only
+    await meter.add("a", 1)
+    meter.note("a", 1)
+    assert ledger.reads == []
+
+
+async def test_a_load_after_counting_keeps_the_larger_count():
     ledger = MemoryLedger()
     ledger.rows[("2026-10-16", "a")] = 40
     meter = UsageMeter(ledger, now=Clock(NOON))
-    await meter.add("a", 2)
-    assert (meter.total(), ledger.rows[("2026-10-16", "a")]) == (42, 42)
+    meter.note("b", 5)  # counted (and being written) before the load ran
+    await meter.load()
+    await meter.flush()
+    assert (meter.tokens("a"), meter.tokens("b"), meter.total()) == (40, 5, 45)
 
 
 async def test_midnight_starts_a_fresh_day():
     clock = Clock(datetime(2026, 10, 16, 23, 59, 59, tzinfo=UTC))
-    ledger = MemoryLedger()
+    ledger = SpyLedger()
     meter = UsageMeter(ledger, now=clock)
+    await meter.load()
     await meter.add("a", 100)
     clock.at += timedelta(seconds=1)
     assert (meter.day(), meter.total(), meter.tokens("a")) == ("2026-10-17", 0, 0)
     await meter.add("a", 7)
     assert ledger.rows == {("2026-10-16", "a"): 100, ("2026-10-17", "a"): 7}
+    assert ledger.reads == ["2026-10-16"]  # the new day started empty, with no read
 
 
 async def test_the_day_is_the_utc_date_whatever_the_clock_zone():
@@ -141,12 +197,21 @@ async def test_concurrent_adds_are_all_counted():
     assert meter.total() == 150
 
 
-async def test_concurrent_first_adds_of_a_day_resume_it_once():
-    ledger = MemoryLedger()
+async def test_a_load_in_flight_across_midnight_does_not_resume_the_old_day():
+    clock = Clock(datetime(2026, 10, 16, 23, 59, 59, tzinfo=UTC))
+    ledger = GatedReadLedger()
     ledger.rows[("2026-10-16", "a")] = 40
-    meter = UsageMeter(ledger, now=Clock(NOON))
-    await asyncio.gather(*(meter.add("a", 3) for _ in range(20)))
-    assert (meter.total(), ledger.rows[("2026-10-16", "a")]) == (100, 100)
+    meter = UsageMeter(ledger, now=clock)
+    loading = asyncio.create_task(meter.load())
+    try:
+        assert await asyncio.to_thread(ledger.entered.wait, 5)  # reading the 16th now
+        clock.at += timedelta(seconds=1)
+    finally:
+        ledger.release.set()
+    meter.note("a", 2)  # the new day is entered while the old day's totals are loading
+    await loading
+    await meter.flush()
+    assert (meter.day(), meter.total()) == ("2026-10-17", 2)
 
 
 async def test_a_meter_without_a_ledger_still_counts_in_memory():
@@ -167,16 +232,19 @@ async def test_a_failing_ledger_leaves_memory_counting(caplog):
     ledger = BrokenLedger()
     meter = UsageMeter(ledger, now=Clock(NOON))
     with caplog.at_level(logging.WARNING, logger="gumshoe.decider.shadow.budget"):
+        await meter.load()
+        assert meter.total() == 0
         await meter.add("a", 9)
         await meter.add("a", 1)
         assert (meter.total(), meter.tokens("a")) == (10, 10)
-    assert ledger.calls >= 3  # the load and both writes were tried
+    assert ledger.calls == 3  # the load and both writes were tried
     assert "OperationalError" in caplog.text
     assert "database is locked" not in caplog.text  # the type only, never the message
 
 
-async def test_a_failing_ledger_on_a_sync_read_starts_the_day_empty():
+async def test_a_failing_load_starts_the_day_at_zero_and_does_not_raise():
     meter = UsageMeter(BrokenLedger(), now=Clock(NOON))
+    await meter.load()
     assert meter.total() == 0
     await meter.add("a", 4)
     assert meter.tokens("a") == 4
@@ -219,9 +287,10 @@ async def test_a_failed_call_counts_an_estimate_and_still_raises():
     assert meter.total() >= 1
 
 
-async def test_a_cancelled_call_counts_nothing(result):
+async def test_a_cancelled_call_counts_an_estimate_and_still_cancels(result):
     gate = asyncio.Event()
-    meter = UsageMeter(None, now=Clock(NOON))
+    ledger = MemoryLedger()
+    meter = UsageMeter(ledger, now=Clock(NOON))
     inner = StartedDecider("jev", result, gate=gate)
     decider = MeteredDecider(inner, meter)
     task = asyncio.create_task(decider.decide(DEMO_STATE, DEMO_QUESTIONS))
@@ -230,7 +299,10 @@ async def test_a_cancelled_call_counts_nothing(result):
     with pytest.raises(asyncio.CancelledError):
         await task
     assert inner.cancelled.is_set()
-    assert meter.total() == 0
+    estimate = estimate_tokens(DEMO_STATE, DEMO_QUESTIONS)
+    assert meter.total() == estimate  # it may have been billed: counted at once, no await
+    await meter.flush()
+    assert ledger.rows == {("2026-10-16", ""): estimate}
 
 
 async def test_a_broken_ledger_never_fails_the_decision(result):
@@ -254,7 +326,6 @@ async def test_a_broken_ledger_keeps_a_failed_call_s_own_error():
 async def test_a_slow_ledger_write_never_delays_the_decision(result):
     ledger = BlockingLedger()
     meter = UsageMeter(ledger, now=Clock(NOON))
-    meter.total()  # the day is loaded; only the write can block now
     decider = MeteredDecider(FakeDecider("jev", result), meter)
     try:
         assert await decider.decide(DEMO_STATE, DEMO_QUESTIONS) is result
@@ -275,3 +346,19 @@ async def test_aclose_closes_the_inner_decider_and_flushes_the_writes(result):
     await decider.aclose()
     assert inner.closed
     assert ledger.rows == {("2026-10-16", ""): 1000}
+
+
+async def test_aclose_gives_up_on_a_hanging_ledger_write_after_the_grace(result, caplog):
+    inner = FakeDecider("jev", result)
+    ledger = BlockingLedger()
+    meter = UsageMeter(ledger, now=Clock(NOON))
+    decider = MeteredDecider(inner, meter, flush_grace_s=0.01)
+    try:
+        await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+        with caplog.at_level(logging.WARNING, logger="gumshoe.decider.shadow.budget"):
+            await decider.aclose()  # returns although the write is still blocked
+        assert inner.closed
+        assert ledger.rows == {}
+        assert "still pending" in caplog.text
+    finally:
+        ledger.release.set()
