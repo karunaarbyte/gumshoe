@@ -20,10 +20,12 @@ from pydantic import (
     AliasChoices,
     Field,
     SecretStr,
+    ValidationError,
     ValidationInfo,
     field_validator,
     model_validator,
 )
+from pydantic_core import InitErrorDetails
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -175,6 +177,7 @@ class Settings(BaseSettings):
             if isinstance(values.get(name), str):
                 values[name] = SecretStr(values[name])
         super().__init__(**values)
+        self._settle_decider_roles()
 
     @model_validator(mode="before")
     @classmethod
@@ -247,7 +250,17 @@ class Settings(BaseSettings):
             )
         return value
 
-    @model_validator(mode="after")
+    def _settle_decider_roles(self) -> None:
+        # Not a model_validator: a model-level error reports the raw input dict, which holds
+        # plain-str secrets from the environment. Errors raised here carry no input.
+        try:
+            self._roles_must_differ()
+        except ValueError as exc:
+            raise ValidationError.from_exception_data(
+                type(self).__name__,
+                [InitErrorDetails(type="value_error", loc=(), input=None, ctx={"error": exc})],
+            ) from None
+
     def _roles_must_differ(self) -> Self:
         if not self.shadow_run:
             said = {"decider_primary", "decider_shadow"} & self.model_fields_set

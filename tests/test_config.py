@@ -503,3 +503,33 @@ def test_session_secret_from_env_or_plain_str_is_never_echoed(monkeypatch, secre
     with pytest.raises(ValidationError) as exc:
         Settings(_env_file=None, session_secret=secret)
     _assert_hidden(exc, secret)
+
+
+def test_same_primary_and_shadow_error_never_echoes_env_secrets(monkeypatch):
+    import json
+
+    admin, jev = "FAKEadmin" + "a" * 30, "FAKEjevkey"
+    monkeypatch.setenv("ADMIN_TOKEN", admin)
+    monkeypatch.setenv("JEV_API_KEY", jev)
+    monkeypatch.setenv("DECIDER_PRIMARY", "jev")
+    monkeypatch.setenv("DECIDER_SHADOW", "jev")
+    with pytest.raises(ValidationError, match="DECIDER_SHADOW must differ") as exc:
+        Settings(_env_file=None)
+    shown = (
+        str(exc.value),
+        repr(exc.value),
+        json.dumps(exc.value.errors(), default=str),
+        exc.value.json(),
+    )
+    for text in shown:
+        assert admin not in text and jev not in text
+
+
+def test_settings_has_no_model_level_after_validator():
+    allowed = {"_wrap_env_secrets"}
+    found = set(Settings.__pydantic_decorators__.model_validators)
+    assert found <= allowed, (
+        f"{found - allowed}: a mode='after' or 'wrap' model validator reports the raw input "
+        "dict in its errors, which holds plain-str secrets from the environment. Use a field "
+        "validator, or raise from Settings.__init__ as _settle_decider_roles does."
+    )
