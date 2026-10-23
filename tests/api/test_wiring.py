@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 
@@ -52,6 +53,40 @@ async def test_default_service_without_a_jev_key_raises_before_building_anything
     with pytest.raises(DeciderConfigError):
         async with default_service(store, settings):
             raise AssertionError("must not get here")
+
+
+async def test_default_service_stops_its_maintenance_task_on_exit(tmp_path):
+    settings = Settings(
+        _env_file=None, decider_primary="nimble", decider_shadow=None, saves_dir=tmp_path
+    )
+    store = SqliteStatsStore(tmp_path / "d.db")
+
+    def maintaining() -> list[asyncio.Task[object]]:
+        return [
+            t
+            for t in asyncio.all_tasks()
+            if getattr(t.get_coro(), "__qualname__", "") == "AgentService.maintain"
+        ]
+
+    before = len(asyncio.all_tasks())
+    async with default_service(store, settings):
+        assert len(maintaining()) == 1
+    await asyncio.sleep(0)
+    assert maintaining() == []
+    assert len(asyncio.all_tasks()) == before
+
+
+async def test_default_service_expires_games_after_the_configured_idle_time(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        decider_primary="nimble",
+        decider_shadow=None,
+        saves_dir=tmp_path,
+        game_idle_minutes=2,
+    )
+    store = SqliteStatsStore(tmp_path / "d.db")
+    async with default_service(store, settings) as service:
+        assert service._idle_s == 120.0
 
 
 async def test_default_service_builds_a_working_service_with_nimble_only(tmp_path):

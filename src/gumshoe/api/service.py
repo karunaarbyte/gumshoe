@@ -19,7 +19,7 @@ import logging
 import time
 import uuid
 from collections import Counter, OrderedDict, deque
-from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
@@ -639,6 +639,35 @@ class AgentService:
                 self._tombstones.add(slot.owner, game)
                 closed += 1
         return closed
+
+    async def maintain(
+        self,
+        *,
+        interval_s: float = 60.0,
+        purge_every_s: float = 3600.0,
+        retention_s: float = 0.0,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    ) -> None:
+        """Housekeeping, forever: purge old saves once at startup, then close idle games every
+        `interval_s` and purge old saves every `purge_every_s`. A failing step is logged (class
+        name only) and the loop goes on."""
+        last_purge = self._clock()
+        try:
+            await self.purge_saves(retention_s)  # once at startup, then on the schedule below
+        except Exception as exc:
+            logger.error("purging old saves failed: %s", type(exc).__name__)
+        while True:
+            await sleep(interval_s)
+            try:
+                await self.expire_idle()
+            except Exception as exc:
+                logger.error("expiring idle games failed: %s", type(exc).__name__)
+            if self._clock() - last_purge >= purge_every_s:
+                last_purge = self._clock()
+                try:
+                    await self.purge_saves(retention_s)
+                except Exception as exc:
+                    logger.error("purging old saves failed: %s", type(exc).__name__)
 
     async def aclose(self) -> None:
         tasks = list(self._tasks)

@@ -1,6 +1,8 @@
 """Builds the real agent service from settings. The only api module that touches the MCP SDK."""
 
+import asyncio
 import json
+import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import UTC, datetime
@@ -78,7 +80,8 @@ async def default_service(
     second store on the same file). A missing Jev key raises `DeciderConfigError` before
     anything is opened. On exit: turns are cancelled, then the MCP client closes, then the
     decider (so background records drain), then the Ollama client. `quotas` is the app's own
-    (shared with its middleware); a fresh one is made when none is given."""
+    (shared with its middleware); a fresh one is made when none is given. The maintenance loop
+    (idle-game expiry, save purge) runs as a task for the service's life and stops first."""
     settings = settings or get_settings()
     sessions = sessions or Sessions.from_settings(settings)
     quotas = quotas or Quotas(settings)
@@ -99,6 +102,17 @@ async def default_service(
             quotas=quotas,
             gate=gate,
             caps=Caps.from_settings(settings),
+            clock=time.monotonic,
+            idle_s=settings.game_idle_minutes * 60.0,
         )
         stack.push_async_callback(service.aclose)
+        maintenance = asyncio.create_task(
+            service.maintain(retention_s=settings.save_retention_days * 86400.0)
+        )
+
+        async def stop_maintenance() -> None:
+            maintenance.cancel()
+            await asyncio.gather(maintenance, return_exceptions=True)
+
+        stack.push_async_callback(stop_maintenance)  # runs before service.aclose
         yield service
