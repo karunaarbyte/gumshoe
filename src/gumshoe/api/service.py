@@ -15,8 +15,9 @@ failed or abandoned turn held is given back exactly once (the task's done callba
 import asyncio
 import hmac
 import logging
+import time
 import uuid
-from collections import Counter, deque
+from collections import Counter, OrderedDict, deque
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -47,6 +48,9 @@ logger = logging.getLogger(__name__)
 SHUTTING_DOWN = "The game server is shutting down. Please try again in a moment."
 BUSY_TEXT = "The detectives are busy right now. Please try again in a moment."
 MAX_TURNS_KEPT = 200  # per game, for the transcript; the oldest are dropped first
+COLD_TEXT = "That case went cold. Start a new game."
+TOMBSTONE_TTL_S = 24 * 3600.0
+TOMBSTONE_CAP = 5000
 
 
 Outcome = Literal["playing", "won", "lost", "gave_up"]
@@ -156,6 +160,7 @@ class _Slot:
     turns: "deque[TurnRecord]" = field(default_factory=_transcript)
     preset: str | None = None  # None for a loaded game
     ip: str = ""  # the network that opened it, for the per-IP open-game cap
+    last_active: float = 0.0  # clock time of registration or of the last turn's end
 
 
 @dataclass
@@ -177,6 +182,36 @@ async def _drain(
         reader.left.set()  # nor one waiting at the gate
 
 
+class _Tombstones:
+    """Games that expired, by (owner, game): the owner is told, nobody else can tell."""
+
+    def __init__(
+        self,
+        cap: int = TOMBSTONE_CAP,
+        ttl_s: float = TOMBSTONE_TTL_S,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._cap = cap
+        self._ttl = ttl_s
+        self._clock = clock
+        self._until: OrderedDict[tuple[str, str], float] = OrderedDict()
+
+    def add(self, owner: str, game: str) -> None:
+        self._until[(owner, game)] = self._clock() + self._ttl
+        self._until.move_to_end((owner, game))
+        while len(self._until) > self._cap:
+            self._until.popitem(last=False)
+
+    def has(self, owner: str, game: str) -> bool:
+        until = self._until.get((owner, game))
+        if until is None:
+            return False
+        if self._clock() >= until:
+            del self._until[(owner, game)]
+            return False
+        return True
+
+
 ListSaves = Callable[[Callable[[str], bool]], list[SaveSummary]]
 
 
@@ -191,6 +226,8 @@ class AgentService:
         quotas: Quotas | None = None,
         gate: TurnGate | None = None,
         caps: Caps = NO_CAPS,
+        clock: Callable[[], float] = time.monotonic,
+        idle_s: float = 0.0,
     ) -> None:
         self._deps = deps
         self._grace_s = grace_s
@@ -199,6 +236,9 @@ class AgentService:
         self._quotas = quotas
         self._gate = gate
         self._caps = caps
+        self._clock = clock
+        self._idle_s = idle_s  # 0 = games never expire
+        self._tombstones = _Tombstones(clock=clock)
         self._slots: dict[str, _Slot] = {}
         self._tasks: set[asyncio.Task[None]] = set()
         # turns running, and games being created; keys at zero are dropped (see `_drop`)
@@ -209,14 +249,20 @@ class AgentService:
 
     def _slot(self, game: str, owner: str) -> _Slot:
         """The game's slot for its owner. A missing game and someone else's game fail alike, so a
-        game id tells a stranger nothing."""
+        game id tells a stranger nothing; only the owner of an expired game is told it went cold."""
         slot = self._slots.get(game)
-        if slot is None or not hmac.compare_digest(slot.owner.encode(), owner.encode()):
+        if slot is None:
+            if self._tombstones.has(owner, game):
+                raise ApiError(410, "cold", COLD_TEXT)
+            raise ToolFailure("unknown_game", UNKNOWN_GAME)
+        if not hmac.compare_digest(slot.owner.encode(), owner.encode()):
             raise ToolFailure("unknown_game", UNKNOWN_GAME)
         return slot
 
     def _register(self, view: NewGameView, preset: str | None, owner: str, ip: str) -> NewGameView:
-        self._slots[view.game] = _Slot(TurnContext(game=view.game), owner, preset=preset, ip=ip)
+        slot = _Slot(TurnContext(game=view.game), owner, preset=preset, ip=ip)
+        slot.last_active = self._clock()
+        self._slots[view.game] = slot
         return view
 
     def _admit_game(self, owner: str, ip: str) -> Callable[[], None]:
@@ -482,6 +528,7 @@ class AgentService:
             raise
         finally:
             record.complete = True
+            slot.last_active = self._clock()  # idleness is measured from a turn's end
 
     def _landed(self, owner: str, ip: str, ticket: Ticket) -> None:
         """Give back what a turn held: its in-flight counts and its gate place."""
@@ -517,6 +564,36 @@ class AgentService:
                     raise  # the host may still hold the game: keep the slot, DELETE can retry
             slot.gone = True
             self._slots.pop(game, None)
+
+    async def expire_idle(self) -> int:
+        """Close the games idle for `idle_s` or more. A game with a turn running or waiting is
+        skipped; the others are closed under their lock, after re-checking that nothing touched
+        them while expiry waited for it."""
+        if self._idle_s <= 0:
+            return 0
+        closed = 0
+        for game, slot in list(self._slots.items()):
+            if slot.busy or self._clock() - slot.last_active < self._idle_s:
+                continue
+            async with slot.lock:
+                if (
+                    slot.gone
+                    or slot.busy
+                    or self._clock() - slot.last_active < self._idle_s
+                    or self._slots.get(game) is not slot
+                ):
+                    continue
+                try:
+                    await self._deps.client.close_game(game)
+                except ToolFailure as exc:
+                    if exc.code != "unknown_game":
+                        logger.warning("could not close an idle game: %s", exc.code)
+                        continue
+                slot.gone = True
+                self._slots.pop(game, None)
+                self._tombstones.add(slot.owner, game)
+                closed += 1
+        return closed
 
     async def aclose(self) -> None:
         tasks = list(self._tasks)
