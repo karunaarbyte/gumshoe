@@ -19,7 +19,7 @@ function CallFooter({ call }: { call: CallView | undefined }) {
         {call.used && <span className="bg-ink px-1 text-card-light">used</span>}
         {call.cold && <span className="border border-ink px-1">cold</span>}
       </div>
-      {call.error !== null && <div className="text-stamp">error: {call.error}</div>}
+      {call.error !== null && <div className="text-stamp">{call.error === 'failed' ? 'this call failed' : `error: ${call.error}`}</div>}
     </td>
   );
 }
@@ -71,19 +71,27 @@ export function DecisionTable({ decision: d, backends }: { decision: DecisionVie
           </tr>
         </tbody>
       </table>
-      <details className="text-xs">
-        <summary>state preview</summary>
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words">{d.state_preview}</pre>
-      </details>
+      {d.state_preview !== '' && (
+        <details className="text-xs">
+          <summary>state preview</summary>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words">{d.state_preview}</pre>
+        </details>
+      )}
     </div>
   );
 }
 
-export function DecisionPanel({ id, backends, retryBaseMs }: { id: string; backends: string[]; retryBaseMs?: number }) {
-  const query = useDecision(id, retryBaseMs);
+export function DecisionPanel({ id, backends, retryBaseMs, game }: { id: string; backends: string[]; retryBaseMs?: number; game?: string }) {
+  const query = useDecision(id, retryBaseMs, game);
   if (query.isPending) return <p className="text-xs italic">Fetching decision {id}…</p>;
   if (query.isError) {
-    const text = isApiError(query.error, 'not_recorded_yet') ? 'not recorded yet' : isApiError(query.error) ? query.error.message : 'could not be loaded';
+    const text = isApiError(query.error, 'not_recorded_yet')
+      ? 'not recorded yet'
+      : isApiError(query.error, 'not_found')
+        ? 'not available (too old to show, or not recorded)'
+        : isApiError(query.error)
+          ? query.error.message
+          : 'could not be loaded';
     return (
       <p className="text-xs text-stamp">
         Decision {id}: {text}

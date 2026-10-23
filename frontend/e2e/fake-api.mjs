@@ -187,6 +187,8 @@ createServer(async (req, res) => {
     if (method === 'GET' && path === '/api/decisions') return json(res, 200, fixture('disagreements-fixture.json'));
     const decisionMatch = /^\/api\/decisions\/([^/]+)$/.exec(path);
     if (method === 'GET' && decisionMatch) return json(res, 200, decision(decisionMatch[1]));
+    const gameDecisionMatch = /^\/api\/games\/[^/]+\/decisions\/([^/]+)$/.exec(path);
+    if (method === 'GET' && gameDecisionMatch) return json(res, 200, { ...decision(gameDecisionMatch[1]), state_preview: '' }); // redacted for players
     const m = /^\/api\/games\/([^/]+)(\/turn|\/confirm|\/turns|\/save)?$/.exec(path);
     if (m === null) return error(res, 404, 'not_found', 'no such route');
     if (game === null || m[1] !== GAME) return error(res, 404, 'unknown_game', 'no such game');

@@ -11,6 +11,7 @@ import { DecisionPanel } from './DecisionPanel';
 interface Props {
   turns: TurnView[];
   health: Health | undefined;
+  game: string;
   retryBaseMs?: number;
 }
 
@@ -35,7 +36,7 @@ function TurnSummary({ turn }: { turn: TurnView }) {
 }
 
 /** The Jev-versus-Nimble drawer: per turn, newest first, each decision side by side. */
-export function TraceDrawer({ turns, health, retryBaseMs }: Props) {
+export function TraceDrawer({ turns, health, game, retryBaseMs }: Props) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const client = useApi();
@@ -43,7 +44,7 @@ export function TraceDrawer({ turns, health, retryBaseMs }: Props) {
   const ids = [...new Set(turns.flatMap((t) => t.decisionIds))];
   // read-only view of what is already in the cache: these never fetch on their own
   const cached = useQueries({
-    queries: ids.map((id) => ({ queryKey: keys.decision(id), queryFn: () => client.decision(id), enabled: false, staleTime: Infinity })),
+    queries: ids.map((id) => ({ queryKey: keys.decision(id, game), queryFn: () => client.gameDecision(game, id), enabled: false, staleTime: Infinity })),
   });
   const loaded = cached.flatMap((q) => (q.data === undefined ? [] : [q.data as DecisionView]));
   const toggle = (index: number) =>
@@ -80,7 +81,7 @@ export function TraceDrawer({ turns, health, retryBaseMs }: Props) {
                   (t.decisionIds.length === 0 ? (
                     <p className="text-xs italic">No decisions in this turn.</p>
                   ) : (
-                    t.decisionIds.map((id) => <DecisionPanel key={id} id={id} backends={backends} retryBaseMs={retryBaseMs} />)
+                    t.decisionIds.map((id) => <DecisionPanel key={id} id={id} backends={backends} retryBaseMs={retryBaseMs} game={game} />)
                   ))}
               </li>
             ))}

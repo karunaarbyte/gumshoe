@@ -84,6 +84,7 @@ export const api = {
     if (params.since) q.set('since', params.since);
     return getJson<DecisionView[]>(`/api/decisions?${q.toString()}`);
   },
+  gameDecision: (game: string, id: string) => getJson<DecisionView>(`${g(game)}/decisions/${encodeURIComponent(id)}`),
   decision: (id: string) => getJson<DecisionView>(`/api/decisions/${encodeURIComponent(id)}`),
   turn: (game: string, body: TurnBody, signal?: AbortSignal) => openStream(`${g(game)}/turn`, body, signal),
   confirm: (game: string, body: ConfirmBody, signal?: AbortSignal) => openStream(`${g(game)}/confirm`, body, signal),

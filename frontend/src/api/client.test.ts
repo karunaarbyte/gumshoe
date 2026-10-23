@@ -30,6 +30,14 @@ describe('api client', () => {
     await expect(api.meta()).resolves.toMatchObject({ max_turn_chars: 1000 });
   });
 
+  test('gameDecision asks the game-scoped endpoint, percent-encoded, with no Authorization', async () => {
+    const fetchMock = stubFetch(jsonResponse({ decision_id: 'd' }));
+    await api.gameDecision('g 1', 'd/2');
+    expect(fetchMock).toHaveBeenCalledWith('/api/games/g%201/decisions/d%2F2', expect.anything());
+    const init = fetchMock.mock.calls[0]![1];
+    expect(new Headers(init?.headers).has('authorization')).toBe(false);
+  });
+
   test('stats sends only the filters that are set', async () => {
     const f = stubFetch(jsonResponse({ nodes: [] }), jsonResponse({ nodes: [] }));
     await api.stats();

@@ -161,7 +161,7 @@ export function Desk({ game, onExit, onError, session: sessionOptions }: Props) 
           <div className="min-h-0 min-w-0 overflow-hidden">
             <Board game={game} state={state} />
           </div>
-          <TraceDrawer turns={view.turns} health={health.data} />
+          <TraceDrawer game={game} turns={view.turns} health={health.data} />
         </div>
         <aside aria-label="Case chat" className="flex h-screen min-h-0 flex-col border-l-2 border-ink bg-card">
           <div className="flex shrink-0 items-center justify-between border-b border-ink bg-card px-3 py-1">

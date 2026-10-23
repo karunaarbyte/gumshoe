@@ -43,6 +43,9 @@ export function fakeApi(init: { state?: GameState; turns?: TurnRecord[] } = {}) 
     decision: vi.fn<Api['decision']>(async (id: string) => {
       throw new ApiError(404, 'not_recorded_yet', `no ${id}`);
     }),
+    gameDecision: vi.fn<Api['gameDecision']>(async (_game, id) => {
+      throw new ApiError(404, 'not_recorded_yet', `no ${id}`);
+    }),
     turn: vi.fn<Api['turn']>(async () => eventsOf([{ kind: 'done', turn_ms: 1 }])),
     confirm: vi.fn<Api['confirm']>(async () => eventsOf([{ kind: 'done', turn_ms: 1 }])),
   };

@@ -9,7 +9,7 @@ export const keys = {
   meta: ['meta'] as const,
   saves: ['saves'] as const,
   games: ['games'] as const,
-  decision: (id: string) => ['decision', id] as const,
+  decision: (id: string, game?: string) => ['decision', game ?? '', id] as const,
 };
 
 export function useHealth() {
@@ -38,11 +38,11 @@ export const DECISION_RETRY_BASE_MS = 300;
 
 /** One decision. `not_recorded_yet` is retried a few times with a short backoff (the primary's
  * row can land a moment after its event); every other error is final. */
-export function useDecision(id: string, retryBaseMs: number = DECISION_RETRY_BASE_MS) {
+export function useDecision(id: string, retryBaseMs: number = DECISION_RETRY_BASE_MS, game?: string) {
   const client = useApi();
   return useQuery({
-    queryKey: keys.decision(id),
-    queryFn: () => client.decision(id),
+    queryKey: keys.decision(id, game),
+    queryFn: () => (game === undefined ? client.decision(id) : client.gameDecision(game, id)),
     staleTime: Infinity,
     retry: (failures, error) => isApiError(error, 'not_recorded_yet') && failures < DECISION_RETRIES,
     retryDelay: (attempt) => retryBaseMs * 2 ** attempt,
