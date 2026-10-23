@@ -160,6 +160,13 @@ def test_absolute_paths_are_kept(tmp_path):
     assert (s.stats_db_path, s.saves_dir) == (tmp_path / "d.db", tmp_path / "s")
 
 
+def test_zero_is_accepted_for_expiry_and_save_settings():
+    s = Settings(
+        _env_file=None, game_idle_minutes=0, save_retention_days=0, session_saves=0, ip_saves=0
+    )
+    assert (s.game_idle_minutes, s.save_retention_days, s.session_saves, s.ip_saves) == (0,) * 4
+
+
 def test_new_settings_defaults():
     s = Settings(_env_file=None)
     assert s.saves_dir == PROJECT_ROOT / "saves"

@@ -21,11 +21,12 @@ Written from the code after plan 4d-2 (tasks 1-12). Interactive docs for the pla
 | `unknown_game` | 404 | no open game has that id (also after a server restart) |
 | `bad_argument` | 422 | the game engine refused an argument (for example an unknown preset) |
 | `unknown_handle` | 422 | a handle the player's case does not have |
-| `bad_save` | 422 | a save name that is missing or unreadable; 500 when writing the save failed |
+| `bad_save` | 422 | a save name that is missing, someone else's, malformed or unreadable (message "that save cannot be read"); 500 when writing the save failed |
 | `bad_request` | 422 | the body, query or path did not validate (message says where and what, never the input); also `ids` of the wrong size, and HTTP 400 |
 | `too_many_games` | 429 | the engine's game cap is reached (`MAX_GAMES`: 1000 locally, 200 in public mode); delete one first |
 | `rate_limited` | 429 | a request, new-session, game-creation or turn rate is exceeded; carries `Retry-After` (section 6a) |
-| `quota` | 429 | too many games open for this session or IP; finish or delete one |
+| `quota` | 429 | too many games open, or too many saves, for this session or IP; finish or delete one (no `Retry-After`, no counts in the message) |
+| `cold` | 410 | the game was closed after sitting idle (`GAME_IDLE_MINUTES`); message "That case went cold. Start a new game." Owner only: anyone else gets the same 404 `unknown_game` as for a missing game |
 | `busy` | 429 | too many turns running for the IP, or the turn queue is full; carries `Retry-After: 5` |
 | `turn_in_progress` | 409 | a turn or confirm button press is still running for this game |
 | `no_such_pending` | 409 | `POST /confirm` with an id that is not the confirmation waiting |
@@ -143,7 +144,8 @@ running (its `events` so far, last in the list). Only turns that really ran are 
 
 ### `POST /api/games/{game}/save` -> `{name: string}`
 
-Waits for a running turn first, then saves. 404 `unknown_game`; 500 `bad_save` if the write failed.
+Waits for a running turn first, then saves. 404 `unknown_game`; 410 `cold`; 429 `quota` when the session
+or IP already holds its cap of saves (`SESSION_SAVES`, `IP_SAVES`; checked before anything is written); 500 `bad_save` if the write failed.
 Known quirk: when the saves folder is full (the host's cap) the host also raises `bad_save`, which this API maps
 to 500, so a client cannot tell a full folder from a failed write.
 
@@ -160,12 +162,22 @@ Body `{name: string (1-64)}`. Answer 200 `GameCreated` with a NEW game id and ne
 
 ### `DELETE /api/games/{game}` -> 204
 
-No body. Waits for a running turn. 404 `unknown_game`.
+No body. Waits for a running turn. 404 `unknown_game`; 410 `cold` for the owner of a game that went idle.
+
+An idle game (no request for `GAME_IDLE_MINUTES`, default 30) is closed by the server and its id then
+answers 410 `cold` to its owner, and 404 `unknown_game` to everyone else. A turn in flight keeps the
+game alive. The 410 note is remembered for a limited time only; after that the id reads as missing.
 
 ### `GET /api/saves` -> `SaveSummary[]`
 
 Only your own saves, newest first (`[]` without a session): `{name, created_at (UTC ISO 8601), pack, status: playing | won | lost}`. Never the case.
-An empty list when the server has no saves folder wired.
+An empty list when the server has no saves folder wired. Saves older than `SAVE_RETENTION_DAYS`
+(default 30; 0 = keep forever) are deleted by the server.
+
+### `DELETE /api/saves/{name}` -> 204
+
+Deletes one of your own saves; no body. A save that is someone else's, missing or malformed gives the same
+422 `bad_save` ("that save cannot be read"), so a name tells a stranger nothing.
 
 ## Sessions
 
@@ -279,7 +291,11 @@ Every limit is a setting (`.env.example`); `0` = unlimited.
 - **429 with `Retry-After`** (whole seconds, also in the JSON error): `rate_limited` (a rate was
   exceeded: requests per IP, new sessions per IP, games created per session, turns per session or
   IP) and `busy` (retry after 5). `quota` (too many games open for the session or IP) is a 429 too.
-  The body is the usual `{code, message}`.
+  The body is the usual `{code, message}`. Save `quota` (`SESSION_SAVES`, `IP_SAVES`) has no
+  `Retry-After` and no counts: delete a save and try again.
+- **Housekeeping**: a background loop closes idle games every 60 s (`GAME_IDLE_MINUTES`), and purges
+  saves older than `SAVE_RETENTION_DAYS` hourly and once at startup. `0` turns each off (idle expiry,
+  purge) or lifts the cap (`SESSION_SAVES`, `IP_SAVES`).
 - **`GET /api/health` counts** against the per-IP request budget like any other API request.
 - **The new-session quota counts attempts**, not only sessions that were created.
 - **A full limiter table fails closed**: each table keeps at most `LIMITER_MAX_KEYS` keys and only

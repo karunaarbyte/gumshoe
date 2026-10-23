@@ -128,8 +128,8 @@ class Settings(BaseSettings):
     limiter_max_keys: int = Field(20000, ge=100)
     game_idle_minutes: int = Field(30, ge=0)  # an idle game is closed; 0 = never
     save_retention_days: int = Field(30, ge=0)  # older saves are deleted; 0 = keep
-    session_saves: int = Field(10, ge=0)
-    ip_saves: int = Field(20, ge=0)
+    session_saves: int = Field(10, ge=0)  # saves per session; 0 = unlimited
+    ip_saves: int = Field(20, ge=0)  # saves per client IP; 0 = unlimited
     # Behind exactly one trusted proxy (the tunnel): read the client from X-Forwarded-For.
     trust_proxy: bool = False
 

@@ -1,6 +1,8 @@
 import asyncio
 import logging
 
+import pytest
+
 from tests.agent.fakes import Script
 from tests.api.helpers import OWNER, serving
 from tests.decider.fakes import FakeClock
@@ -59,3 +61,62 @@ async def test_a_failing_step_is_logged_and_the_loop_carries_on(caplog):
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
     assert calls["n"] >= 2 and "RuntimeError" in caplog.text and "disk on fire" not in caplog.text
+
+
+async def test_cancellation_from_the_sleep_ends_the_loop():
+    async with serving(Script(), clock=FakeClock(), idle_s=60.0) as s:
+
+        async def sleep(_):
+            raise asyncio.CancelledError
+
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(s.service.maintain(interval_s=1, sleep=sleep), 2)
+
+
+async def test_cancellation_inside_a_step_is_not_swallowed():
+    async with serving(Script(), clock=FakeClock(), idle_s=60.0) as s:
+
+        async def cancelled():
+            raise asyncio.CancelledError
+
+        s.service.expire_idle = cancelled  # type: ignore[method-assign]
+
+        async def sleep(_):
+            await asyncio.sleep(0)
+
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(s.service.maintain(interval_s=1, sleep=sleep), 2)
+
+
+async def test_a_failing_expiry_does_not_skip_the_purge_in_the_same_pass():
+    clock = FakeClock()
+    async with serving(Script(), clock=clock, idle_s=60.0) as s:
+        purges: list[float] = []
+        second_pass = asyncio.Event()
+        expiries = {"n": 0}
+
+        async def boom():
+            expiries["n"] += 1
+            if expiries["n"] == 2:
+                second_pass.set()
+            raise RuntimeError("disk on fire")
+
+        async def fake_purge(retention_s):
+            purges.append(retention_s)
+            return 0
+
+        s.service.expire_idle = boom  # type: ignore[method-assign]
+        s.service.purge_saves = fake_purge  # type: ignore[method-assign]
+
+        async def sleep(_):
+            clock.advance(10)  # every pass is due for a purge
+            await asyncio.sleep(0)
+
+        task = asyncio.create_task(
+            s.service.maintain(interval_s=1, purge_every_s=5, retention_s=7.0, sleep=sleep)
+        )
+        await asyncio.wait_for(second_pass.wait(), 2)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+    # the startup purge, plus the first pass's purge, which ran though its expiry failed
+    assert len(purges) >= 2 and expiries["n"] >= 2
