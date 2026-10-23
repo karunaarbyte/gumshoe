@@ -464,9 +464,42 @@ def test_admin_token_with_whitespace_is_rejected(padding):
         with pytest.raises(ValidationError, match="ADMIN_TOKEN") as exc:
             Settings(_env_file=None, admin_token=SecretStr(bad))
         assert token not in str(exc.value)
+    with pytest.raises(ValidationError, match="must not start or end with whitespace"):
+        Settings(_env_file=None, admin_token=SecretStr(padding * 40))
 
 
 def test_decision_retention_default_and_validation():
     assert Settings(_env_file=None).decision_retention_days == 30
     with pytest.raises(ValidationError):
         Settings(_env_file=None, decision_retention_days=-1)
+
+
+def _assert_hidden(exc, secret):
+    inputs = [e.get("input") for e in exc.value.errors()]
+    for shown in (str(exc.value), repr(exc.value), repr(exc.value.errors()), repr(inputs)):
+        assert secret.strip() not in shown
+
+
+@pytest.mark.parametrize("secret", ["fake-short-secret", "f" * 40 + "\n"])
+def test_admin_token_from_env_or_plain_str_is_never_echoed(monkeypatch, secret):
+    monkeypatch.setenv("ADMIN_TOKEN", secret)
+    with pytest.raises(ValidationError) as exc:
+        Settings(_env_file=None)
+    _assert_hidden(exc, secret)
+    monkeypatch.delenv("ADMIN_TOKEN")
+    with pytest.raises(ValidationError) as exc:
+        Settings(_env_file=None, admin_token=secret)
+    _assert_hidden(exc, secret)
+
+
+@pytest.mark.parametrize("secret", ["fake-short-session", "short\n"])
+def test_session_secret_from_env_or_plain_str_is_never_echoed(monkeypatch, secret):
+    monkeypatch.setenv("PUBLIC_ORIGIN", "https://example.com")
+    monkeypatch.setenv("SESSION_SECRET", secret)
+    with pytest.raises(ValidationError) as exc:
+        Settings(_env_file=None)
+    _assert_hidden(exc, secret)
+    monkeypatch.delenv("SESSION_SECRET")
+    with pytest.raises(ValidationError) as exc:
+        Settings(_env_file=None, session_secret=secret)
+    _assert_hidden(exc, secret)

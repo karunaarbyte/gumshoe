@@ -16,7 +16,14 @@ from pathlib import Path
 from typing import Any, Literal, Self
 from urllib.parse import urlsplit
 
-from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    SecretStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -51,8 +58,14 @@ def _origin(text: str) -> str:
     return text
 
 
+_SECRET_FIELDS = ("jev_api_key", "session_secret", "admin_token")
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=PROJECT_ROOT / ".env", extra="ignore")
+    # hide_input_in_errors: a validation error must never echo a raw secret from the environment.
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env", extra="ignore", hide_input_in_errors=True
+    )
 
     # The backend the game trusts, and an optional one that runs alongside it. When the primary
     # is nimble and DECIDER_SHADOW is not set at all, shadowing is off (not nimble twice).
@@ -115,7 +128,7 @@ class Settings(BaseSettings):
     session_secret: SecretStr = SecretStr("")
     # Admin access to the stats and decisions (32+ characters; empty = those endpoints are off).
     admin_token: SecretStr = SecretStr("")
-    decision_retention_days: int = Field(30, ge=0)  # decisions older than this are deleted
+    decision_retention_days: int = Field(30, ge=0)  # older decisions are deleted; 0 = keep forever
 
     # Limits (0 = unlimited). Per session, per client IP, and global.
     session_games_open: int = Field(3, ge=0)
@@ -154,6 +167,26 @@ class Settings(BaseSettings):
     @classmethod
     def _resolve_against_the_project_root(cls, value: Path) -> Path:
         return _under_root(value)
+
+    def __init__(self, **values: Any) -> None:
+        # Pydantic reports the raw input of a failed check, even with hide_input_in_errors. A
+        # SecretStr input is reported masked, so wrap the raw strings before anything validates.
+        for name in _SECRET_FIELDS:
+            if isinstance(values.get(name), str):
+                values[name] = SecretStr(values[name])
+        super().__init__(**values)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _wrap_env_secrets(cls, data: Any) -> Any:
+        # The same for values that come from the environment or .env (they are merged in after
+        # __init__ runs).
+        if isinstance(data, dict):
+            data = {
+                key: SecretStr(val) if key in _SECRET_FIELDS and isinstance(val, str) else val
+                for key, val in data.items()
+            }
+        return data
 
     @field_validator("admin_token", mode="after")
     @classmethod
@@ -204,13 +237,15 @@ class Settings(BaseSettings):
             )
         return origin
 
-    @model_validator(mode="after")
-    def _public_mode_needs_a_secret(self) -> Self:
-        if self.public_origin and len(self.session_secret.get_secret_value()) < 32:
+    @field_validator("session_secret", mode="after")
+    @classmethod
+    def _public_mode_needs_a_secret(cls, value: SecretStr, info: ValidationInfo) -> SecretStr:
+        # A field check, not a model check: a model-level error reports the raw input dict.
+        if info.data.get("public_origin") and len(value.get_secret_value()) < 32:
             raise ValueError(
                 "SESSION_SECRET must be at least 32 characters when PUBLIC_ORIGIN is set"
             )
-        return self
+        return value
 
     @model_validator(mode="after")
     def _roles_must_differ(self) -> Self:
