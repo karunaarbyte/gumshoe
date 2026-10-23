@@ -158,3 +158,31 @@ def test_other_scopes_pass_through_untouched():
     scope = {"type": "lifespan"}
     asyncio.run(SecurityHeaders(inner)(scope, receive, send))
     assert calls == [(scope, receive, send)]
+
+
+def test_mixed_case_headers_from_downstream_are_neither_duplicated_nor_kept():
+    seen: list[dict] = []
+
+    async def inner(scope, receive, send):
+        headers = [
+            (b"Cache-Control", b"max-age=60"),
+            (b"Content-Security-Policy", b"default-src *"),
+            (b"X-Content-Type-Options", b"sniff-away"),
+            (b"Content-Type", b"text/plain"),
+        ]
+        await send({"type": "http.response.start", "status": 200, "headers": headers})
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+    async def send(message):
+        seen.append(message)
+
+    scope = {"type": "http", "path": "/api/x", "headers": []}
+    asyncio.run(SecurityHeaders(inner)(scope, None, send))
+    raw = seen[0]["headers"]
+    names = [name.lower() for name, _ in raw]
+    assert len(names) == len(set(names))  # no header twice, whatever its case
+    values = {name.lower(): value for name, value in raw}
+    assert values[b"cache-control"] == b"max-age=60"  # downstream caching is kept
+    assert values[b"content-security-policy"] == CSP.encode()
+    assert values[b"x-content-type-options"] == b"nosniff"
+    assert values[b"content-type"] == b"text/plain"

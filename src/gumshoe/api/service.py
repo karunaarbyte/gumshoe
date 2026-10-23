@@ -202,7 +202,15 @@ class _Tombstones:
         self._until: OrderedDict[tuple[str, str], float] = OrderedDict()
 
     def add(self, owner: str, game: str) -> None:
-        self._until[(owner, game)] = self._clock() + self._ttl
+        now = self._clock()
+        # One ttl for all and every add goes to the end: the map is in deadline order, so the
+        # expired ones are at the head (amortised O(1) per add).
+        while self._until:
+            head, until = next(iter(self._until.items()))
+            if now < until:
+                break
+            del self._until[head]
+        self._until[(owner, game)] = now + self._ttl
         self._until.move_to_end((owner, game))
         while len(self._until) > self._cap:
             self._until.popitem(last=False)
@@ -603,6 +611,14 @@ class AgentService:
                     with contextlib.suppress(OSError):
                         await asyncio.to_thread(owners.delete, view.name)
                     raise ApiError(500, "internal", "the game could not be saved") from None
+                except BaseException:
+                    # Cancelled (or worse) between the write and the claim: an unclaimed save
+                    # belongs to nobody yet still counts toward the host's saves. Deleted
+                    # inline, since a second await could be cancelled too; a claim thread still
+                    # finishing leaves at most an orphan sidecar, which purge removes.
+                    with contextlib.suppress(OSError):
+                        owners.delete(view.name)
+                    raise
                 return view
 
     async def _check_save_caps(self, owners: SaveOwners, owner: str, ip: str) -> None:

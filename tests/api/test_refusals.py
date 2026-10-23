@@ -346,3 +346,35 @@ def test_public_mode_reads_its_own_cookie_name_and_the_trusted_proxy_address(sto
     assert lines(caplog) == [
         "refused code=rate_limited route=GET /api/meta ip=203.0.113.9 session=abcdef"
     ]
+
+
+def test_a_handler_refusal_never_logs_the_query_string_anywhere(store, caplog):
+    async def up():
+        return True
+
+    app = create_app(
+        store,
+        make_service=fake_factory(Script(), caps=Caps(games_per_session=1)),
+        settings=Settings(_env_file=None),
+        personas_up=up,
+    )
+    with caplog.at_level(logging.DEBUG), TestClient(app) as client:
+        client.post("/api/games", json={"seed": 1})
+        refused = client.post(f"/api/games?text={SECRET_TEXT}", json={"seed": 2})
+    assert refused.status_code == 429
+    [line] = lines(caplog)
+    assert line.startswith("refused code=quota route=POST /api/games ip=")
+    server = [r for r in caplog.records if not r.name.startswith(("httpx", "httpcore"))]
+    assert server  # the test client's own request log (httpx) is not the server's
+    for record in server:  # any server logger, message and arguments alike
+        assert SECRET_TEXT not in record.getMessage()
+
+
+@pytest.mark.parametrize(("trust_proxy", "ip"), [(False, "testclient"), (True, "203.0.113.9")])
+def test_a_forwarded_address_is_logged_only_behind_a_trusted_proxy(store, caplog, trust_proxy, ip):
+    settings = {"trust_proxy": trust_proxy, "ip_requests_per_minute": 1}
+    headers = {"x-forwarded-for": "203.0.113.9"}
+    with capture(caplog), RawClient(app_for(store, **settings)) as client:
+        client.get("/api/meta", headers=headers)
+        client.get("/api/meta", headers=headers)
+    assert lines(caplog) == [f"refused code=rate_limited route=GET /api/meta ip={ip} session=-"]

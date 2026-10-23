@@ -32,9 +32,11 @@ FILTERED_CALL_FIELDS = frozenset({"answers", "error"})
 BLANKED_VIEW_FIELDS = frozenset({"state_preview"})
 BLANKED_CALL_FIELDS: frozenset[str] = frozenset()
 
-# The nodes whose answers a player may see. Their options are the player's own visible places and
-# suspects (`suspect_3`, never a name), intents, yes/no and scores. Every other node, and
-# parse_accusation above all (its options are every suspect, locked ones too), shows none.
+# The nodes whose answers a player may see. Their options are tokens (`suspect_3`, never a name)
+# for every place and suspect, locked ones included, plus intents, yes/no and scores. The brief
+# already lists every one of those entries to the player (a locked one without its name), so a
+# token answer tells them nothing new: that, not the options being visible ones only, is why
+# these are safe. Every other node, parse_accusation above all, shows none.
 ANSWER_NODES = frozenset({"understand", "post_check"})
 
 # The shapes the game's own verdicts and question names take: a lowercase key such as `suspect_3`,

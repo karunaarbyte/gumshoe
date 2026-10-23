@@ -274,6 +274,8 @@ class Settings(BaseSettings):
         try:
             self._roles_must_differ()
         except ValueError as exc:
+            # Never interpolate field values into this message: the error echoes it, and a
+            # value may be a secret.
             raise ValidationError.from_exception_data(
                 type(self).__name__,
                 [InitErrorDetails(type="value_error", loc=(), input=None, ctx={"error": exc})],

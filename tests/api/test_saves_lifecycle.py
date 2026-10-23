@@ -134,6 +134,29 @@ async def test_a_save_that_cannot_be_claimed_is_removed_and_fails_without_detail
         await s.service.save_game(g.game, owner=OWNER, ip="1.1.1.1")
 
 
+async def test_a_save_cancelled_before_it_is_claimed_is_removed(tmp_path, monkeypatch):
+    import threading
+
+    _, owners, kw = wired(tmp_path)
+    started, release = threading.Event(), threading.Event()
+
+    def slow_claim(name, owner, ip=""):
+        started.set()
+        release.wait(5)  # the request is cancelled while the claim is under way
+
+    async with serving(Script(), **kw) as s:
+        g = await s.service.new_game(1, owner=OWNER)
+        monkeypatch.setattr(owners, "claim", slow_claim)
+        task = asyncio.create_task(s.service.save_game(g.game, owner=OWNER))
+        assert await asyncio.to_thread(started.wait, 5)
+        assert len(list(tmp_path.glob("*.json"))) == 1  # the host wrote it
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, 5)
+        release.set()
+        assert list(tmp_path.iterdir()) == []  # no unclaimed save left behind
+
+
 def test_the_save_cap_message_says_nothing_of_other_saves(tmp_path):
     sessions, _, kw = wired(tmp_path, caps=Caps(saves_per_session=1))
     store = SqliteStatsStore(tmp_path / "d.db")

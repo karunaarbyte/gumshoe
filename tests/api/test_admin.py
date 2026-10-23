@@ -396,3 +396,45 @@ def test_a_cors_preflight_may_ask_to_send_the_token(store):
     assert "authorization" in listed.headers["access-control-allow-headers"].lower()
     assert listed.headers["access-control-allow-origin"] == "http://localhost:5173"
     assert other.status_code == 400 and "access-control-allow-origin" not in other.headers
+
+
+# --- every admin route is the app's own, so `gated()` sees it ---
+
+
+def _router_with_an_admin_route(*, on_router: bool):
+    from fastapi import APIRouter, Depends
+
+    from gumshoe.api.admin import require_admin
+    from gumshoe.api.games import saves_router
+
+    wrapper = APIRouter(dependencies=[Depends(require_admin)] if on_router else [])
+    wrapper.include_router(saves_router)
+    if not on_router:
+
+        @wrapper.get("/api/admin/hidden", dependencies=[Depends(require_admin)])
+        def hidden() -> dict:
+            return {}
+
+    return wrapper
+
+
+@pytest.mark.parametrize("on_router", [False, True])
+def test_an_admin_route_behind_an_included_router_fails_at_startup(store, monkeypatch, on_router):
+    from gumshoe.api import app as app_module
+
+    monkeypatch.setattr(
+        app_module, "saves_router", _router_with_an_admin_route(on_router=on_router)
+    )
+    with pytest.raises(RuntimeError, match="admin routes must be registered on the app itself"):
+        client_for(store, admin_token=SecretStr(TOKEN))
+
+
+def test_the_real_admin_routes_are_all_the_apps_own(store):
+    from fastapi.routing import APIRoute
+
+    from gumshoe.api.app import admin_routes_under_routers
+
+    app = client_for(store).app
+    assert admin_routes_under_routers(app.router.routes) == []
+    direct = {r.path for r in app.router.routes if isinstance(r, APIRoute)}
+    assert {"/api/stats/decisions", "/api/decisions", "/api/admin/usage"} <= direct

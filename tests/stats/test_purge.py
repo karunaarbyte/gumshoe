@@ -83,3 +83,21 @@ def test_the_cutoff_is_compared_in_utc_whatever_zone_it_is_given_in(tmp_path):
 
 def test_purging_an_empty_store_is_fine(tmp_path):
     assert SqliteStatsStore(tmp_path / "d.db").purge_decisions(CUTOFF) == 0
+
+
+def test_purge_takes_the_write_lock_before_it_reads(tmp_path, monkeypatch):
+    store = SqliteStatsStore(tmp_path / "d.db")
+    store.insert([rec("old", "primary", "2026-08-01T00:00:00.000000+00:00")])
+    statements: list[str] = []
+    connect = store._connect
+
+    def traced():
+        conn = connect()
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    monkeypatch.setattr(store, "_connect", traced)
+    assert store.purge_decisions(CUTOFF) == 1
+    # a deferred read upgraded to a write can fail with SQLITE_BUSY: lock first, then read
+    assert statements[0] == "BEGIN IMMEDIATE"
+    assert statements[1].startswith("SELECT decision_id")

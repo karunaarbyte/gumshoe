@@ -123,3 +123,15 @@ def test_a_tombstone_belongs_to_its_owner():
     t = _Tombstones(cap=10, ttl_s=100.0, clock=FakeClock())
     t.add("alice", "g")
     assert t.has("alice", "g") and not t.has("bob", "g")
+
+
+def test_adding_a_tombstone_prunes_the_expired_ones_at_the_head():
+    clock = FakeClock()
+    t = _Tombstones(cap=100, ttl_s=100.0, clock=clock)
+    t.add("o", "old1")
+    t.add("o", "old2")
+    clock.advance(50)
+    t.add("o", "young")
+    clock.advance(60)  # the first two are past their deadline, "young" is not
+    t.add("o", "new")
+    assert list(t._until) == [("o", "young"), ("o", "new")]  # pruned without any `has`

@@ -35,6 +35,11 @@ class SecurityHeaders:
 
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
+                # MutableHeaders matches names against the raw bytes, so a downstream
+                # `Cache-Control` would be missed and a second header appended: lowercase first.
+                message["headers"] = [
+                    (name.lower(), value) for name, value in message.get("headers", [])
+                ]
                 headers = MutableHeaders(scope=message)
                 for name, value in FIXED.items():
                     headers[name] = value

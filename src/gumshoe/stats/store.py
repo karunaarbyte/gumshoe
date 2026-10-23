@@ -123,6 +123,8 @@ class SqliteStatsStore:
         this store's size one delete is brief, and batching would only add complexity."""
         cutoff = to_utc_iso(older_than)
         with closing(self._connect()) as conn, conn:
+            # The write lock first: a read then upgraded to a write can fail with SQLITE_BUSY.
+            conn.execute("BEGIN IMMEDIATE")
             ids = [
                 row["decision_id"]
                 for row in conn.execute(

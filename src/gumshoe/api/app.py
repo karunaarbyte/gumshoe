@@ -7,6 +7,7 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import Depends, FastAPI, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
@@ -14,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.routing import Match
+from starlette.routing import BaseRoute, Match
 
 from gumshoe.agent import ToolFailure
 from gumshoe.api.admin import admin_token_of, require_admin
@@ -74,6 +75,32 @@ def prices_of(settings: Settings) -> dict[str, Price]:
         "jev": Price(settings.jev_usd_per_mtok_in, settings.jev_usd_per_mtok_out),
         "nimble": Price(settings.nimble_usd_per_mtok_in, settings.nimble_usd_per_mtok_out),
     }
+
+
+def _needs_admin(dependant: Any) -> bool:
+    """Whether a route's dependency tree reaches `require_admin`."""
+    return any(sub.call is require_admin or _needs_admin(sub) for sub in dependant.dependencies)
+
+
+def admin_routes_under_routers(routes: list[BaseRoute], *, nested: bool = False) -> list[str]:
+    """The admin routes reached through an included router, as paths (the router's prefix when
+    the router itself requires the token).
+
+    `gated()` finds the admin routes among the app's own `APIRoute`s, so its 404-not-405 rule
+    misses one served through an `APIRouter` (FastAPI keeps those behind `_IncludedRouter`).
+    Walked by duck type, with no private import: an included router has `original_router`."""
+    found: list[str] = []
+    for route in routes:
+        inner = getattr(route, "original_router", None)
+        if inner is not None:
+            context = getattr(route, "include_context", None)
+            depends = getattr(context, "dependencies", None) or []
+            if any(d.dependency is require_admin for d in depends):
+                found.append(getattr(inner, "prefix", "") or "<router>")
+            found += admin_routes_under_routers(inner.routes, nested=True)
+        elif nested and isinstance(route, APIRoute) and _needs_admin(route.dependant):
+            found.append(route.path)
+    return found
 
 
 def create_app(
@@ -350,6 +377,10 @@ def create_app(
             saves_held=snap.get("saves_held", 0),
             top_clients=[ClientUsage(key=k, tokens=t) for k, t in top],
         )
+
+    # Every admin route must be the app's own (see `gated`): fail at startup, never leak a 405.
+    if hidden := admin_routes_under_routers(app.router.routes):
+        raise RuntimeError(f"admin routes must be registered on the app itself: {hidden}")
 
     # Last, after every API route (and the docs), so those always win over the UI's catch-all.
     mount_ui(app, settings.ui_dist)
