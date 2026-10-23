@@ -17,11 +17,14 @@ BAD_SAVE_MESSAGE = "that save cannot be read"
 
 
 class ApiError(Exception):
-    def __init__(self, status: int, code: str, message: str) -> None:
+    def __init__(
+        self, status: int, code: str, message: str, *, retry_after: int | None = None
+    ) -> None:
         super().__init__(f"{status} {code}: {message}")
         self.status = status
         self.code = code
         self.message = message
+        self.retry_after = retry_after
 
 
 def status_for(code: str) -> int:

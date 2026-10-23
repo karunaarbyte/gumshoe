@@ -103,7 +103,9 @@ def create_app(
 
     @app.exception_handler(ApiError)
     async def api_error(request: Request, exc: ApiError) -> JSONResponse:
-        return JSONResponse(error_body(exc.code, exc.message), status_code=exc.status)
+        headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after is not None else None
+        body = error_body(exc.code, exc.message)
+        return JSONResponse(body, status_code=exc.status, headers=headers)
 
     @app.exception_handler(ToolFailure)
     async def tool_failure(request: Request, exc: ToolFailure) -> JSONResponse:
