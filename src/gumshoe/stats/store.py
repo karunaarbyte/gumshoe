@@ -43,6 +43,12 @@ CREATE TABLE IF NOT EXISTS decision_calls (
 );
 CREATE INDEX IF NOT EXISTS idx_calls_node_ts ON decision_calls (node, ts);
 CREATE INDEX IF NOT EXISTS idx_calls_decision ON decision_calls (decision_id);
+CREATE TABLE IF NOT EXISTS jev_usage (
+    day    TEXT    NOT NULL,
+    key    TEXT    NOT NULL,
+    tokens INTEGER NOT NULL,
+    PRIMARY KEY (day, key)
+);
 """
 
 COLUMNS = (
@@ -88,6 +94,26 @@ class SqliteStatsStore:
         rows = [self._to_row(r) for r in records]
         with closing(self._connect()) as conn, conn:  # `with conn` = one transaction
             conn.executemany(INSERT, rows)
+
+    def add_usage(self, day: str, key: str, tokens: int) -> None:
+        """Add to a day's token count for a key. One upsert statement, so concurrent adds queue
+        on SQLite's write lock and none is lost."""
+        with closing(self._connect()) as conn, conn:
+            conn.execute(
+                "INSERT INTO jev_usage (day, key, tokens) VALUES (?, ?, ?) "
+                "ON CONFLICT (day, key) DO UPDATE SET tokens = tokens + excluded.tokens",
+                (day, key, tokens),
+            )
+
+    def usage_totals(self, day: str) -> dict[str, int]:
+        with closing(self._connect()) as conn:
+            rows = conn.execute("SELECT key, tokens FROM jev_usage WHERE day = ?", (day,))
+            return {row["key"]: row["tokens"] for row in rows}
+
+    def purge_usage(self, before_day: str) -> int:
+        """Delete the days earlier than `before_day`; returns how many rows went."""
+        with closing(self._connect()) as conn, conn:
+            return conn.execute("DELETE FROM jev_usage WHERE day < ?", (before_day,)).rowcount
 
     def fetch_calls(
         self, *, node: str | None = None, since: datetime | None = None
