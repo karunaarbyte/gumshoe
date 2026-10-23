@@ -35,6 +35,7 @@ class ShadowDecider:
         cold_after_s: float = COLD_AFTER_S,
         drain_grace_s: float = DRAIN_GRACE_S,
         clock: Callable[[], float] = time.monotonic,
+        shadow_parallel: int = 0,
     ) -> None:
         if shadow is not None and shadow.name == primary.name:
             raise ValueError("primary and shadow must differ (stats are keyed by backend name)")
@@ -47,6 +48,9 @@ class ShadowDecider:
         self._clock = clock
         self._last_end: dict[str, float] = {}  # backend name -> clock() when its last call ended
         self._background: set[asyncio.Task[None]] = set()
+        self._shadow_limit = shadow_parallel  # 0 = no limit
+        self._shadow_inflight = 0
+        self.shadow_skipped = 0  # decisions whose shadow call was skipped at the limit
 
     async def decide(
         self,
@@ -60,12 +64,19 @@ class ShadowDecider:
         primary_task = asyncio.create_task(
             self._call(self._primary, "primary", state, questions, node)
         )
+        run_shadow = self._shadow is not None and (
+            self._shadow_limit == 0 or self._shadow_inflight < self._shadow_limit
+        )
+        if self._shadow is not None and not run_shadow:
+            self.shadow_skipped += 1
         shadow_task = (
             asyncio.create_task(self._call(self._shadow, "shadow", state, questions, node))
-            if self._shadow is not None
+            if run_shadow and self._shadow is not None
             else None
         )
         if shadow_task is not None:
+            self._shadow_inflight += 1
+            shadow_task.add_done_callback(self._shadow_finished)
             shadow_task.add_done_callback(_log_if_crashed)
         try:
             primary = await primary_task
@@ -79,6 +90,9 @@ class ShadowDecider:
             return primary.result
 
         return await self._after_primary_failure(decision_id, node, state, primary, shadow_task)
+
+    def _shadow_finished(self, _task: "asyncio.Task[CallOutcome]") -> None:
+        self._shadow_inflight -= 1
 
     async def drain(self, grace_s: float | None = None) -> None:
         """Wait up to `grace_s` seconds for background recording; cancel what is still running."""

@@ -45,6 +45,7 @@ def make_decider(
         recorder,
         cold_after_s=settings.cold_after_s,
         drain_grace_s=settings.request_timeout_s + DRAIN_SLACK_S,
+        shadow_parallel=settings.shadow_parallel,
     )
 
 
