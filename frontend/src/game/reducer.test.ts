@@ -191,6 +191,19 @@ describe('gameReducer, the waiting position', () => {
     expect(fold([start, ev({ kind: 'queued', position: 1 }), { type: 'stream_ended', sawDone: false }]).queued).toBeNull();
   });
 
+  test.each([
+    [0, 1],
+    [Number.NaN, 1],
+    [undefined, 1],
+    [-3, 1],
+    [1, 1],
+    [5, 5],
+    [2.7, 2],
+  ])('a queued position of %s is kept as %s, never one that renders "NaN ahead"', (position, kept) => {
+    const queued = { kind: 'queued', position } as unknown as TurnEvent;
+    expect(fold([start, ev(queued)]).queued).toBe(kept);
+  });
+
   test('a queued event does not mutate the previous view', () => {
     const before = fold([start]);
     const snapshot = structuredClone(before);

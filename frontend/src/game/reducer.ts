@@ -73,9 +73,14 @@ function pendingOf(event: ConfirmEvent): PendingView {
   };
 }
 
+/** A waiting position as a whole number from 1: a missing or broken one reads as "next". */
+function placeOf(position: unknown): number {
+  return typeof position === 'number' && Number.isFinite(position) && position >= 1 ? Math.floor(position) : 1;
+}
+
 function foldEvent(current: GameView, event: TurnEvent): GameView {
   // a waiting position is shown, never kept as a turn item; any later event clears it
-  if (event.kind === 'queued') return { ...current, queued: event.position };
+  if (event.kind === 'queued') return { ...current, queued: placeOf(event.position) };
   const view = current.queued === null ? current : { ...current, queued: null };
   const id = decisionIdOf(event);
   let next = updateCurrentTurn(view, (t) => ({

@@ -23,10 +23,15 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
 /** `admin` adds the stored admin token as a bearer header; only the admin calls pass it. */
 async function send(path: string, init: RequestInit = {}, admin = false): Promise<Response> {
   const token = admin ? getAdminToken() : null;
-  const headers = token === null ? init.headers : { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` };
+  let request = init;
+  if (token !== null) {
+    const headers = new Headers(init.headers);
+    headers.set('authorization', `Bearer ${token}`);
+    request = { ...init, headers };
+  }
   let response: Response;
   try {
-    response = await fetch(path, headers === init.headers ? init : { ...init, headers });
+    response = await fetch(path, request);
   } catch {
     throw new ApiError(0, NETWORK, 'the server could not be reached');
   }

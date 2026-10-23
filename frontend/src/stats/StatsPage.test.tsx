@@ -228,9 +228,17 @@ describe('StatsPage and the admin token', () => {
   });
 
   test('Forget the token clears it and asks again, with no rejection notice', async () => {
-    show();
+    const { queryClient } = show();
     await screen.findByTestId('compared-understand');
+    const roots = () =>
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .map((q) => q.queryKey[0]);
+    await waitFor(() => expect(roots()).toEqual(expect.arrayContaining(['stats', 'disagreements'])));
     await userEvent.click(screen.getByRole('button', { name: 'Forget the token' }));
+    expect(roots()).not.toContain('stats');
+    expect(roots()).not.toContain('disagreements');
     expect(getAdminToken()).toBeNull();
     expect(screen.getByLabelText('Admin token')).toBeInTheDocument();
     expect(screen.queryByText(REJECTED)).not.toBeInTheDocument();
