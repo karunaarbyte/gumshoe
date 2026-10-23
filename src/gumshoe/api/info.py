@@ -31,6 +31,7 @@ class Health(BaseModel):
     shadow: str | None
     persona_models: PersonaModels
     personas: Literal["up", "down"]  # whether the persona model server answers; down = stock lines
+    mode: Literal["normal", "slow"] = "normal"  # slow: the daily Jev budget is spent, Nimble alone
 
 
 class Meta(BaseModel):

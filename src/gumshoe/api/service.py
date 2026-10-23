@@ -42,7 +42,7 @@ from gumshoe.api.ratelimit import Busy, Quotas, Ticket, TurnGate
 from gumshoe.api.saveowners import SaveOwners
 from gumshoe.cases import NotebookView, PlayerCaseView, RevealView
 from gumshoe.config import Settings
-from gumshoe.decider import describe_failure
+from gumshoe.decider import client_key, describe_failure
 
 logger = logging.getLogger(__name__)
 
@@ -483,7 +483,7 @@ class AgentService:
             events=[],
             complete=False,
         )
-        task = asyncio.create_task(self._run(slot, events, queue, reader, record, ticket))
+        task = asyncio.create_task(self._run(slot, events, queue, reader, record, ticket, ip))
         self._tasks.add(task)  # a strong reference: the loop only keeps a weak one
         task.add_done_callback(self._finished)
         # Done callbacks run in order and however the task ended, even when it was cancelled
@@ -502,11 +502,15 @@ class AgentService:
         reader: _Reader,
         record: TurnRecord,
         ticket: Ticket,
+        ip: str,
     ) -> None:
         def emit(event: TurnEvent) -> None:
             record.events.append(event)
             queue.put_nowait(event)
 
+        # the turn's decisions are counted against this network's share of the Jev budget; set
+        # here, inside the turn's own task, so it never reaches the caller's context
+        token = client_key.set(ip)
         try:
             async with slot.lock:
                 if slot.gone:  # deleted while this turn waited
@@ -535,6 +539,13 @@ class AgentService:
         finally:
             record.complete = True
             slot.last_active = self._clock()  # idleness is measured from a turn's end
+            client_key.reset(token)
+
+    def decider_mode(self) -> Literal["normal", "slow"]:
+        """Slow mode is the global Jev budget spent (the decider's `mode`); a decider with no
+        budget is always normal."""
+        mode = getattr(self._deps.decider, "mode", "normal")
+        return "slow" if mode == "slow" else "normal"
 
     def _landed(self, owner: str, ip: str, ticket: Ticket) -> None:
         """Give back what a turn held: its in-flight counts and its gate place."""

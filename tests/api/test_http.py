@@ -153,6 +153,7 @@ def test_health_says_the_game_is_on_and_which_backends_and_models_serve_it(store
         "shadow": "nimble",
         "persona_models": {"default": "ministral-3:14b", "dramatic": "gemma4:12b"},
         "personas": "up",
+        "mode": "normal",
     }
     assert "sk-very-secret" not in response.text
 

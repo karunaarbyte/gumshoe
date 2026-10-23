@@ -144,6 +144,7 @@ def create_app(
     @app.get("/api/health")
     async def health(request: Request) -> Health:
         off: str | None = getattr(request.app.state, "game_off", NOT_STARTED)
+        service = getattr(request.app.state, "service", None)
         return Health(
             game="off" if off else "on",
             reason=off,
@@ -153,6 +154,7 @@ def create_app(
                 default=settings.persona_model_default, dramatic=settings.persona_model_dramatic
             ),
             personas="up" if await personas_up() else "down",
+            mode=service.decider_mode() if service is not None else "normal",
         )
 
     @app.get("/api/meta")

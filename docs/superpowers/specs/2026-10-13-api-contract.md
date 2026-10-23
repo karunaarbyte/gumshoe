@@ -58,7 +58,8 @@ Written from the code after plan 4d-2 (tasks 1-12). Interactive docs for the pla
 
 ```json
 {"status": "ok", "game": "on", "reason": null, "primary": "jev", "shadow": "nimble",
- "persona_models": {"default": "ministral-3:14b", "dramatic": "gemma4:12b"}, "personas": "up"}
+ "persona_models": {"default": "ministral-3:14b", "dramatic": "gemma4:12b"}, "personas": "up",
+ "mode": "normal"}
 ```
 
 - `status` is always `"ok"` (the process is up).
@@ -68,6 +69,9 @@ Written from the code after plan 4d-2 (tasks 1-12). Interactive docs for the pla
 - `personas` is `"up"` or `"down"`: whether the persona model server answers (probed with a 1 s timeout,
   cached 5 s). When `"down"` the game still runs but suspects only give stock lines.
 - `primary`, `shadow` (may be null), model names only: never a key or a URL.
+- `mode` is `"normal"` or `"slow"`. `"slow"` means the global daily Jev budget is spent and the game runs
+  on Nimble alone (slower turns; it keeps playing). A single client IP over its own share also gets
+  Nimble alone, but that is not reported here. `"normal"` when the game is off.
 
 ### `GET /api/meta` -> `Meta`
 
