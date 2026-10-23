@@ -164,7 +164,7 @@ def test_a_save_write_failure_is_500(store):
     from tests.api.helpers import serving
 
     class Failing(AgentService):
-        async def save_game(self, game, *, owner):
+        async def save_game(self, game, *, owner, ip=""):
             raise ToolFailure("bad_save", "could not write the save")
 
     @asynccontextmanager

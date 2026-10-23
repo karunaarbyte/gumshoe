@@ -1,11 +1,12 @@
-"""The game endpoints: create, load, read, play (as server-sent events), save and delete."""
+"""The game endpoints: create, load, read, play (as server-sent events), save and delete; and
+the saves: list and delete."""
 
 import asyncio
 import contextlib
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Path, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
@@ -199,9 +200,9 @@ async def transcript(game: str, service: Service, owner: Owner) -> list[TurnReco
 
 
 @router.post("/{game}/save")
-async def save(game: str, service: Service, owner: Owner) -> SaveView:
+async def save(game: str, request: Request, service: Service, owner: Owner) -> SaveView:
     try:
-        return await service.save_game(game, owner=owner)
+        return await service.save_game(game, owner=owner, ip=request_ip(request))
     except ToolFailure as exc:
         if exc.code == "bad_save":  # the write failed: the server's fault, not the request's
             raise ApiError(500, exc.code, exc.message) from exc
@@ -222,3 +223,12 @@ async def saves(
     if owner is None:
         return []
     return await service.saves(owner=owner)
+
+
+@saves_router.delete("/{name}", status_code=204)
+async def delete_save(
+    name: Annotated[str, Path(max_length=64)], service: Service, owner: Owner
+) -> Response:
+    """Delete one of the caller's saves. Someone else's save reads exactly like a missing one."""
+    await service.delete_save(name, owner=owner)
+    return Response(status_code=204)

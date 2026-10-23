@@ -13,6 +13,7 @@ failed or abandoned turn held is given back exactly once (the task's done callba
 """
 
 import asyncio
+import contextlib
 import hmac
 import logging
 import time
@@ -64,6 +65,8 @@ class Caps:
     games_per_ip: int = 0
     turns_per_session: int = 0
     turns_in_flight_per_ip: int = 0
+    saves_per_session: int = 0
+    saves_per_ip: int = 0
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "Caps":
@@ -72,6 +75,8 @@ class Caps:
             games_per_ip=settings.ip_games_open,
             turns_per_session=settings.session_turns_in_flight,
             turns_in_flight_per_ip=settings.ip_turns_in_flight,
+            saves_per_session=settings.session_saves,
+            saves_per_ip=settings.ip_saves,
         )
 
 
@@ -239,6 +244,7 @@ class AgentService:
         self._clock = clock
         self._idle_s = idle_s  # 0 = games never expire
         self._tombstones = _Tombstones(clock=clock)
+        self._save_lock = asyncio.Lock()  # check-and-save, one at a time: the caps stay exact
         self._slots: dict[str, _Slot] = {}
         self._tasks: set[asyncio.Task[None]] = set()
         # turns running, and games being created; keys at zero are dropped (see `_drop`)
@@ -542,15 +548,54 @@ class AgentService:
         if not task.cancelled() and (error := task.exception()) is not None:
             logger.error("a turn task died: %s", describe_failure(error))
 
-    async def save_game(self, game: str, *, owner: str) -> SaveView:
+    async def save_game(self, game: str, *, owner: str, ip: str = "") -> SaveView:
+        """Save the game for its owner. Over a save cap: 429 `quota`, before anything is written.
+
+        The save is written first and claimed after (a sidecar with no save is an orphan that
+        purge removes). A save that cannot be claimed is removed again, so no unowned save
+        counts toward the host's saves."""
         slot = self._slot(game, owner)
         async with slot.lock:  # wait for a running turn: the save is a clean state
             if slot.gone:
                 raise ToolFailure("unknown_game", UNKNOWN_GAME)
-            view = await self._deps.client.save_game(game)
-            if self._owners is not None:
-                await asyncio.to_thread(self._owners.claim, view.name, owner)
-            return view
+            owners = self._owners
+            if owners is None:
+                return await self._deps.client.save_game(game)
+            async with self._save_lock:  # saves are rare and quick: one at a time
+                await self._check_save_caps(owners, owner, ip)
+                view = await self._deps.client.save_game(game)
+                try:
+                    await asyncio.to_thread(owners.claim, view.name, owner, ip)
+                except OSError as exc:
+                    logger.error("a save could not be claimed: %s", type(exc).__name__)
+                    with contextlib.suppress(OSError):
+                        await asyncio.to_thread(owners.delete, view.name)
+                    raise ApiError(500, "internal", "the game could not be saved") from None
+                return view
+
+    async def _check_save_caps(self, owners: SaveOwners, owner: str, ip: str) -> None:
+        """Refuse a save over a cap. The answer names no save and no count: it tells the caller
+        nothing about saves that are not theirs."""
+        caps = self._caps
+        if 0 < caps.saves_per_session <= await asyncio.to_thread(owners.count_owned, owner):
+            raise ApiError(429, "quota", "you have too many saves; delete one first")
+        if ip and 0 < caps.saves_per_ip <= await asyncio.to_thread(owners.count_ip, ip):
+            raise ApiError(429, "quota", "too many saves from your network")
+
+    async def delete_save(self, name: str, *, owner: str) -> None:
+        """Delete the caller's save. Someone else's save fails exactly as a missing one does."""
+        owners = self._owners
+        if owners is None or not await asyncio.to_thread(owners.owns, name, owner):
+            raise ToolFailure("bad_save", BAD_SAVE_MESSAGE)
+        await asyncio.to_thread(owners.delete, name)
+
+    async def purge_saves(self, retention_s: float) -> int:
+        """Delete saves older than `retention_s`, and orphaned sidecars. 0 = keep everything."""
+        owners = self._owners
+        if owners is None or retention_s <= 0:
+            return 0
+        async with self._save_lock:  # a save written but not yet claimed is not an orphan
+            return await asyncio.to_thread(owners.purge, retention_s)
 
     async def delete_game(self, game: str, *, owner: str) -> None:
         slot = self._slot(game, owner)
