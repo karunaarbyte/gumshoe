@@ -2,7 +2,7 @@ import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { DecisionView, Health } from '../api/types';
 import { useApi } from '../data/ApiContext';
-import { keys } from '../data/queries';
+import { decisionQuery } from '../data/queries';
 import type { TurnView } from '../game/model';
 import { InkButton } from '../ui/Button';
 import { ms, totals, usd } from './compare';
@@ -44,7 +44,7 @@ export function TraceDrawer({ turns, health, game, retryBaseMs }: Props) {
   const ids = [...new Set(turns.flatMap((t) => t.decisionIds))];
   // read-only view of what is already in the cache: these never fetch on their own
   const cached = useQueries({
-    queries: ids.map((id) => ({ queryKey: keys.decision(id, game), queryFn: () => client.gameDecision(game, id), enabled: false, staleTime: Infinity })),
+    queries: ids.map((id) => ({ ...decisionQuery(client, game, id), enabled: false })),
   });
   const loaded = cached.flatMap((q) => (q.data === undefined ? [] : [q.data as DecisionView]));
   const toggle = (index: number) =>

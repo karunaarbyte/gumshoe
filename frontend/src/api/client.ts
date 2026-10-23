@@ -85,6 +85,7 @@ export const api = {
     return getJson<DecisionView[]>(`/api/decisions?${q.toString()}`);
   },
   gameDecision: (game: string, id: string) => getJson<DecisionView>(`${g(game)}/decisions/${encodeURIComponent(id)}`),
+  /** Admin only, used by the stats page; never from the player UI. */
   decision: (id: string) => getJson<DecisionView>(`/api/decisions/${encodeURIComponent(id)}`),
   turn: (game: string, body: TurnBody, signal?: AbortSignal) => openStream(`${g(game)}/turn`, body, signal),
   confirm: (game: string, body: ConfirmBody, signal?: AbortSignal) => openStream(`${g(game)}/confirm`, body, signal),

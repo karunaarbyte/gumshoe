@@ -81,8 +81,8 @@ export function DecisionTable({ decision: d, backends }: { decision: DecisionVie
   );
 }
 
-export function DecisionPanel({ id, backends, retryBaseMs, game }: { id: string; backends: string[]; retryBaseMs?: number; game?: string }) {
-  const query = useDecision(id, retryBaseMs, game);
+export function DecisionPanel({ id, backends, retryBaseMs, game }: { id: string; backends: string[]; retryBaseMs?: number; game: string }) {
+  const query = useDecision(game, id, retryBaseMs);
   if (query.isPending) return <p className="text-xs italic">Fetching decision {id}…</p>;
   if (query.isError) {
     const text = isApiError(query.error, 'not_recorded_yet')
