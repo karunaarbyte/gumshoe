@@ -331,7 +331,8 @@ Every limit is a setting (`.env.example`); `0` = unlimited.
   saves older than `SAVE_RETENTION_DAYS` hourly and once at startup. `0` turns each off (idle expiry,
   purge) or lifts the cap (`SESSION_SAVES`, `IP_SAVES`).
 - **`GET /api/health` counts** against the per-IP request budget like any other API request.
-- **The new-session quota counts attempts**, not only sessions that were created.
+- **The new-session quota counts sessions that were created.** A create or load that fails (full
+  server, quota, bad body) gives its slot back and sets no cookie.
 - **A full limiter table fails closed**: each table keeps at most `LIMITER_MAX_KEYS` keys and only
   evicts expired ones; when every key is live, a new client gets 429 until entries expire.
 - **The `queued` event**: when the turn gate (`MAX_PARALLEL_TURNS`) is full and the turn is allowed
