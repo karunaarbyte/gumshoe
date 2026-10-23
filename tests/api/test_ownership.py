@@ -1,10 +1,14 @@
 from contextlib import contextmanager
+from functools import partial
 
 import pytest
 
 from gumshoe.agent import ToolFailure
 from gumshoe.api import create_app
-from gumshoe.api.errors import UNKNOWN_GAME
+from gumshoe.api.errors import BAD_SAVE_MESSAGE, UNKNOWN_GAME
+from gumshoe.api.saveowners import SaveOwners
+from gumshoe.api.session import Sessions
+from gumshoe.api.wiring import save_index
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script
 from tests.api.client import TestClient
@@ -216,3 +220,25 @@ def test_a_load_issues_the_session_cookie(store, tmp_path):
         with no_browser_session(client):
             r = client.post("/api/games/load", json={"name": name})
     assert r.status_code == 200 and "gs_session=" in r.headers["set-cookie"]
+
+
+def test_saves_are_listed_and_loadable_only_by_their_owner(store, tmp_path):
+    sessions = Sessions(b"k" * 32, secure=False)
+    factory = fake_factory(
+        Script(),
+        saves_dir=tmp_path,
+        owners=SaveOwners(tmp_path, sessions),
+        list_saves=partial(save_index, tmp_path),
+    )
+    with TestClient(create_app(store, make_service=factory, sessions=sessions)) as client:
+        game = new_game(client)
+        name = client.post(f"/api/games/{game}/save").json()["name"]
+        assert [s["name"] for s in client.get("/api/saves").json()] == [name]
+        with another_browser(client):
+            assert client.get("/api/saves").json() == []
+            r = client.post("/api/games/load", json={"name": name})
+            assert (r.status_code, r.json()) == (
+                422,
+                {"code": "bad_save", "message": BAD_SAVE_MESSAGE},
+            )
+        assert client.post("/api/games/load", json={"name": name}).status_code == 200

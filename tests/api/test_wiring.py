@@ -142,7 +142,7 @@ def test_the_save_index_lists_saves_newest_first_and_never_their_case(tmp_path):
     os.utime(tmp_path / f"{first}.json", (1_000_000_000, 1_000_000_000))
     (tmp_path / "notes.json").write_text("{}")  # not a save name: ignored
     (tmp_path / "fedcba9876543210.json").write_text("not json")  # unreadable: left out
-    listed = save_index(tmp_path)
+    listed = save_index(tmp_path, lambda name: True)
     assert [s.name for s in listed] == [second, first]
     assert {(s.pack, s.status) for s in listed} == {("castle", "playing")}
     assert listed[1].created_at == "2001-09-09T01:46:40+00:00"
@@ -151,7 +151,7 @@ def test_the_save_index_lists_saves_newest_first_and_never_their_case(tmp_path):
 
 
 def test_the_save_index_of_a_missing_folder_is_empty(tmp_path):
-    assert save_index(tmp_path / "nowhere") == []
+    assert save_index(tmp_path / "nowhere", lambda name: True) == []
 
 
 async def test_default_service_saves_into_the_configured_folder(tmp_path):
@@ -162,7 +162,7 @@ async def test_default_service_saves_into_the_configured_folder(tmp_path):
     async with default_service(store, settings) as service:
         new = await service.new_game(1, owner=OWNER)
         saved = await service.save_game(new.game, owner=OWNER)
-        listed = await service.saves()
+        listed = await service.saves(owner=OWNER)
     assert (tmp_path / f"{saved.name}.json").is_file()
     assert [s.name for s in listed] == [saved.name]
 
@@ -175,4 +175,12 @@ def test_the_save_index_skips_a_save_whose_state_nests_too_deeply_to_parse(tmp_p
     data = json.loads(path.read_text())
     data["state"] = "[" * 100_000
     path.write_text(json.dumps(data))
-    assert [s.name for s in save_index(tmp_path)] == [good]
+    assert [s.name for s in save_index(tmp_path, lambda name: True)] == [good]
+
+
+def test_the_save_index_leaves_out_saves_the_caller_does_not_own(tmp_path):
+    host = GameHost(ids=SeqIds(), saves_dir=tmp_path)
+    mine = host.save_game(host.new_game(1).game).name
+    host.save_game(host.new_game(2, "short").game)
+    assert [s.name for s in save_index(tmp_path, lambda name: name == mine)] == [mine]
+    assert save_index(tmp_path, lambda name: False) == []

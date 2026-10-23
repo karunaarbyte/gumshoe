@@ -2,6 +2,7 @@ import asyncio
 import logging
 from dataclasses import replace
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Literal
 
 import pytest
@@ -485,6 +486,8 @@ async def test_saves_come_from_the_injected_lister():
         status="playing",
     )  # fmt: skip
     async with serving(Script()) as s:
-        assert await s.service.saves() == []  # none injected
-        s.service._list_saves = lambda: [summary]
-        assert await s.service.saves() == [summary]
+        assert await s.service.saves(owner=OWNER) == []  # none injected
+        s.service._list_saves = lambda owns: [summary] if owns(summary.name) else []
+        s.service._owners = SimpleNamespace(owns=lambda name, owner: owner == OWNER)  # type: ignore
+        assert await s.service.saves(owner=OWNER) == [summary]
+        assert await s.service.saves(owner="other") == []

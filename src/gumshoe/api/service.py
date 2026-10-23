@@ -29,7 +29,8 @@ from gumshoe.agent import (
     take_turn,
 )
 from gumshoe.agent.events import Clarify, Done
-from gumshoe.api.errors import UNKNOWN_GAME, ApiError
+from gumshoe.api.errors import BAD_SAVE_MESSAGE, UNKNOWN_GAME, ApiError
+from gumshoe.api.saveowners import SaveOwners
 from gumshoe.cases import NotebookView, PlayerCaseView, RevealView
 from gumshoe.decider import describe_failure
 
@@ -134,17 +135,22 @@ async def _drain(
         reader.gone = True  # a turn still waiting for the lock now has nobody to serve
 
 
+ListSaves = Callable[[Callable[[str], bool]], list[SaveSummary]]
+
+
 class AgentService:
     def __init__(
         self,
         deps: Deps,
         *,
         grace_s: float = 5.0,
-        list_saves: Callable[[], list[SaveSummary]] | None = None,
+        list_saves: ListSaves | None = None,
+        owners: SaveOwners | None = None,
     ) -> None:
         self._deps = deps
         self._grace_s = grace_s
         self._list_saves = list_saves  # blocking file reads: called in a worker thread
+        self._owners = owners
         self._slots: dict[str, _Slot] = {}
         self._tasks: set[asyncio.Task[None]] = set()
 
@@ -164,6 +170,8 @@ class AgentService:
         return self._register(await self._deps.client.new_game(seed, preset), preset, owner)
 
     async def load_game(self, name: str, *, owner: str) -> NewGameView:
+        if self._owners is not None and not await asyncio.to_thread(self._owners.owns, name, owner):
+            raise ToolFailure("bad_save", BAD_SAVE_MESSAGE)
         return self._register(await self._deps.client.load_game(name), None, owner)
 
     @staticmethod
@@ -223,10 +231,11 @@ class AgentService:
             )
         return found
 
-    async def saves(self) -> list[SaveSummary]:
-        if self._list_saves is None:
+    async def saves(self, *, owner: str) -> list[SaveSummary]:
+        if self._list_saves is None or self._owners is None:
             return []
-        return await asyncio.to_thread(self._list_saves)
+        owners = self._owners
+        return await asyncio.to_thread(self._list_saves, lambda name: owners.owns(name, owner))
 
     def turns(self, game: str, *, owner: str) -> list[TurnRecord]:
         """The game's transcript, oldest first; a running turn is the last, not yet complete."""
@@ -338,7 +347,10 @@ class AgentService:
         async with slot.lock:  # wait for a running turn: the save is a clean state
             if slot.gone:
                 raise ToolFailure("unknown_game", UNKNOWN_GAME)
-            return await self._deps.client.save_game(game)
+            view = await self._deps.client.save_game(game)
+            if self._owners is not None:
+                await asyncio.to_thread(self._owners.claim, view.name, owner)
+            return view
 
     async def delete_game(self, game: str, *, owner: str) -> None:
         slot = self._slot(game, owner)

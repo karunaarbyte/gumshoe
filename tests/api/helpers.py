@@ -59,6 +59,7 @@ async def serving(
     decider: ScriptedDecider | None = None,
     saves_dir: Path | None = None,
     grace_s: float = 5.0,
+    **service_kwargs: Any,
 ) -> AsyncIterator[Served]:
     """A service over a real GameHost (pinned ids) behind an in-process MCP client. Use
     `async with` inside the test (the SDK client owns a task group)."""
@@ -71,7 +72,7 @@ async def serving(
             llm=llm or ScriptedLlm([]),
             config=AgentConfig(),
         )
-        service = AgentService(deps, grace_s=grace_s)
+        service = AgentService(deps, grace_s=grace_s, **service_kwargs)
         try:
             yield Served(service, host, the_decider, script)
         finally:
@@ -92,11 +93,15 @@ def parse_sse(text: str) -> list[tuple[str, dict[str, Any]]]:
 
 
 def fake_factory(
-    script: Script, llm: ScriptedLlm | None = None, *, saves_dir: Path | None = None
+    script: Script,
+    llm: ScriptedLlm | None = None,
+    *,
+    saves_dir: Path | None = None,
+    **service_kwargs: Any,
 ) -> Callable[[SqliteStatsStore], AbstractAsyncContextManager[AgentService]]:
     @asynccontextmanager
     async def factory(store: SqliteStatsStore) -> AsyncIterator[AgentService]:
-        async with serving(script, llm, saves_dir=saves_dir) as served:
+        async with serving(script, llm, saves_dir=saves_dir, **service_kwargs) as served:
             yield served.service
 
     return factory

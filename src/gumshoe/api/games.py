@@ -205,6 +205,10 @@ async def delete(game: str, service: Service, owner: Owner) -> Response:
 
 
 @saves_router.get("")
-async def saves(service: Service) -> list[SaveSummary]:
-    """The saves on disk, newest first: name, when, pack and how the game stood. Never a case."""
-    return await service.saves()
+async def saves(
+    service: Service, owner: Annotated[str | None, Depends(optional_owner)]
+) -> list[SaveSummary]:
+    """The caller's saves, newest first: name, when, pack and how the game stood. Never a case."""
+    if owner is None:
+        return []
+    return await service.saves(owner=owner)

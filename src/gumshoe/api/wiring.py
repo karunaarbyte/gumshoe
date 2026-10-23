@@ -1,7 +1,7 @@
 """Builds the real agent service from settings. The only api module that touches the MCP SDK."""
 
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import UTC, datetime
 from functools import partial
@@ -10,7 +10,9 @@ from pathlib import Path
 from mcp.client import Client
 
 from gumshoe.agent import AgentConfig, Deps, GameClient, OllamaLlm
+from gumshoe.api.saveowners import SaveOwners
 from gumshoe.api.service import AgentService, SaveSummary
+from gumshoe.api.session import Sessions
 from gumshoe.config import Settings, get_settings
 from gumshoe.decider import make_decider
 from gumshoe.mcp_server import GameError, GameHost
@@ -34,16 +36,19 @@ def agent_config(settings: Settings) -> AgentConfig:
 MAX_SAVES_LISTED = 200
 
 
-def save_index(folder: Path) -> list[SaveSummary]:
+def save_index(folder: Path, owns: Callable[[str], bool]) -> list[SaveSummary]:
     """The readable saves in `folder`, newest first. Reads only the pack and the game's status
     out of each file: a save holds the whole case, and none of it is passed on. A file that
-    cannot be read is left out (the load would refuse it anyway)."""
+    cannot be read is left out (the load would refuse it anyway). Only saves `owns` accepts are
+    listed."""
     if not folder.is_dir():
         return []
     found: list[SaveSummary] = []
     for path in folder.glob("*.json"):
         if NAME.fullmatch(path.stem) is None:
             continue  # not a name the host makes
+        if not owns(path.stem):
+            continue
         try:
             save = read_save(folder, path.stem)
             made = datetime.fromtimestamp(path.stat().st_mtime, UTC)
@@ -63,13 +68,16 @@ def save_index(folder: Path) -> list[SaveSummary]:
 
 @asynccontextmanager
 async def default_service(
-    store: SqliteStatsStore, settings: Settings | None = None
+    store: SqliteStatsStore,
+    settings: Settings | None = None,
+    sessions: Sessions | None = None,
 ) -> AsyncIterator[AgentService]:
     """The service the app runs on. The injected store doubles as the decision recorder (never a
     second store on the same file). A missing Jev key raises `DeciderConfigError` before
     anything is opened. On exit: turns are cancelled, then the MCP client closes, then the
     decider (so background records drain), then the Ollama client."""
     settings = settings or get_settings()
+    sessions = sessions or Sessions.from_settings(settings)
     decider = make_decider(settings, recorder=store)
     llm = OllamaLlm(settings.ollama_base_url, timeout=settings.llm_timeout_s)
     async with AsyncExitStack() as stack:
@@ -80,6 +88,7 @@ async def default_service(
         service = AgentService(
             Deps(GameClient(raw), decider, llm, agent_config(settings)),
             list_saves=partial(save_index, settings.saves_dir),
+            owners=SaveOwners(settings.saves_dir, sessions),
         )
         stack.push_async_callback(service.aclose)
         yield service

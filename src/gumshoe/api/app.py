@@ -58,8 +58,10 @@ def create_app(
     make_service: ServiceFactory | None = None,
     settings: Settings | None = None,
     personas_up: Callable[[], Awaitable[bool]] | None = None,
+    sessions: Sessions | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
+    sessions = sessions or Sessions.from_settings(settings)
     personas_up = (
         personas_up
         or PersonaProbe(
@@ -68,7 +70,7 @@ def create_app(
         ).up
     )
     prices = prices_of(settings)
-    factory: ServiceFactory = make_service or (lambda s: default_service(s, settings))
+    factory: ServiceFactory = make_service or (lambda s: default_service(s, settings, sessions))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -84,7 +86,7 @@ def create_app(
 
     app = FastAPI(title="Gumshoe API", lifespan=lifespan)
     app.state.game_off = NOT_STARTED  # until the lifespan has run
-    app.state.sessions = Sessions.from_settings(settings)
+    app.state.sessions = sessions
     app.add_middleware(BodyLimit, max_bytes=settings.max_body_bytes)
     allowed_origins = (
         *settings.cors_origin_list,
