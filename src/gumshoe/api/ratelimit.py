@@ -159,7 +159,10 @@ class Ticket:
         if gate is None:
             self._state = "closed"
             return "ready"
+        if self._state != "queued":  # waited on or closed already: never wait twice
+            return "ready" if self._state == "running" else "left"
         if gate.semaphore.locked() and on_queue is not None:
+            # An approximate place: admit order and wait order can differ.
             on_queue(gate.queued)
         acquire = asyncio.ensure_future(gate.semaphore.acquire())
         left = asyncio.ensure_future(abort.wait())
@@ -168,24 +171,39 @@ class Ticket:
                 {acquire, left}, timeout=gate.wait_s, return_when=asyncio.FIRST_COMPLETED
             )
         except asyncio.CancelledError:
-            await self._give_up(acquire, left)
+            self._give_up(acquire, left)
             raise
-        if acquire in done:
+        if acquire in done:  # if abort finished in the same iteration, the slot wins: "ready"
             left.cancel()
+            if self._closed():  # closed while waiting: hand the slot straight back
+                gate.semaphore.release()
+                return "left"
             self._state = "running"
             gate.queued -= 1
             gate.running += 1
             return "ready"
-        await self._give_up(acquire, left)
+        self._give_up(acquire, left)
         return "left" if left in done else "timeout"
 
-    async def _give_up(self, acquire: "asyncio.Future[Any]", left: "asyncio.Future[Any]") -> None:
+    def _closed(self) -> bool:
+        return self._state == "closed"  # a method: close() may run during an await
+
+    def _give_up(self, acquire: "asyncio.Future[Any]", left: "asyncio.Future[Any]") -> None:
+        """Synchronous on purpose: a second cancel can never interrupt it half-way."""
         assert self._gate is not None
+        sem = self._gate.semaphore
         left.cancel()
-        acquire.cancel()
-        await asyncio.gather(acquire, left, return_exceptions=True)
-        if acquire.done() and not acquire.cancelled():  # it won the race: hand the slot back
-            self._gate.semaphore.release()
+        if acquire.done():
+            if not acquire.cancelled() and acquire.exception() is None:
+                sem.release()  # it won the race: hand the slot back
+        else:
+            acquire.cancel()
+
+            def _hand_back(fut: "asyncio.Future[Any]") -> None:
+                if not fut.cancelled() and fut.exception() is None:
+                    sem.release()
+
+            acquire.add_done_callback(_hand_back)
         if self._state == "queued":
             self._gate.queued -= 1
         self._state = "closed"
