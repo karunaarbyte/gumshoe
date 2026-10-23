@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { collect, errorResponse, jsonResponse, sseResponse } from '../test/streams';
+import { clearAdminToken, setAdminToken } from './adminToken';
 import { api } from './client';
 import { ApiError } from './errors';
 
@@ -15,6 +16,7 @@ function stubFetch(...responses: (Response | Error)[]) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  clearAdminToken();
 });
 
 describe('api client', () => {
@@ -132,5 +134,63 @@ describe('api client', () => {
     const fetchMock = stubFetch(jsonResponse([]));
     await api.turns('a/b');
     expect(fetchMock).toHaveBeenCalledWith('/api/games/a%2Fb/turns', expect.anything());
+  });
+});
+
+describe('the admin token', () => {
+  const TOKEN = 'fake-admin-token-0001';
+  const authOf = (init: RequestInit | undefined) => new Headers(init?.headers).get('authorization');
+
+  test('admin calls send the stored token as a bearer header', async () => {
+    setAdminToken(TOKEN);
+    const fetchMock = stubFetch(jsonResponse({}), jsonResponse([]), jsonResponse({}));
+    await api.stats();
+    await api.disagreements();
+    await api.decision('d');
+    for (const n of [0, 1, 2]) expect(authOf(fetchMock.mock.calls[n]![1])).toBe(`Bearer ${TOKEN}`);
+  });
+
+  test('admin calls without a stored token send no Authorization at all', async () => {
+    const fetchMock = stubFetch(jsonResponse({}), jsonResponse([]), jsonResponse({}));
+    await api.stats();
+    await api.disagreements();
+    await api.decision('d');
+    for (const n of [0, 1, 2]) expect(authOf(fetchMock.mock.calls[n]![1])).toBeNull();
+  });
+
+  test('no player call ever carries the token', async () => {
+    setAdminToken(TOKEN);
+    const done = () => sseResponse([{ kind: 'done', turn_ms: 1 }]);
+    const calls: [string, () => Promise<unknown>, () => Response][] = [
+      ['health', () => api.health(), () => jsonResponse({})],
+      ['meta', () => api.meta(), () => jsonResponse({})],
+      ['games', () => api.games(), () => jsonResponse([])],
+      ['saves', () => api.saves(), () => jsonResponse([])],
+      ['createGame', () => api.createGame(1, 'standard'), () => jsonResponse({})],
+      ['loadGame', () => api.loadGame('s'), () => jsonResponse({})],
+      ['state', () => api.state('g'), () => jsonResponse({})],
+      ['turns', () => api.turns('g'), () => jsonResponse([])],
+      ['save', () => api.save('g'), () => jsonResponse({ name: 's' })],
+      ['deleteGame', () => api.deleteGame('g'), () => jsonResponse({})],
+      ['gameDecision', () => api.gameDecision('g', 'd'), () => jsonResponse({})],
+      ['turn', () => api.turn('g', { text: 'hi' }), done],
+      ['confirm', () => api.confirm('g', { pending_id: 'p', answer: 'yes' }), done],
+    ];
+    for (const [name, call, response] of calls) {
+      const fetchMock = stubFetch(response());
+      await call();
+      const [url, init] = fetchMock.mock.calls[0]!;
+      expect(authOf(init), name).toBeNull();
+      expect(JSON.stringify([url, init?.body ?? null]), name).not.toContain(TOKEN);
+    }
+  });
+
+  test('the token never appears in a URL', async () => {
+    setAdminToken(TOKEN);
+    const fetchMock = stubFetch(jsonResponse({}), jsonResponse([]), jsonResponse({}));
+    await api.stats({ since: '2026-10-01T00:00:00Z' });
+    await api.disagreements({ since: '2026-10-01T00:00:00Z' });
+    await api.decision('d');
+    for (const [url] of fetchMock.mock.calls) expect(String(url)).not.toContain(TOKEN);
   });
 });

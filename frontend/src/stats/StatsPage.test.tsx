@@ -1,15 +1,27 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { clearAdminToken, getAdminToken, setAdminToken } from '../api/adminToken';
 import { apiError, fakeApi } from '../test/fakeApi';
 import { renderWithApp } from '../test/render';
 import { StatsPage } from './StatsPage';
 
 function show(client = fakeApi()) {
   const onBack = vi.fn();
-  renderWithApp(<StatsPage onBack={onBack} />, client);
-  return { client, onBack };
+  const { queryClient } = renderWithApp(<StatsPage onBack={onBack} />, client);
+  return { client, onBack, queryClient };
 }
+
+const TOKEN = 'fake-stats-token';
+const REJECTED = 'That token did not work, or the stats are switched off.';
+
+beforeEach(() => {
+  setAdminToken(TOKEN);
+});
+
+afterEach(() => {
+  clearAdminToken();
+});
 
 describe('StatsPage', () => {
   test('leads with what agreement means, before any number', async () => {
@@ -172,5 +184,68 @@ describe('StatsPage', () => {
     });
     show(client);
     expect(await screen.findByText(/No shadow ran on this node/)).toBeInTheDocument();
+  });
+});
+
+describe('StatsPage and the admin token', () => {
+  test('without a token it asks for one and does not call the server', async () => {
+    clearAdminToken();
+    const { client } = show();
+    expect(screen.getByLabelText('Admin token')).toHaveAttribute('type', 'password');
+    expect(client.stats).not.toHaveBeenCalled();
+    expect(client.disagreements).not.toHaveBeenCalled();
+    await userEvent.type(screen.getByLabelText('Admin token'), 'fake-typed');
+    await userEvent.click(screen.getByRole('button', { name: 'Open the stats' }));
+    expect(await screen.findByTestId('compared-understand')).toBeInTheDocument();
+    expect(getAdminToken()).toBe('fake-typed');
+  });
+
+  test('a not_found answer means a wrong token: the token is dropped and the gate returns', async () => {
+    const client = fakeApi();
+    client.stats.mockRejectedValue(apiError('not_found', 404, 'Not Found'));
+    show(client);
+    expect(await screen.findByText(REJECTED)).toBeInTheDocument();
+    expect(getAdminToken()).toBeNull();
+    expect(screen.getByLabelText('Admin token')).toBeInTheDocument();
+    expect(screen.queryByText('Not Found')).not.toBeInTheDocument();
+  });
+
+  test('a rejected token is asked once, not retried', async () => {
+    const client = fakeApi();
+    client.stats.mockRejectedValue(apiError('not_found', 404, 'Not Found'));
+    show(client);
+    await screen.findByText(REJECTED);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(client.stats).toHaveBeenCalledTimes(1);
+  });
+
+  test('a not_found on the disagreements also drops the token', async () => {
+    const client = fakeApi();
+    client.disagreements.mockRejectedValue(apiError('not_found', 404, 'Not Found'));
+    show(client);
+    expect(await screen.findByText(REJECTED)).toBeInTheDocument();
+    expect(getAdminToken()).toBeNull();
+  });
+
+  test('Forget the token clears it and asks again, with no rejection notice', async () => {
+    show();
+    await screen.findByTestId('compared-understand');
+    await userEvent.click(screen.getByRole('button', { name: 'Forget the token' }));
+    expect(getAdminToken()).toBeNull();
+    expect(screen.getByLabelText('Admin token')).toBeInTheDocument();
+    expect(screen.queryByText(REJECTED)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('compared-understand')).not.toBeInTheDocument();
+  });
+
+  test('the token is not part of any cached query key and not on the page', async () => {
+    const { queryClient } = show();
+    await screen.findByTestId('compared-understand');
+    const cached = queryClient
+      .getQueryCache()
+      .getAll()
+      .map((q) => JSON.stringify(q.queryKey));
+    expect(cached.length).toBeGreaterThan(0);
+    for (const k of cached) expect(k).not.toContain(TOKEN);
+    expect(document.body.innerHTML).not.toContain(TOKEN);
   });
 });

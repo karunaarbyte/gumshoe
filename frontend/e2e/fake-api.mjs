@@ -25,6 +25,10 @@ const confirmText = 'Accuse Mr Grey the butler, by poisoned port, for an unpaid 
 
 let game = null; // { pending, outcome, facts, turns }
 let requests = []; // bodies of POST /turn and /confirm, for the test to inspect via GET /__requests
+// the admin routes answer a plain 404 unless this (fake) token is sent, like the real server
+const ADMIN_TOKEN = 'e2e-fake-admin-token';
+const isAdmin = (path) => path === '/api/stats/decisions' || path === '/api/decisions' || path.startsWith('/api/decisions/');
+let authLeaks = []; // player routes that were sent an Authorization header (there should be none)
 
 function fresh() {
   return { pending: null, outcome: 'playing', facts: [], turns: [] };
@@ -160,6 +164,10 @@ createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const path = url.pathname;
   const method = req.method ?? 'GET';
+  if (isAdmin(path)) {
+    if (req.headers.authorization !== `Bearer ${ADMIN_TOKEN}`) return error(res, 404, 'not_found', 'Not Found');
+  } else if (req.headers.authorization !== undefined && !path.startsWith('/__')) authLeaks.push(path);
+  if (method === 'GET' && path === '/__auth_leaks') return json(res, 200, authLeaks);
   try {
     if (method === 'GET' && path === '/api/health')
       return json(res, 200, {

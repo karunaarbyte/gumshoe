@@ -12,8 +12,6 @@ interface Props {
   onError: (error: ApiError) => void;
   /** A message to show above everything (for example, the game you had has ended). */
   banner: string | null;
-  /** Open the Jev vs Nimble comparison. */
-  onStats?: () => void;
 }
 
 const MAX_SEED = Number.MAX_SAFE_INTEGER; // the server takes up to 2^63-1; JSON numbers stay exact to here
@@ -27,7 +25,7 @@ export function parseSeed(text: string, random: () => number = Math.random): num
   return Number.isSafeInteger(n) && n <= MAX_SEED ? n : null;
 }
 
-export function TitleScreen({ onOpen, onError, banner, onStats }: Props) {
+export function TitleScreen({ onOpen, onError, banner }: Props) {
   const client = useApi();
   const queryClient = useQueryClient();
   const health = useHealth();
@@ -75,10 +73,8 @@ export function TitleScreen({ onOpen, onError, banner, onStats }: Props) {
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-8 p-10">
-      <div className="flex items-start justify-between">
-        <h1 className="text-6xl">GUMSHOE</h1>
-        {onStats !== undefined && <InkButton onClick={onStats}>Stats</InkButton>}
-      </div>
+      <h1 className="text-6xl">GUMSHOE</h1>
+      <p className="text-sm italic">Your messages are kept to compare AI models.</p>
       {banner !== null && (
         <p role="alert" className="border-2 border-stamp bg-card-light p-3 text-stamp">
           {banner}

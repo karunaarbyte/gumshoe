@@ -70,7 +70,6 @@ function Shell({ session }: { session?: Omit<SessionOptions, 'client'> }) {
     <TitleScreen
       banner={banner}
       onError={onError}
-      onStats={() => go({ name: 'stats' })}
       onOpen={(game) => {
         setBanner(null);
         go({ name: 'desk', game });

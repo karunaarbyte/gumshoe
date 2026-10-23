@@ -1,3 +1,4 @@
+import { getAdminToken } from './adminToken';
 import { ApiError, NETWORK, errorFrom } from './errors';
 import { readEvents } from './sse';
 import type {
@@ -19,10 +20,13 @@ import type {
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
-async function send(path: string, init: RequestInit = {}): Promise<Response> {
+/** `admin` adds the stored admin token as a bearer header; only the admin calls pass it. */
+async function send(path: string, init: RequestInit = {}, admin = false): Promise<Response> {
+  const token = admin ? getAdminToken() : null;
+  const headers = token === null ? init.headers : { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` };
   let response: Response;
   try {
-    response = await fetch(path, init);
+    response = await fetch(path, headers === init.headers ? init : { ...init, headers });
   } catch {
     throw new ApiError(0, NETWORK, 'the server could not be reached');
   }
@@ -30,8 +34,8 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
   return response;
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  return (await (await send(path)).json()) as T;
+async function getJson<T>(path: string, admin = false): Promise<T> {
+  return (await (await send(path, {}, admin)).json()) as T;
 }
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
@@ -75,18 +79,18 @@ export const api = {
     if (params.since) q.set('since', params.since);
     if (params.includeCold) q.set('include_cold', 'true');
     const query = q.toString();
-    return getJson<StatsReport>(`/api/stats/decisions${query === '' ? '' : `?${query}`}`);
+    return getJson<StatsReport>(`/api/stats/decisions${query === '' ? '' : `?${query}`}`, true);
   },
   disagreements: (params: DisagreementParams = {}) => {
     const q = new URLSearchParams({ disagree: 'true', limit: String(params.limit ?? 20) });
     if (params.node) q.set('node', params.node);
     if (params.question) q.set('question', params.question);
     if (params.since) q.set('since', params.since);
-    return getJson<DecisionView[]>(`/api/decisions?${q.toString()}`);
+    return getJson<DecisionView[]>(`/api/decisions?${q.toString()}`, true);
   },
   gameDecision: (game: string, id: string) => getJson<DecisionView>(`${g(game)}/decisions/${encodeURIComponent(id)}`),
-  /** Admin only, used by the stats page; never from the player UI. */
-  decision: (id: string) => getJson<DecisionView>(`/api/decisions/${encodeURIComponent(id)}`),
+  /** Admin only (sends the admin token); never from the player UI. */
+  decision: (id: string) => getJson<DecisionView>(`/api/decisions/${encodeURIComponent(id)}`, true),
   turn: (game: string, body: TurnBody, signal?: AbortSignal) => openStream(`${g(game)}/turn`, body, signal),
   confirm: (game: string, body: ConfirmBody, signal?: AbortSignal) => openStream(`${g(game)}/confirm`, body, signal),
 };

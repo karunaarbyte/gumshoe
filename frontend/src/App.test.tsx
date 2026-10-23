@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { App, defaultQueryClient } from './App';
+import { clearAdminToken } from './api/adminToken';
 import { ApiError } from './api/errors';
 import { gameKey, loadBoard, saveKey, storeBoard } from './board/storage';
 import { confirmFirst, healthOff, healthOn, reveal, states, transcript } from './test/fixtures';
@@ -16,6 +17,7 @@ function renderApp(client = fakeApi()) {
 beforeEach(() => preferReducedMotion(true));
 afterEach(() => {
   window.location.hash = '';
+  clearAdminToken();
 });
 
 describe('App', () => {
@@ -98,13 +100,13 @@ describe('App', () => {
     expect(await screen.findByText(/dialogue model is offline/)).toBeInTheDocument();
   });
 
-  test('the stats page opens from the title and works while the game is off', async () => {
-    window.location.hash = '#/';
+  test('the stats page is not linked from the title but opens at #/stats, behind the token, while the game is off', async () => {
+    window.location.hash = '#/stats';
     const client = fakeApi();
     client.health.mockResolvedValue(healthOff);
     renderApp(client);
-    await userEvent.click(await screen.findByRole('button', { name: 'Stats' }));
-    expect(window.location.hash).toBe('#/stats');
+    await userEvent.type(await screen.findByLabelText('Admin token'), 'fake-app-token');
+    await userEvent.click(screen.getByRole('button', { name: 'Open the stats' }));
     expect(await screen.findByRole('main', { name: 'Stats' })).toBeInTheDocument();
     expect(await screen.findByTestId('compared-understand')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Back' }));

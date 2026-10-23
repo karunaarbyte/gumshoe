@@ -53,20 +53,24 @@ export function useDecision(game: string, id: string, retryBaseMs: number = DECI
   });
 }
 
-/** The comparison report. The filters are part of the key, so changing one asks again. */
+/** The comparison report. The filters are part of the key, so changing one asks again.
+ * It is an admin call: never retried, because the server answers a wrong token with a 404 and
+ * blocks an address after repeated failures (Refresh asks again by hand). The token is not in the key. */
 export function useStats(since: string | undefined, includeCold: boolean) {
   const client = useApi();
   return useQuery({
     queryKey: keys.stats(since, includeCold),
     queryFn: () => client.stats({ since, includeCold }),
+    retry: false,
   });
 }
 
-/** The latest decisions where the backends differ (on one question when given). */
+/** The latest decisions where the backends differ (on one question when given). Admin, never retried. */
 export function useDisagreements(node: string, question: string, since: string | undefined) {
   const client = useApi();
   return useQuery({
     queryKey: keys.disagreements(node, question, since),
     queryFn: () => client.disagreements({ node: node || undefined, question: question || undefined, since }),
+    retry: false, // an admin call, like useStats
   });
 }

@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useState } from 'react';
+import { clearAdminToken } from '../api/adminToken';
 import { isApiError } from '../api/errors';
 import type { NodeStats } from '../api/types';
 import { useDisagreements, useStats } from '../data/queries';
 import { DecisionTable } from '../trace/DecisionPanel';
 import { InkButton } from '../ui/Button';
+import { AdminGate } from './AdminGate';
 import { NodeCard } from './NodeCard';
 import { pct, shadowOf, sinceToIso } from './summary';
 
@@ -40,7 +43,7 @@ function Notes({ nodes }: { nodes: NodeStats[] }) {
   );
 }
 
-function Disagreements({ nodes, since }: { nodes: NodeStats[]; since: string | undefined }) {
+function Disagreements({ nodes, since, onRejected }: { nodes: NodeStats[]; since: string | undefined; onRejected: () => void }) {
   const [node, setNode] = useState('');
   const [question, setQuestion] = useState('');
   const [open, setOpen] = useState<string | null>(null);
@@ -48,6 +51,10 @@ function Disagreements({ nodes, since }: { nodes: NodeStats[]; since: string | u
   // a question the current node or window no longer has is not a filter any more
   const chosen = questions.includes(question) ? question : '';
   const query = useDisagreements(node, chosen, since);
+  const rejected = isApiError(query.error, 'not_found');
+  useEffect(() => {
+    if (rejected) onRejected();
+  }, [rejected, onRejected]);
   return (
     <section aria-label="Disagreements" className="border border-ink bg-card-light p-4">
       <h2 className="text-xl">Where they disagree</h2>
@@ -110,16 +117,25 @@ function Disagreements({ nodes, since }: { nodes: NodeStats[]; since: string | u
 }
 
 /** Jev against Nimble over every recorded decision. It never depends on the game being on. */
-export function StatsPage({ onBack }: { onBack: () => void }) {
+function StatsView({ onBack, onRejected, onForget }: { onBack: () => void; onRejected: () => void; onForget: () => void }) {
   const [date, setDate] = useState('');
   const [includeCold, setIncludeCold] = useState(false);
   const since = sinceToIso(date);
   const stats = useStats(since, includeCold);
+  // a 404 is all the server says for a wrong token, admin switched off or a blocked address
+  const rejected = isApiError(stats.error, 'not_found');
+  useEffect(() => {
+    if (rejected) onRejected();
+  }, [rejected, onRejected]);
+  if (rejected) return null;
   return (
     <main aria-label="Stats" className="mx-auto flex max-w-5xl flex-col gap-4 p-8">
       <header className="flex items-center justify-between">
         <h1 className="text-4xl">Jev vs Nimble</h1>
-        <InkButton onClick={onBack}>Back</InkButton>
+        <div className="flex gap-3">
+          <InkButton onClick={onForget}>Forget the token</InkButton>
+          <InkButton onClick={onBack}>Back</InkButton>
+        </div>
       </header>
       <Definition />
       <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -145,10 +161,36 @@ export function StatsPage({ onBack }: { onBack: () => void }) {
           {stats.data.nodes.map((n) => (
             <NodeCard key={n.node} node={n} />
           ))}
-          <Disagreements nodes={stats.data.nodes} since={since} />
+          <Disagreements nodes={stats.data.nodes} since={since} onRejected={onRejected} />
           <Notes nodes={stats.data.nodes} />
         </>
       )}
     </main>
+  );
+}
+
+const REJECTED = 'That token did not work, or the stats are switched off.';
+
+/** The stats behind the admin token. A rejected token is dropped and asked for again; it is never retried. */
+export function StatsPage({ onBack }: { onBack: () => void }) {
+  const queryClient = useQueryClient();
+  const [gate, setGate] = useState<{ n: number; notice?: string }>({ n: 0 });
+  const reset = useCallback(
+    (notice?: string) => {
+      clearAdminToken();
+      // what an earlier token read must not show to the next one
+      queryClient.removeQueries({ queryKey: ['stats'] });
+      queryClient.removeQueries({ queryKey: ['disagreements'] });
+      setGate((g) => ({ n: g.n + 1, notice }));
+    },
+    [queryClient],
+  );
+  const onRejected = useCallback(() => reset(REJECTED), [reset]);
+  const onForget = useCallback(() => reset(), [reset]);
+  return (
+    // the key makes the gate read the (now empty) token again
+    <AdminGate key={gate.n} onBack={onBack} notice={gate.notice}>
+      <StatsView onBack={onBack} onRejected={onRejected} onForget={onForget} />
+    </AdminGate>
   );
 }

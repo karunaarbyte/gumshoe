@@ -26,6 +26,12 @@ describe('parseSeed', () => {
 });
 
 describe('TitleScreen', () => {
+  test('there is no Stats button and the privacy line is shown', async () => {
+    setup();
+    expect(screen.queryByRole('button', { name: 'Stats' })).not.toBeInTheDocument();
+    expect(screen.getByText('Your messages are kept to compare AI models.')).toBeInTheDocument();
+  });
+
   test('starts a new case with the seed and the chosen preset', async () => {
     const { client, onOpen } = setup();
     await userEvent.type(screen.getByRole('textbox', { name: 'Seed (optional)' }), '7');

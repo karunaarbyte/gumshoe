@@ -37,8 +37,16 @@ test('new case, a turn, an accusation, confirm, game over and the reveal', async
   await expect(page.getByTestId('decision-d-search').locator('tr[data-disagree="true"]')).toHaveCount(1);
 });
 
-test('the stats page: the definition, honest denominators, the matrix and a disagreement', async ({ page }) => {
+test('the stats page: behind the admin token, then the definition, honest denominators, the matrix and a disagreement', async ({ page, request }) => {
+  await page.goto('/');
+  await expect(page.getByText('Your messages are kept to compare AI models.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Stats' })).toHaveCount(0);
   await page.goto('/#/stats');
+  await page.getByLabel('Admin token').fill('e2e-wrong-token');
+  await page.getByRole('button', { name: 'Open the stats' }).click();
+  await expect(page.getByRole('alert')).toHaveText('That token did not work, or the stats are switched off.');
+  await page.getByLabel('Admin token').fill('e2e-fake-admin-token');
+  await page.getByRole('button', { name: 'Open the stats' }).click();
   await expect(page.getByRole('region', { name: 'What agreement means' })).toContainText('not that either is right');
   await expect(page.getByTestId('compared-understand')).toContainText('165 of 228 decisions compared · 63 nimble errors');
   await expect(page.getByTestId('matrix-understand')).toBeVisible();
@@ -47,6 +55,8 @@ test('the stats page: the definition, honest denominators, the matrix and a disa
   await expect(page.getByTestId('decision-dec-weight').locator('tr[data-disagree="true"]')).toHaveCount(1);
   await page.getByRole('button', { name: 'Back' }).click();
   await expect(page).toHaveURL(/#\/$/);
+  await expect(page.getByRole('button', { name: 'New case' })).toBeVisible();
+  expect(await (await request.get('http://127.0.0.1:8765/__auth_leaks')).json()).toEqual([]);
 });
 
 test('a typed yes carries the waiting pending_id and a bare yes carries none', async ({ page, request }) => {
