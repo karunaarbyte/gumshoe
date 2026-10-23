@@ -10,7 +10,9 @@ from fastapi import Depends, FastAPI, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import Match
 
 from gumshoe.agent import ToolFailure
 from gumshoe.api.admin import admin_token_of, require_admin
@@ -101,7 +103,8 @@ def create_app(
                 app.state.game_off = f"the decider is not configured: {exc.message}"
             yield
 
-    app = FastAPI(title="Gumshoe API", lifespan=lifespan)
+    # No slash redirects: a 307 from `/api/admin/usage/` would show the route exists.
+    app = FastAPI(title="Gumshoe API", lifespan=lifespan, redirect_slashes=False)
     app.state.game_off = NOT_STARTED  # until the lifespan has run
     app.state.sessions = sessions
     app.state.quotas = quotas
@@ -119,7 +122,7 @@ def create_app(
             CORSMiddleware,
             allow_origins=list(origins),
             allow_methods=["GET", "POST", "DELETE"],
-            allow_headers=["content-type"],
+            allow_headers=["content-type", "authorization"],
         )
 
     @app.exception_handler(ApiError)
@@ -139,8 +142,24 @@ def create_app(
         body = error_body("bad_request", describe_validation(exc.errors()))
         return JSONResponse(body, status_code=422)
 
+    def gated(request: Request) -> bool:
+        """Whether the path is one of the admin routes (found from the routes themselves)."""
+        return any(
+            isinstance(route, APIRoute)
+            and any(d.dependency is require_admin for d in route.dependencies)
+            and route.matches(request.scope)[0] is not Match.NONE
+            for route in app.router.routes
+        )
+
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        if exc.status_code == 405 and gated(request):
+            # Routing answers a wrong method before the gate runs: run it here, so without the
+            # token the answer is the plain 404 (counted and logged), not a 405 with `Allow`.
+            try:
+                require_admin(request)
+            except ApiError as refused:
+                return await api_error(request, refused)
         body = error_body(http_code(exc.status_code), str(exc.detail))
         return JSONResponse(body, status_code=exc.status_code, headers=exc.headers)
 

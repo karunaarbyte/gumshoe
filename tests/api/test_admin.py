@@ -310,3 +310,89 @@ def test_the_failure_table_is_bounded():
     for i in range(5000):
         quotas.admin_failed(f"10.0.{i // 256}.{i % 256}")
     assert len(quotas._admin_failures._hits) <= 1000
+
+
+# --- other methods and trailing slashes look like an unknown route too ----------------------------
+
+METHODS = ["HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+
+
+def raw(response):
+    """Everything a probe sees, byte for byte."""
+    return response.status_code, response.content, sorted(response.headers.items())
+
+
+def block(client):
+    for _ in range(10):
+        client.get("/api/decisions", headers=bearer("x" * 40))
+
+
+SCENARIOS = {
+    "admin off": ({}, {}, False),
+    "no header": ({"admin_token": SecretStr(TOKEN)}, {}, False),
+    "wrong token": ({"admin_token": SecretStr(TOKEN)}, bearer("x" * 40), False),
+    "blocked ip, right token": ({"admin_token": SecretStr(TOKEN)}, bearer(), True),
+}
+
+
+@pytest.mark.parametrize("scenario", SCENARIOS)
+@pytest.mark.parametrize("method", METHODS)
+@pytest.mark.parametrize("path", ROUTES)
+def test_any_method_on_a_gated_path_is_an_unknown_route(store, scenario, method, path):
+    settings, headers, blocked = SCENARIOS[scenario]
+    with client_for(store, clock=FakeClock(), **settings) as client:
+        if blocked:
+            block(client)
+        unknown = client.request(method, "/api/nothing-here", headers=headers)
+        r = client.request(method, path, headers=headers)
+    assert raw(r) == raw(unknown)
+    assert "allow" not in r.headers and r.status_code == 404
+
+
+@pytest.mark.parametrize("scenario", SCENARIOS)
+@pytest.mark.parametrize("method", ["GET", *METHODS])
+@pytest.mark.parametrize("path", ROUTES)
+def test_a_trailing_slash_on_a_gated_path_is_an_unknown_route(store, scenario, method, path):
+    settings, headers, blocked = SCENARIOS[scenario]
+    with client_for(store, clock=FakeClock(), **settings) as client:
+        if blocked:
+            block(client)
+        unknown = client.request(method, "/api/nothing-here/", headers=headers)
+        r = client.request(method, path + "/", headers=headers, follow_redirects=False)
+    assert raw(r) == raw(unknown)
+    assert "location" not in r.headers and r.status_code == 404
+
+
+def test_a_wrong_token_on_another_method_counts_and_is_logged(store, caplog):
+    with (
+        caplog.at_level(logging.INFO, logger="gumshoe.api.admin"),
+        client_for(store, admin_token=SecretStr(TOKEN), clock=FakeClock()) as client,
+    ):
+        for _ in range(10):
+            assert client.post("/api/decisions", headers=bearer("x" * 40)).status_code == 404
+        assert client.get("/api/decisions", headers=bearer()).status_code == 404  # blocked
+    lines = [r.getMessage() for r in caplog.records if r.name == "gumshoe.api.admin"]
+    assert lines == ["admin refused ip=testclient"] * 11
+    assert TOKEN not in caplog.text and "x" * 40 not in caplog.text
+
+
+def test_the_right_token_still_opens_get_and_a_wrong_method_may_say_so(store):
+    with client_for(store, admin_token=SecretStr(TOKEN)) as client:
+        assert client.get("/api/admin/usage", headers=bearer()).status_code == 200
+        assert client.post("/api/admin/usage", headers=bearer()).status_code == 405
+
+
+def test_a_cors_preflight_may_ask_to_send_the_token(store):
+    preflight = {
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "authorization",
+    }
+    with client_for(store, admin_token=SecretStr(TOKEN), cors_origins="http://localhost:5173") as c:
+        listed = c.options(
+            "/api/decisions", headers={"Origin": "http://localhost:5173", **preflight}
+        )
+        other = c.options("/api/decisions", headers={"Origin": "http://evil.test", **preflight})
+    assert listed.status_code == 200
+    assert "authorization" in listed.headers["access-control-allow-headers"].lower()
+    assert listed.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert other.status_code == 400 and "access-control-allow-origin" not in other.headers
