@@ -120,3 +120,76 @@ async def test_a_failing_expiry_does_not_skip_the_purge_in_the_same_pass():
         await asyncio.gather(task, return_exceptions=True)
     # the startup purge, plus the first pass's purge, which ran though its expiry failed
     assert len(purges) >= 2 and expiries["n"] >= 2
+
+
+async def test_maintain_also_runs_the_housekeeping_callback_on_the_purge_schedule():
+    clock = FakeClock()
+    ran = asyncio.Event()
+    async with serving(Script(), clock=clock) as s:
+
+        async def sleep(_):
+            clock.advance(200)
+            await asyncio.sleep(0)
+
+        task = asyncio.create_task(
+            s.service.maintain(interval_s=1, purge_every_s=100, housekeeping=ran.set, sleep=sleep)
+        )
+        await asyncio.wait_for(ran.wait(), 2)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+async def test_a_failing_housekeeping_is_logged_and_the_next_pass_still_runs(caplog):
+    clock = FakeClock()
+    calls = {"n": 0}
+    second = asyncio.Event()
+
+    def housekeeping():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("secret-path /tmp/x")
+        second.set()
+
+    async with serving(Script(), clock=clock) as s:
+
+        async def sleep(_):
+            clock.advance(200)
+            await asyncio.sleep(0)
+
+        with caplog.at_level(logging.ERROR):
+            task = asyncio.create_task(
+                s.service.maintain(
+                    interval_s=1, purge_every_s=100, housekeeping=housekeeping, sleep=sleep
+                )
+            )
+            await asyncio.wait_for(second.wait(), 2)
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    assert calls["n"] >= 2
+    assert "housekeeping failed: RuntimeError" in caplog.text
+    assert "secret-path" not in caplog.text
+
+
+async def test_housekeeping_is_skipped_until_the_purge_cadence_has_elapsed():
+    clock = FakeClock()
+    ran = asyncio.Event()
+    passes = 0
+    two_passes = asyncio.Event()
+    async with serving(Script(), clock=clock) as s:
+
+        async def sleep(_):
+            nonlocal passes
+            passes += 1
+            if passes >= 3:
+                two_passes.set()
+            clock.advance(1)  # far below purge_every_s
+            await asyncio.sleep(0)
+
+        task = asyncio.create_task(
+            s.service.maintain(interval_s=1, purge_every_s=100, housekeeping=ran.set, sleep=sleep)
+        )
+        await asyncio.wait_for(two_passes.wait(), 2)
+        await asyncio.sleep(0)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+    assert not ran.is_set()

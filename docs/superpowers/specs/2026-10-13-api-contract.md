@@ -72,6 +72,10 @@ Written from the code after plan 4d-2 (tasks 1-12). Interactive docs for the pla
 - `mode` is `"normal"` or `"slow"`. `"slow"` means the global daily Jev budget is spent and the game runs
   on Nimble alone (slower turns; it keeps playing). A single client IP over its own share also gets
   Nimble alone, but that is not reported here. `"normal"` when the game is off.
+  Budgeting is on by default for a Jev primary with a usage ledger: `JEV_DAILY_TOKENS=5000000`
+  (global, per UTC day) and `JEV_IP_DAILY_TOKENS=300000` (per client IP); `0` means no cap. A request
+  with an empty or unknown client IP is held only to the global cap. Over a cap, Nimble alone decides
+  until 00:00 UTC. Usage rows older than 35 days are purged by the maintenance loop.
 
 ### `GET /api/meta` -> `Meta`
 

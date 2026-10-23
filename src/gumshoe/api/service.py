@@ -657,10 +657,12 @@ class AgentService:
         interval_s: float = 60.0,
         purge_every_s: float = 3600.0,
         retention_s: float = 0.0,
+        housekeeping: Callable[[], object] | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         """Housekeeping, forever: purge old saves once at startup, then close idle games every
-        `interval_s` and purge old saves every `purge_every_s`. A failing step is logged (class
+        `interval_s` and purge old saves (and run `housekeeping`, off the event loop) every
+        `purge_every_s`. A failing step is logged (class
         name only) and the loop goes on."""
         last_purge = self._clock()
         try:
@@ -679,6 +681,11 @@ class AgentService:
                     await self.purge_saves(retention_s)
                 except Exception as exc:
                     logger.error("purging old saves failed: %s", type(exc).__name__)
+                if housekeeping is not None:
+                    try:
+                        await asyncio.to_thread(housekeeping)
+                    except Exception as exc:
+                        logger.error("housekeeping failed: %s", type(exc).__name__)
 
     async def aclose(self) -> None:
         tasks = list(self._tasks)

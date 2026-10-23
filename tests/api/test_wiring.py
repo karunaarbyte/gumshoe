@@ -13,7 +13,7 @@ from gumshoe.agent import AgentConfig
 from gumshoe.api import create_app
 from gumshoe.api.games import MAX_TURN_CHARS
 from gumshoe.api.service import AgentService, Caps
-from gumshoe.api.wiring import agent_config, default_service, save_index
+from gumshoe.api.wiring import agent_config, default_service, save_index, thirty_five_days_ago
 from gumshoe.config import Settings
 from gumshoe.decider import BudgetDecider, DeciderConfigError
 from gumshoe.mcp_server import GameHost
@@ -288,3 +288,9 @@ async def test_default_service_resumes_the_jev_budget_before_serving_and_closes_
     assert len(reads) == 1
     # the Jev primary and its shadow close first, then Nimble alone, then the Ollama client
     assert log == ["close jev", "close nimble", "close nimble", "llm"]
+
+
+def test_the_usage_cutoff_is_35_days_back_as_a_zero_padded_iso_day():
+    assert thirty_five_days_ago(datetime(2026, 2, 10, 23, 59, tzinfo=UTC)) == "2026-01-06"
+    assert thirty_five_days_ago(datetime(2026, 3, 5, 0, 0, tzinfo=UTC)) == "2026-01-29"
+    assert thirty_five_days_ago(datetime(2026, 1, 20, tzinfo=UTC)) == "2025-12-16"

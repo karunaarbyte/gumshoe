@@ -5,7 +5,7 @@ import json
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import partial
 from pathlib import Path
 
@@ -69,6 +69,11 @@ def save_index(folder: Path, owns: Callable[[str], bool]) -> list[SaveSummary]:
     return found[:MAX_SAVES_LISTED]
 
 
+def thirty_five_days_ago(now: datetime | None = None) -> str:
+    """The UTC day (YYYY-MM-DD) 35 days back: usage rows older than it are purged."""
+    return ((now or datetime.now(UTC)) - timedelta(days=35)).strftime("%Y-%m-%d")
+
+
 @asynccontextmanager
 async def default_service(
     store: SqliteStatsStore,
@@ -110,7 +115,10 @@ async def default_service(
         )
         stack.push_async_callback(service.aclose)
         maintenance = asyncio.create_task(
-            service.maintain(retention_s=settings.save_retention_days * 86400.0)
+            service.maintain(
+                retention_s=settings.save_retention_days * 86400.0,
+                housekeeping=lambda: store.purge_usage(thirty_five_days_ago()),
+            )
         )
 
         async def stop_maintenance() -> None:
