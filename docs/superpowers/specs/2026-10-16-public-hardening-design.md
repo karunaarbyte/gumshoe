@@ -260,6 +260,10 @@ Test-first, each piece with a fake clock where time matters.
   Acceptable for one machine; stated so nobody scales it by accident.
 - **Restart loses live games** (saves survive). A rotated `SESSION_SECRET` also orphans saves.
 - **Slow mode quality** (section 4 latency target). The clean latency run decides whether it is usable.
+  The 12-26 s Nimble latency quoted for slow mode is unverified until that clean run.
+- **IPv6 is keyed per /64** (accepted risk). A client holding a larger routed prefix (a /56 or a /48 is
+  common) counts as many clients, one per /64, so it can fill the per-IP game, save and Jev caps; only the
+  global caps (`MAX_GAMES`, the save total, `JEV_DAILY_TOKENS`) bound it.
 - **Tunnel assumptions.** One trusted proxy hop and a forwarded-IP header; if the tunnel product differs, the client
   IP rule must be revisited before launch.
 - **NAT.** A school or office behind one IP shares the per-IP limits (10 sessions per hour, 6 open games).

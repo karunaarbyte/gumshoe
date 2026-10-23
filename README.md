@@ -18,6 +18,16 @@ ollama pull gemma4:12b       # the voice for dramatic moments (PERSONA_MODEL_DRA
 
 Without a Jev key yet, uncomment the two role lines in `.env` to play on Nimble alone (see `.env.example`).
 
+Two settings matter when playing locally:
+
+- Jev budgeting is on by default (`JEV_DAILY_TOKENS=5000000` per UTC day, `JEV_IP_DAILY_TOKENS=300000`
+  per client IP; `0` turns a cap off). Locally every request comes from `127.0.0.1`, so after about
+  300,000 Jev tokens in a day (roughly 8 games) you silently drop to Nimble alone. Set
+  `JEV_IP_DAILY_TOKENS=0` in `.env` to keep Jev deciding.
+- Set `SESSION_SECRET` too (any string; the generator below works). Without it a random secret is made
+  at each start, so a restart, including every `--reload`, ends your session, and the saves you made
+  before can no longer be listed or loaded.
+
 ## Try the decision layer
 
 ```bash
@@ -44,16 +54,21 @@ uv run gumshoe-api --port 8001 --reload
 
 Host and port default to `API_HOST` and `API_PORT`. There is no authentication: keep it on the loopback
 address. Cross-origin access is off unless `CORS_ORIGINS` lists exact origins; in development the Vite
-dev server proxies `/api`, so none is needed.
+dev server proxies `/api`, so none is needed. Without `PUBLIC_ORIGIN`, a write (POST or DELETE) is
+accepted from the server's own address only on a loopback name (`localhost`, `127.0.0.1`, `[::1]`); under
+any other name, list that origin in `CORS_ORIGINS`.
 
 - Games: `POST /api/games` `{seed, preset}`, `GET /api/games`, `GET /api/games/{id}` (brief, notebook,
   outcome, the waiting confirmation, the reveal once over), `POST /api/games/{id}/turn` `{text, pending_id?}`
   and `POST /api/games/{id}/confirm` `{pending_id, answer}` (both stream server-sent events, ending with
   `done`), `GET /api/games/{id}/turns` (the transcript), `POST /api/games/{id}/save`, `POST /api/games/load`
-  `{name}`, `DELETE /api/games/{id}`, `GET /api/saves`.
+  `{name}`, `DELETE /api/games/{id}`, `GET /api/saves`, `DELETE /api/saves/{name}`, and
+  `GET /api/games/{id}/decisions/{decision_id}` (one of the game's own decisions, redacted for the player).
 - Server: `GET /api/health` (whether the game is on, and why not), `GET /api/meta`.
-- Stats: `GET /api/stats/decisions`, `GET /api/decisions` (`?ids=`, `?disagree=true`),
-  `GET /api/decisions/{id}`. Set the `*_USD_PER_MTOK_*` prices to see estimated cost.
+- Admin (each needs `Authorization: Bearer <ADMIN_TOKEN>`; without a valid one, or with no token
+  configured, they answer a plain 404): `GET /api/stats/decisions`, `GET /api/decisions` (`?ids=`,
+  `?disagree=true`), `GET /api/decisions/{id}` and `GET /api/admin/usage` (today's Jev tokens, the caps,
+  the mode and the server's load). Set the `*_USD_PER_MTOK_*` prices to see estimated cost.
 
 One turn runs at a time per game (a second one is refused with 409 `turn_in_progress`). Every error body
 is `{code, message}`. Games live in memory: a restart ends them, so save the ones to keep. The full
@@ -81,9 +96,11 @@ keep `API_HOST` on `127.0.0.1`.
    - `TRUST_PROXY=true`, only behind exactly one trusted proxy: the client IP is then read from
      `X-Forwarded-For` for the per-IP limits. Leave it false otherwise, as the header is spoofable.
    - `JEV_DAILY_TOKENS` (default 5,000,000 per UTC day) and `JEV_IP_DAILY_TOKENS` (default 300,000 per
-     client IP): the Jev budget; `0` means no cap. Over a cap, Nimble alone decides until 00:00 UTC ("slow
-     mode"). Nimble shares the machine with the persona models, so a decision can take 12 to 26 seconds
-     then (measured in `docs/notes/jev-vs-nimble.md`).
+     client IP): the Jev budget; `0` means no cap. Over a cap, Nimble alone decides until 00:00 UTC
+     ("slow mode"). Nimble shares the machine with the persona models, so a decision can take 12 to 26
+     seconds then (measured in `docs/notes/jev-vs-nimble.md`, not yet confirmed by a clean latency run).
+     Only a Jev primary is metered, so in public mode the server refuses to start with
+     `DECIDER_SHADOW=jev` (Nimble primary, Jev shadow).
    - Expiry: `GAME_IDLE_MINUTES` (30; an idle game closes and its owner gets 410 "cold"),
      `SAVE_RETENTION_DAYS` (30) and `DECISION_RETENTION_DAYS` (30). `0` keeps things forever.
    - Limits per session (`SESSION_*`) and per IP (`IP_*`), plus `MAX_GAMES`, `MAX_PARALLEL_TURNS` and the

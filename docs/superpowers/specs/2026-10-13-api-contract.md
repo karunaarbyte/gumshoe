@@ -321,10 +321,11 @@ each other.
 
 Every limit is a setting (`.env.example`); `0` = unlimited.
 
-- **429 with `Retry-After`** (whole seconds, also in the JSON error): `rate_limited` (a rate was
-  exceeded: requests per IP, new sessions per IP, games created per session, turns per session or
-  IP) and `busy` (retry after 5). `quota` (too many games open for the session or IP) is a 429 too.
-  The body is the usual `{code, message}`. Save `quota` (`SESSION_SAVES`, `IP_SAVES`) has no
+- **429 with `Retry-After`** (whole seconds, in the `Retry-After` header only; the body is the usual
+  `{code, message}`): `rate_limited` (a rate was exceeded: requests per IP, new sessions per IP, games
+  created per session, turns per session or IP) and `busy` (retry after 5). A create or load that
+  fails sends no cookie and does not count as a new session. `quota` (too many games open for the
+  session or IP) is a 429 too. Save `quota` (`SESSION_SAVES`, `IP_SAVES`) has no
   `Retry-After` and no counts: delete a save and try again.
 - **Housekeeping**: a background loop closes idle games every 60 s (`GAME_IDLE_MINUTES`), and purges
   saves older than `SAVE_RETENTION_DAYS` hourly and once at startup. `0` turns each off (idle expiry,
