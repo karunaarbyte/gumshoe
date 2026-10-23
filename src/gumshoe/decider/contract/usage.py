@@ -19,7 +19,8 @@ class UsageLedger(Protocol):
 
 
 def estimate_tokens(state: str, questions: Mapping[str, Question]) -> int:
-    """A rough size of a request in tokens (about three characters each), for a call that
-    failed and so reported no usage. Never zero: a failed call may still have been billed."""
-    chars = len(state) + sum(len(q.model_dump_json()) for q in questions.values())
-    return max(1, chars // 3)
+    """A rough size of a request in tokens (about three UTF-8 bytes each), for a call that
+    failed and so reported no usage. Bytes, not characters, so non-ASCII text is not
+    under-counted. Never zero: a failed call may still have been billed."""
+    size = len(state.encode()) + sum(len(q.model_dump_json().encode()) for q in questions.values())
+    return max(1, size // 3)

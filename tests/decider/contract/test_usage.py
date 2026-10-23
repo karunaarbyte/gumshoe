@@ -14,6 +14,15 @@ def test_the_estimate_grows_with_the_request_and_is_at_least_one():
     assert estimate_tokens("", {}) == 1
 
 
+def test_the_estimate_counts_utf8_bytes_three_to_a_token():
+    assert estimate_tokens("a" * 30, {}) == 10
+    assert estimate_tokens("a" * 2, {}) == 1
+    assert estimate_tokens("\u732b" * 10, {}) == 10  # 3 bytes each in UTF-8, not 1 character
+    assert estimate_tokens("\u00e9" * 30, {}) == 20  # 2 bytes each
+    q = NoulQuestion(instructions="\u732b" * 30)
+    assert estimate_tokens("", {"q": q}) == len(q.model_dump_json().encode()) // 3
+
+
 def test_the_client_key_defaults_to_empty_and_is_per_task():
     assert client_key.get() == ""
 
