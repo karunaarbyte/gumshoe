@@ -11,6 +11,7 @@ import hmac
 import logging
 import re
 import secrets
+from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import Depends, Request, Response
@@ -100,15 +101,27 @@ def current_owner(request: Request) -> str:
     return session_id
 
 
-def issue_owner(request: Request, response: Response) -> str:
-    """The caller's session id, issuing a session (and its cookie) when there is none."""
+async def issue_owner(request: Request, response: Response) -> AsyncIterator[str]:
+    """The caller's session id, issuing a session (and its cookie) when there is none.
+
+    A new session counts against the IP's new-session limit, but only if the request succeeds:
+    a failed create or load sends no cookie, so its slot is given back (otherwise a full server
+    would lock a network out of new sessions after a few retries). Async, so the limiter is
+    only ever touched on the event loop."""
     sessions = sessions_of(request)
     session_id = sessions.read(request.cookies.get(sessions.cookie_name))
-    if not session_id:
-        request.app.state.quotas.new_session(request_ip(request))
-        session_id, value = sessions.issue()
-        sessions.set_cookie(response, value)
-    return session_id
+    if session_id:
+        yield session_id
+        return
+    quotas, ip = request.app.state.quotas, request_ip(request)
+    quotas.new_session(ip)
+    session_id, value = sessions.issue()
+    sessions.set_cookie(response, value)
+    try:
+        yield session_id
+    except BaseException:
+        quotas.refund_new_session(ip)
+        raise
 
 
 def optional_owner(request: Request) -> str | None:

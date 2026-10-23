@@ -178,3 +178,12 @@ def test_a_hit_exactly_one_window_old_has_expired():
     assert lim.hit("a") == 1
     clock.advance(0.1)
     assert lim.hit("a") is None
+
+
+def test_a_refunded_hit_frees_its_place():
+    limiter = WindowLimiter(1, 60, clock=FakeClock())
+    assert limiter.hit("a") is None
+    assert limiter.hit("a") is not None
+    limiter.refund("a")
+    assert limiter.hit("a") is None
+    limiter.refund("nobody")  # nothing to take back: no error

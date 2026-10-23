@@ -2,6 +2,7 @@ import pytest
 
 from gumshoe.api import create_app
 from gumshoe.api.ratelimit import TurnGate
+from gumshoe.api.service import Caps
 from gumshoe.config import Settings
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script
@@ -14,13 +15,13 @@ def store(tmp_path):
     return SqliteStatsStore(tmp_path / "decisions.db")
 
 
-def client_for(store, **settings):
+def client_for(store, caps=None, **settings):
     async def up():
         return True
 
     app = create_app(
         store,
-        make_service=fake_factory(Script()),
+        make_service=fake_factory(Script(), **({"caps": caps} if caps else {})),
         settings=Settings(_env_file=None, **settings),
         personas_up=up,
     )
@@ -44,6 +45,40 @@ def test_new_sessions_per_hour_per_ip(store):
         r = client.post("/api/games", json={"seed": 1})
         assert (r.status_code, r.json()["code"]) == (429, "rate_limited")
         assert "retry-after" in r.headers
+
+
+def test_a_failed_create_does_not_use_up_a_new_session_slot(store):
+    # the IP already holds its one game: every fresh visitor's create fails with a 429
+    with client_for(store, caps=Caps(games_per_ip=1), ip_new_sessions_per_hour=3) as client:
+        assert client.post("/api/games", json={"seed": 1}).status_code == 200
+        for _ in range(10):
+            client.cookies.clear()
+            r = client.post("/api/games", json={"seed": 1})
+            assert (r.status_code, r.json()["code"]) == (429, "quota")
+            assert "set-cookie" not in r.headers
+
+
+def test_a_failed_load_does_not_use_up_a_new_session_slot(store):
+    with client_for(store, ip_new_sessions_per_hour=2) as client:
+        for _ in range(5):
+            client.cookies.clear()
+            r = client.post("/api/games/load", json={"name": "no-such-save"})
+            assert r.status_code >= 400 and "set-cookie" not in r.headers
+        for _ in range(2):  # the two slots are all still there
+            client.cookies.clear()
+            assert client.post("/api/games", json={"seed": 1}).status_code == 200
+        client.cookies.clear()
+        r = client.post("/api/games", json={"seed": 1})
+        assert (r.status_code, r.json()["code"]) == (429, "rate_limited")
+
+
+def test_a_bad_body_does_not_use_up_a_new_session_slot(store):
+    with client_for(store, ip_new_sessions_per_hour=1) as client:
+        for _ in range(3):
+            client.cookies.clear()
+            assert client.post("/api/games", json={"seed": "x"}).status_code == 422
+        client.cookies.clear()
+        assert client.post("/api/games", json={"seed": 1}).status_code == 200
 
 
 def test_a_returning_session_is_not_a_new_session(store):

@@ -70,6 +70,14 @@ class WindowLimiter:
         hits.append(now)
         return None
 
+    def refund(self, key: str) -> None:
+        """Take back the newest hit of `key` (a request that counted but then failed)."""
+        if self._limit == 0:
+            return
+        hits = self._hits.get(key)
+        if hits:
+            hits.pop()
+
     def peek(self, key: str) -> int | None:
         """The seconds until `key` may hit again, or None if it may now. Records nothing."""
         if self._limit == 0:
@@ -138,6 +146,10 @@ class Quotas:
 
     def new_session(self, ip: str) -> None:
         self._check(self._new_sessions, ip, "new players from your network")
+
+    def refund_new_session(self, ip: str) -> None:
+        """A new session whose first request failed was never handed out: give its slot back."""
+        self._new_sessions.refund(ip)
 
     def game_created(self, owner: str) -> None:
         self._check(self._games_created, owner, "new games")
