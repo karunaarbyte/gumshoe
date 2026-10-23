@@ -373,3 +373,39 @@ def test_public_origin_rejects_userinfo():
             public_origin="https://user@gumshoe.example.com",
             session_secret=SecretStr("s" * 32),
         )
+
+
+def test_limit_defaults():
+    s = Settings(_env_file=None)
+    assert (s.session_games_open, s.session_games_per_hour, s.session_turns_per_minute) == (
+        3,
+        20,
+        30,
+    )
+    assert (s.ip_new_sessions_per_hour, s.ip_requests_per_minute, s.ip_turns_per_minute) == (
+        10,
+        300,
+        60,
+    )
+    assert (s.session_turns_in_flight, s.ip_turns_in_flight, s.ip_games_open) == (1, 2, 6)
+    assert (s.max_parallel_turns, s.turn_queue_size, s.turn_queue_wait_s) == (2, 4, 20.0)
+    assert (s.shadow_parallel, s.limiter_max_keys, s.trust_proxy) == (1, 20000, False)
+
+
+def test_the_global_game_cap_is_lower_in_public_mode():
+    assert Settings(_env_file=None).effective_max_games == 1000
+    public = Settings(
+        _env_file=None,
+        public_origin="https://g.example.com",
+        session_secret=SecretStr("s" * 32),
+    )
+    assert public.effective_max_games == 200
+    assert Settings(_env_file=None, max_games=7).effective_max_games == 7
+
+
+def test_limits_reject_negative_numbers():
+    for name in ("session_games_open", "ip_requests_per_minute", "shadow_parallel"):
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None, **{name: -1})
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, turn_queue_wait_s=0)

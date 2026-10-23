@@ -110,6 +110,25 @@ class Settings(BaseSettings):
     public_origin: str = ""
     session_secret: SecretStr = SecretStr("")
 
+    # Limits (0 = unlimited). Per session, per client IP, and global.
+    session_games_open: int = Field(3, ge=0)
+    session_games_per_hour: int = Field(20, ge=0)
+    session_turns_per_minute: int = Field(30, ge=0)
+    session_turns_in_flight: int = Field(1, ge=0)  # turns running at once across a session's games
+    ip_new_sessions_per_hour: int = Field(10, ge=0)
+    ip_requests_per_minute: int = Field(300, ge=0)
+    ip_turns_per_minute: int = Field(60, ge=0)
+    ip_turns_in_flight: int = Field(2, ge=0)
+    ip_games_open: int = Field(6, ge=0)
+    max_games: int | None = Field(None, ge=1)  # None: 1000 locally, 200 in public mode
+    max_parallel_turns: int = Field(2, ge=0)  # turns processed at once (the Ollama bottleneck)
+    turn_queue_size: int = Field(4, ge=0)
+    turn_queue_wait_s: float = Field(20.0, gt=0, allow_inf_nan=False)
+    shadow_parallel: int = Field(1, ge=0)  # background Nimble shadow calls at once
+    limiter_max_keys: int = Field(20000, ge=100)
+    # Behind exactly one trusted proxy (the tunnel): read the client from X-Forwarded-For.
+    trust_proxy: bool = False
+
     @field_validator("decider_shadow", mode="before")
     @classmethod
     def _blank_shadow_means_off(cls, value: Any) -> Any:
@@ -192,6 +211,12 @@ class Settings(BaseSettings):
     @property
     def public_mode(self) -> bool:
         return bool(self.public_origin)
+
+    @property
+    def effective_max_games(self) -> int:
+        if self.max_games is not None:
+            return self.max_games
+        return 200 if self.public_mode else 1000
 
     @property
     def cors_origin_list(self) -> tuple[str, ...]:
