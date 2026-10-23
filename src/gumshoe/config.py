@@ -126,6 +126,10 @@ class Settings(BaseSettings):
     turn_queue_wait_s: float = Field(20.0, gt=0, allow_inf_nan=False)
     shadow_parallel: int = Field(1, ge=0)  # background Nimble shadow calls at once
     limiter_max_keys: int = Field(20000, ge=100)
+    game_idle_minutes: int = Field(30, ge=0)  # an idle game is closed; 0 = never
+    save_retention_days: int = Field(30, ge=0)  # older saves are deleted; 0 = keep
+    session_saves: int = Field(10, ge=0)
+    ip_saves: int = Field(20, ge=0)
     # Behind exactly one trusted proxy (the tunnel): read the client from X-Forwarded-For.
     trust_proxy: bool = False
 

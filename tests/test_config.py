@@ -409,3 +409,15 @@ def test_limits_reject_negative_numbers():
             Settings(_env_file=None, **{name: -1})
     with pytest.raises(ValidationError):
         Settings(_env_file=None, turn_queue_wait_s=0)
+
+
+def test_expiry_and_save_defaults():
+    s = Settings(_env_file=None)
+    got = (s.game_idle_minutes, s.save_retention_days, s.session_saves, s.ip_saves)
+    assert got == (30, 30, 10, 20)
+
+
+def test_expiry_and_save_settings_reject_negative_numbers():
+    for name in ("game_idle_minutes", "save_retention_days", "session_saves", "ip_saves"):
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None, **{name: -1})
