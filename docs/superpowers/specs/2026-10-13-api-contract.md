@@ -158,16 +158,19 @@ cookie is read, never issued. In order:
 - The ownership check comes first: a stranger, no session, and a missing game all get the same
   404 `unknown_game` as `GET /api/games/{game}` (410 `cold` for the owner of an expired game).
 - `decision_id` must be 32 lowercase hex characters and appear in this game's own transcript
-  events (`GET /api/games/{game}/turns`). Anything else, malformed or another game's id or an id
-  that exists only in the stats store, is the same 404 `{"code": "not_found", "message": "no such
-  decision"}` (never a 422), so the answer says nothing about ids outside this game.
+  events (`GET /api/games/{game}/turns`). The transcript keeps only the last 200 turns, so an
+  older decision answers `not_found` too. Anything else, a malformed id (any well-formed path
+  segment that is not 32 lowercase hex), another game's id or an id that exists only in the stats
+  store, is the same 404 `{"code": "not_found", "message": "no such
+  decision"}` (never a 422), so the answer says nothing about ids outside this game. (An empty id, or one containing `/`, is
+  not a well-formed path segment: the router answers its plain Not Found.)
 - An id in the transcript whose record has not landed yet: 404 `not_recorded_yet`, retry.
 - A store failure is a plain 500 `internal` ("something went wrong").
 
 The view is redacted for the player (an allow-list): `state_preview` is `""`; a call's `error` is
 `"failed"` or null; `answers` are kept only on the `understand` and `post_check` nodes and only
-where the question and verdict are plain tokens (`suspect_3`, `yes`, `2.00`), so `parse_accusation`
-shows none; `agrees` keeps only plain-token question names. Timing, tokens, cost, confidence,
+where the question and verdict are plain tokens of the game's own shapes (`suspect_3`, `yes`,
+`2.00`), so `parse_accusation` answers are removed; `agrees` keeps only plain-token question names. Timing, tokens, cost, confidence,
 backend and role stay. The request rate limit applies as to any request.
 
 ### `POST /api/games/{game}/save` -> `{name: string}`
@@ -339,7 +342,28 @@ Every limit is a setting (`.env.example`); `0` = unlimited.
 - **409 `turn_in_progress`** is also what a second turn from the same session gets while one of its
   turns runs (`SESSION_TURNS_IN_FLIGHT`, default 1), even in another game.
 
-## 7. Stats
+## 7. Stats and admin routes
+
+These routes are for the operator, not for browsers: `GET /api/stats/decisions`, `GET /api/decisions`,
+`GET /api/decisions/{id}` and `GET /api/admin/usage`. They need the admin token.
+
+- `ADMIN_TOKEN` is set in the server's environment: 32 or more characters, no leading or trailing
+  whitespace. Generate one with `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`.
+- Without `ADMIN_TOKEN`, these routes answer a plain 404 to everyone, indistinguishable from a path
+  that does not exist, for any method and with or without a trailing slash.
+- With it, send `Authorization: Bearer <token>`. A wrong or missing token gets the same plain 404.
+- After repeated wrong tokens an IP gets that 404 even for the right token, for about a minute.
+  Refusals are logged as `admin refused ip=...` (the IP only, never the token).
+- CORS allows the `authorization` header only for origins listed in `CORS_ORIGINS`.
+- Until the frontend change (plan 7f), the in-app Stats page and trace drawer do not work against
+  a server with these gates; the trace drawer will use the player route in section 3.
+- `DECISION_RETENTION_DAYS` (default 30; `0` keeps decisions forever) sets how long decisions are
+  kept. The purge runs once at startup and then hourly.
+
+### `GET /api/admin/usage`
+
+Admin only. The operator's view of today's Jev spend (the daily budget, see `GET /api/health`) and
+the server's load.
 
 ### `GET /api/stats/decisions` -> `StatsReport`
 
