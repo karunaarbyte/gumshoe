@@ -1,13 +1,14 @@
 # Gumshoe API contract (for the React UI)
 
-Written from the code after plan 4d-2 (tasks 1-12). Interactive docs for the plain JSON routes are at
-`/docs`; the server-sent event streams are described here only.
+Written from the code after plan 4d-2 (tasks 1-12), updated for the hardening stage. Interactive docs for
+the plain JSON routes are at `/docs` only when `API_DOCS=true` (off by default, refused in public mode);
+the server-sent event streams are described here only.
 
 ## 1. Conventions
 
 - All request and response bodies are JSON (except the event streams, section 4). Unknown request
   fields are refused with 422 `bad_request`. Every API route starts with `/api` (the generated `/docs`, `/redoc` and `/openapi.json` do not).
-- No authentication. Bind to the loopback address only.
+- No accounts. Players are told apart by a signed session cookie; the stats routes need the admin token (section 7). Bind to the loopback address and put any public copy behind one trusted tunnel.
 - **Errors** always have this shape, whatever raised them:
 
   ```json
@@ -355,8 +356,11 @@ These routes are for the operator, not for browsers: `GET /api/stats/decisions`,
 - After repeated wrong tokens an IP gets that 404 even for the right token, for about a minute.
   Refusals are logged as `admin refused ip=...` (the IP only, never the token).
 - CORS allows the `authorization` header only for origins listed in `CORS_ORIGINS`.
-- Until the frontend change (plan 7f), the in-app Stats page and trace drawer do not work against
-  a server with these gates; the trace drawer will use the player route in section 3.
+- The UI's Stats page (`/#/stats`, not linked from the title screen) asks for the token, sends it as the
+  bearer header on its requests, and keeps it in `sessionStorage` (that tab only). A 404 on the first
+  request returns to the prompt with "That token did not work, or the stats are switched off." The trace
+  drawer does not use the admin routes: it reads its own game's decisions through the player route in
+  section 3.
 - `DECISION_RETENTION_DAYS` (default 30; `0` keeps decisions forever) sets how long decisions are
   kept. The purge runs once at startup and then hourly.
 
@@ -407,7 +411,24 @@ agrees: {question: bool}}` (`agrees` is empty unless the decision is a fair head
 `CallView`: `{backend, role, used, cold, latency_ms, error | null, input_tokens | null,
 output_tokens | null, est_cost_usd | null, answers: {question: {verdict, confidence}}}`.
 
+## 7a. Headers and serving the UI
+
+- Every response carries `Content-security-policy` (everything from the site itself; inline styles
+  allowed; no framing), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` and
+  `X-Frame-Options: DENY`. With `PUBLIC_ORIGIN` set it also sends `Strict-Transport-Security`
+  (one year, this host only). An answer that sets no caching gets `Cache-Control: no-store`.
+- A state-changing request (anything but GET, HEAD, OPTIONS) must carry an accepted `Origin` (or `Referer`);
+  otherwise 403. With `PUBLIC_ORIGIN` only that exact origin is accepted; locally the request's own
+  `scheme://host` is accepted too. A body that is not `application/json` gets 415.
+- If `UI_DIST` (default `frontend/dist`) holds an `index.html`, the API serves the built UI from `/`:
+  GET and HEAD only, `index.html` (`Cache-Control: no-cache`) for client-side routes, hashed files under
+  `/assets` with a one-year immutable cache. A missing file (last segment has a dot) and any dot segment
+  (`.env`, `.git`) are 404. Paths under `/api` are never the UI: an unknown one is the JSON 404
+  `not_found`, whatever the method. A directory that looks like a source tree is never served.
+- `/docs`, `/redoc` and `/openapi.json` exist only with `API_DOCS=true`; otherwise they are not API
+  routes: `/docs` is answered by the UI's fallback page and `/openapi.json` is a 404.
+
 ## 8. Not provided
 
 Out of scope of plan 4d-2: per-game stats, autosave, per-source "exhausted" flags, static file
-serving (the UI is served by its own dev server or host), and time series of the stats.
+accounts, and CAPTCHA or firewall features (the built UI is served as in section 7a), and time series of the stats.
