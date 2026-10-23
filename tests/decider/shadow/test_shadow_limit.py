@@ -58,28 +58,74 @@ async def test_zero_means_no_limit(result):
     await decider.drain()
 
 
-async def test_a_failing_primary_with_a_skipped_shadow_surfaces_its_error(result):
-    class FailsFromTheSecondCall(FakeDecider):
-        async def decide(self, state, questions, *, node="adhoc", decision_id=None):
-            self.nodes.append(node)
-            if len(self.nodes) >= 2:
-                raise DeciderError("jev", "down")
-            return result
+class _FailsFromTheSecondCall(FakeDecider):
+    async def decide(self, state, questions, *, node="adhoc", decision_id=None):
+        self.nodes.append(node)
+        if len(self.nodes) >= 2:
+            raise DeciderError("jev", "down")
+        return self._result
 
+
+class _GatedOnlyFirst(FakeDecider):
+    """A shadow whose first call blocks on the gate; later calls answer (or fail) at once."""
+
+    async def decide(self, state, questions, *, node="adhoc", decision_id=None):
+        self.nodes.append(node)
+        if len(self.nodes) == 1:
+            assert self._gate is not None
+            await self._gate.wait()
+        if self._error is not None and len(self.nodes) > 1:
+            raise self._error
+        return self._result
+
+
+async def test_a_failing_primary_with_a_skipped_shadow_falls_back_inline(result):
     release = asyncio.Event()
-    busy_shadow = FakeDecider("nimble", result, gate=release)
+    shadow = _GatedOnlyFirst("nimble", result, gate=release)
+    recorder = FakeRecorder()
     decider = ShadowDecider(
-        FailsFromTheSecondCall("jev"), busy_shadow, FakeRecorder(), shadow_parallel=1
+        _FailsFromTheSecondCall("jev", result), shadow, recorder, shadow_parallel=1
     )
     # succeeds; its shadow now holds the one place
     await decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent")
     await asyncio.sleep(0)
-    with pytest.raises(DeciderError):
-        # skipped shadow: no fallback
-        await decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent")
-    assert decider.shadow_skipped == 1
+    # the primary fails, the parallel shadow was skipped: the shadow answers inline instead
+    answer = await asyncio.wait_for(
+        decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent", decision_id="d2"), 5
+    )
+    assert answer == result
+    assert len(shadow.nodes) == 2
+    assert decider.shadow_skipped == 0  # the shadow did run for that decision, as the fallback
     release.set()
     await decider.drain()
+    rows = [r for batch in recorder.batches for r in batch if r.decision_id == "d2"]
+    by_role = {r.role: r for r in rows}
+    assert set(by_role) == {"primary", "shadow"}  # the primary failure is still recorded
+    assert by_role["shadow"].used and by_role["shadow"].fallback
+    assert not by_role["primary"].used
+
+
+async def test_a_failing_primary_and_a_failing_inline_fallback_surface_an_error(result):
+    release = asyncio.Event()
+    shadow = _GatedOnlyFirst("nimble", result, error=DeciderError("nimble", "down"), gate=release)
+    decider = ShadowDecider(
+        _FailsFromTheSecondCall("jev", result), shadow, FakeRecorder(), shadow_parallel=1
+    )
+    await decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent")
+    await asyncio.sleep(0)
+    with pytest.raises(DeciderError):
+        await asyncio.wait_for(decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent"), 5)
+    assert len(shadow.nodes) == 2
+    release.set()
+    await decider.drain()
+
+
+async def test_a_failing_primary_without_any_shadow_surfaces_its_error():
+    decider = ShadowDecider(
+        FakeDecider("jev", error=DeciderError("jev", "down")), None, FakeRecorder()
+    )
+    with pytest.raises(DeciderError):
+        await decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent")
 
 
 async def test_the_place_is_freed_when_the_shadow_raises(result):

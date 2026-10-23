@@ -89,7 +89,9 @@ class ShadowDecider:
             self._spawn(self._finish(decision_id, node, state, primary, shadow_task))
             return primary.result
 
-        return await self._after_primary_failure(decision_id, node, state, primary, shadow_task)
+        return await self._after_primary_failure(
+            decision_id, node, state, questions, primary, shadow_task
+        )
 
     def _shadow_finished(self, _task: "asyncio.Task[CallOutcome]") -> None:
         self._shadow_inflight -= 1
@@ -159,21 +161,29 @@ class ShadowDecider:
         decision_id: str,
         node: str,
         state: str,
+        questions: Mapping[str, Question],
         primary: CallOutcome,
         shadow_task: asyncio.Task[CallOutcome] | None,
     ) -> DecisionResult:
         assert primary.failure is not None
-        if shadow_task is None:  # nothing to fall back to: surface the original error
-            await self._record(decision_id, node, state, [primary], used_role=None, fallback=False)
-            raise primary.failure
-
-        try:
-            shadow = await shadow_task  # already running; cancelling the turn cancels it too
-        except (
-            Exception
-        ):  # a bug in the shadow (already logged): the primary's failure is the story
-            await self._record(decision_id, node, state, [primary], used_role=None, fallback=False)
-            raise primary.failure from None
+        if shadow_task is None:
+            if self._shadow is None:  # nothing to fall back to: surface the original error
+                await self._record(
+                    decision_id, node, state, [primary], used_role=None, fallback=False
+                )
+                raise primary.failure
+            # the parallel shadow call was skipped at the limit; this rare failure path still
+            # falls back, calling the shadow inline (it ran after all, so it was not skipped)
+            self.shadow_skipped -= 1
+            shadow = await self._call(self._shadow, "shadow", state, questions, node)
+        else:
+            try:
+                shadow = await shadow_task  # already running; cancelling the turn cancels it too
+            except Exception:  # a bug in the shadow (already logged): the primary's failure
+                await self._record(
+                    decision_id, node, state, [primary], used_role=None, fallback=False
+                )
+                raise primary.failure from None
         if shadow.result is not None:
             await self._record(
                 decision_id, node, state, [primary, shadow], used_role="shadow", fallback=True
