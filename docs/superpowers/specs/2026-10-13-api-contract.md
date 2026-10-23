@@ -367,7 +367,28 @@ These routes are for the operator, not for browsers: `GET /api/stats/decisions`,
 ### `GET /api/admin/usage`
 
 Admin only. The operator's view of today's Jev spend (the daily budget, see `GET /api/health`) and
-the server's load.
+the server's load. Answer (`AdminUsage`):
+
+```json
+{"day": "2026-10-16", "jev_tokens_today": 120345, "jev_daily_cap": 5000000,
+ "jev_ip_daily_cap": 300000, "mode": "normal", "games_open": 3, "turns_running": 1, "queued": 0,
+ "shadow_skipped": 0, "sessions_seen": 12, "saves_held": 4,
+ "top_clients": [{"key": "203.0.113.9", "tokens": 80000}]}
+```
+
+- `day`: today's UTC date (`YYYY-MM-DD`), the day the token counts are for.
+- `jev_tokens_today`: Jev tokens counted today across every client (the sum of the day's ledger).
+- `jev_daily_cap`, `jev_ip_daily_cap`: the `JEV_DAILY_TOKENS` and `JEV_IP_DAILY_TOKENS` settings
+  (`0` = no cap).
+- `mode`: `normal` or `slow` (the global Jev budget is spent and Nimble alone decides).
+- `games_open`: games the server holds; `turns_running`: of those, the ones running a turn now;
+  `queued`: turns waiting at the turn gate.
+- `shadow_skipped`: decisions whose shadow call was skipped at the parallel-shadow limit, since
+  the server started.
+- `sessions_seen`: sessions issued since the server started.
+- `saves_held`: saves on disk (`0` when the server keeps no save owners).
+- `top_clients`: the five biggest Jev spenders today, largest first, as `{key, tokens}`; `key` is
+  the client IP the turn came from (empty when unknown).
 
 ### `GET /api/stats/decisions` -> `StatsReport`
 

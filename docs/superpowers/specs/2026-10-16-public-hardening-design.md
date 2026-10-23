@@ -159,20 +159,24 @@ All numbers are settings (0 = unlimited, for local testing).
   10 per minute per IP and logged (IP only).
 - **`/api/admin/usage`.** Today's Jev tokens against the caps (global and top client IPs), mode, sessions seen, games
   open, saves held, queue depth, skipped shadows. Read only.
-- **Stats page.** `#/stats` asks for the token (a password field), keeps it in `sessionStorage`, and the shared
-  `send()` in `frontend/src/api/client.ts` adds `Authorization: Bearer` to the admin calls only. A 404 shows "enter
-  the admin token". The title screen's "Stats" button is removed from the player-facing flow; the owner opens
-  `#/stats` by its address.
+- **Stats page.** `#/stats` asks for the admin token (a password field), keeps it in `sessionStorage` (that tab
+  only), and the shared `send()` in `frontend/src/api/client.ts` adds `Authorization: Bearer` to the admin calls
+  only. A 404 clears the token and asks again with "That token did not work, or the stats are switched off.";
+  "Forget the token" clears it and the cached stats. The title screen's "Stats" button is removed from the
+  player-facing flow; the owner opens `#/stats` by its address.
 - **Player trace drawer.** `Desk.tsx` renders `TraceDrawer` for every player, and it calls
-  `GET /api/decisions/{id}`, which becomes admin-only. A new owner-scoped endpoint
-  `GET /api/games/{game}/decisions/{id}` serves the drawer instead: it answers only for a decision id that appears in
-  that game's own transcript events and returns the decision with **`state_preview` removed** (the model answers,
-  confidence, timing and token counts stay). The plan must check the remaining fields for anything the player does
-  not know (question criteria naming a locked suspect); any such field is dropped too. Admin keeps the full view.
+  `GET /api/decisions/{id}`, which becomes admin-only. A new owner-only endpoint `GET /api/games/{game}/decisions/{id}`
+  serves the drawer instead: it answers only the game's owner, and only for a decision id that appears in that
+  game's own transcript events (the last 200 turns the server keeps). A stranger gets the missing game's answer; an
+  id that is malformed or not in that transcript gets one plain 404. The decision is redacted by an allow-list
+  (`api/redact.py`): **`state_preview` is removed**; numbers, flags and server-made strings (confidence, timing,
+  token counts) stay; model answers are kept only for the `understand` and `post_check` nodes, and only those whose
+  question names and verdicts are shape-checked tokens (such as `suspect_3`, `yes`, `2.00`), never free text; every
+  other node shows no answers; a call's error shows only as `"failed"`, never its text. Admin keeps the full view.
 - **Players' text.** Because the list endpoints are admin-only, `state_preview` stays in them (it is how
-  disagreements are read). A startup purge, then hourly, deletes decision rows older than `DECISION_RETENTION_DAYS`
-  (30; 0 = keep forever). The title screen gets a single line: "Your messages are kept to compare AI models."
-  (wording for the owner to approve).
+  disagreements are read). A purge in the startup housekeeping, then hourly, deletes decision rows older than
+  `DECISION_RETENTION_DAYS` (30; 0 = keep forever). The title screen gets a single line: "Your messages are kept
+  to compare AI models." (wording for the owner to approve).
 
 ## 6. Exposure
 
@@ -185,10 +189,12 @@ All numbers are settings (0 = unlimited, for local testing).
   style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'`
   (the inline styles come from React `style` attributes; scripts stay `'self'`, which the built `index.html`
   satisfies), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `X-Frame-Options: DENY`.
-  `Cache-Control: no-store` is added to API responses **only where none is set**, so the SSE route keeps its
-  `no-cache` and `X-Accel-Buffering` headers.
-- **Docs.** `/docs`, `/redoc` and `/openapi.json` are off unless `API_DOCS=true`; with the CSP above their pages
-  will not load, which is noted in the setting's description.
+  `Cache-Control: no-store` is added to **every** response (not only `/api/`) **where none is set**, so a disabled
+  `/docs` looks like any unknown route, while the SSE route keeps its `no-cache` and `X-Accel-Buffering` headers and
+  the UI files keep their own caching.
+- **Docs.** `/docs`, `/redoc` and `/openapi.json` are off by default, also locally: local docs are opt-in with
+  `API_DOCS=true`. Public mode (`PUBLIC_ORIGIN` set) refuses `API_DOCS=true` at startup. With the CSP above their
+  pages will not load, which is noted in the setting's description.
 - **Binding.** Unchanged: `127.0.0.1`. Opening to the network is the tunnel's job.
 - **Logging.** One line per refused request (code, route, session id prefix of 6 chars, IP). Typed text, cookies and
   tokens are never logged.
@@ -198,7 +204,8 @@ All numbers are settings (0 = unlimited, for local testing).
 | Piece | Where |
 |---|---|
 | Cookie, keys, `Session` dependency, public-mode checks | new `api/session.py` |
-| Origin check, security headers, no-store (pure ASGI middleware, like `BodyLimit`; a `BaseHTTPMiddleware` would break the SSE disconnect detection) | new `api/shield.py` |
+| Origin check (pure ASGI middleware, like `BodyLimit`; a `BaseHTTPMiddleware` would break the SSE disconnect detection) | new `api/shield.py` |
+| Security headers and no-store (pure ASGI middleware too) | new `api/headers.py` |
 | Counters, `RateLimiter`, `TurnGate` (semaphore + bounded queue), client IP | new `api/ratelimit.py` |
 | Admin dependency | new `api/admin.py` |
 | Ownership, `slot_for`, owner filter, idle expiry, tombstones, queue behaviour | `api/service.py` |
