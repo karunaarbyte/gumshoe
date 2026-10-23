@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
 import { type ApiError, isApiError } from '../api/errors';
 import type { GameCreated } from '../api/types';
-import { copyBoard, gameKey, saveKey } from '../board/storage';
+import { copyBoard, gameKey, removeBoard, saveKey } from '../board/storage';
 import { useApi } from '../data/ApiContext';
 import { keys, useGames, useHealth, useMeta, useSaves } from '../data/queries';
 import { InkButton, StampButton } from '../ui/Button';
@@ -56,6 +56,12 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
   const close = useMutation({
     mutationFn: (game: string) => client.deleteGame(game),
     onSettled: () => queryClient.invalidateQueries({ queryKey: keys.games }),
+    onError: fail,
+  });
+  const removeSave = useMutation({
+    mutationFn: (name: string) => client.deleteSave(name),
+    onSuccess: (_done: void, name: string) => removeBoard(saveKey(name)),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: keys.saves }),
     onError: fail,
   });
   const busy = create.isPending || load.isPending;
@@ -121,6 +127,9 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
               <span className="text-xs uppercase">{s.status}</span>
               <InkButton disabled={off || busy} onClick={() => load.mutate(s.name)}>
                 Load
+              </InkButton>
+              <InkButton aria-label={`Delete save ${s.name}`} disabled={off || busy || removeSave.isPending} onClick={() => removeSave.mutate(s.name)}>
+                Delete
               </InkButton>
             </li>
           ))}

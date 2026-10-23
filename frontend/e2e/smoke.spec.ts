@@ -86,3 +86,16 @@ test('a typed yes carries the waiting pending_id and a bare yes carries none', a
   expect(yesTurns[0]?.body).not.toHaveProperty('pending_id');
   expect(yesTurns[1]?.body.pending_id).toBe('p-e2e');
 });
+
+test('a save can be deleted from the title screen', async ({ page, request }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'New case' }).click();
+  await expect(page).toHaveURL(/#\/game\/e2e-game$/);
+  const origin = { origin: 'http://127.0.0.1:5174' };
+  expect((await request.post('http://127.0.0.1:8765/api/games/e2e-game/save', { headers: origin })).ok()).toBe(true);
+  await page.goto('/');
+  const saves = page.getByRole('region', { name: 'Saved games' });
+  await saves.getByRole('button', { name: 'Delete save 0123456789abcdef' }).click();
+  await expect(saves.getByText('No saves yet.')).toBeVisible();
+  expect(await (await request.get('http://127.0.0.1:8765/api/saves')).json()).toEqual([]);
+});

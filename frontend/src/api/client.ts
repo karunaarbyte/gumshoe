@@ -79,6 +79,10 @@ export const api = {
   deleteGame: async (game: string): Promise<void> => {
     await send(g(game), { method: 'DELETE' });
   },
+  /** 204 on success: there is no body to read. */
+  deleteSave: async (name: string): Promise<void> => {
+    await send(`/api/saves/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  },
   stats: (params: StatsParams = {}) => {
     const q = new URLSearchParams();
     if (params.since) q.set('since', params.since);

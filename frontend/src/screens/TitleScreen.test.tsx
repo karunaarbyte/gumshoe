@@ -62,6 +62,35 @@ describe('TitleScreen', () => {
     expect(loadBoard(gameKey('g2')).positions['suspect:X']).toEqual({ x: 1, y: 2 });
   });
 
+  test('deletes a save: its button names it, it waits while pending, then the list refreshes', async () => {
+    const client = fakeApi();
+    const save = { name: '0123456789abcdef', created_at: '2026-10-15T10:00:00+00:00', pack: 'castle', status: 'playing' } as const;
+    client.saves.mockResolvedValueOnce([save]).mockResolvedValue([]);
+    let finish: () => void = () => {};
+    client.deleteSave.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+    storeBoard(saveKey(save.name), { positions: { 'suspect:X': { x: 1, y: 2 } }, threads: [] });
+    setup(client);
+    const saves = await screen.findByRole('region', { name: 'Saved games' });
+    const del = await within(saves).findByRole('button', { name: `Delete save ${save.name}` });
+    await userEvent.click(del);
+    expect(client.deleteSave).toHaveBeenCalledWith(save.name);
+    await waitFor(() => expect(del).toBeDisabled());
+    finish();
+    await waitFor(() => expect(within(saves).getByText('No saves yet.')).toBeInTheDocument());
+    expect(client.saves).toHaveBeenCalledTimes(2);
+    expect(loadBoard(saveKey(save.name)).positions).toEqual({}); // its board copy goes too
+  });
+
+  test('a failed save delete is reported and the list is refreshed', async () => {
+    const client = fakeApi();
+    client.saves.mockResolvedValue([{ name: 's1', created_at: '2026-10-15T10:00:00+00:00', pack: 'castle', status: 'won' }]);
+    client.deleteSave.mockRejectedValue(new ApiError(404, 'unknown_game', 'no such save'));
+    const { onError } = setup(client);
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete save s1' }));
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'unknown_game' })));
+    await waitFor(() => expect(client.saves).toHaveBeenCalledTimes(2));
+  });
+
   test('lists open games with outcome and turn_running; Resume and Close', async () => {
     const client = fakeApi();
     client.games.mockResolvedValue([{ game: 'g9', preset: 'standard', outcome: 'lost', attempts_left: 0, turn_running: true }]);

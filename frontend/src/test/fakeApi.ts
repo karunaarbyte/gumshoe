@@ -38,6 +38,7 @@ export function fakeApi(init: { state?: GameState; turns?: TurnRecord[] } = {}) 
     turns: vi.fn<Api['turns']>(async () => init.turns ?? []),
     save: vi.fn<Api['save']>(async () => ({ name: '0123456789abcdef' })),
     deleteGame: vi.fn<Api['deleteGame']>(async () => undefined),
+    deleteSave: vi.fn<Api['deleteSave']>(async () => undefined),
     stats: vi.fn<Api['stats']>(async () => statsReport),
     disagreements: vi.fn<Api['disagreements']>(async () => disagreements),
     decision: vi.fn<Api['decision']>(async (id: string) => {

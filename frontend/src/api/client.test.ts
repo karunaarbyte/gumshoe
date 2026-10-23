@@ -130,6 +130,17 @@ describe('api client', () => {
     await expect(api.deleteGame('g1')).resolves.toBeUndefined();
   });
 
+  test('deleting a save sends DELETE to its encoded name and answers nothing on 204', async () => {
+    const fetchMock = stubFetch(new Response(null, { status: 204 }));
+    await expect(api.deleteSave('a b/c')).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith('/api/saves/a%20b%2Fc', expect.objectContaining({ method: 'DELETE' }));
+  });
+
+  test('deleting a save that is not there throws its error', async () => {
+    stubFetch(errorResponse(404, 'unknown_game'));
+    await expect(api.deleteSave('gone')).rejects.toMatchObject({ code: 'unknown_game' });
+  });
+
   test('game ids are URL-encoded', async () => {
     const fetchMock = stubFetch(jsonResponse([]));
     await api.turns('a/b');
@@ -172,6 +183,7 @@ describe('the admin token', () => {
       ['turns', () => api.turns('g'), () => jsonResponse([])],
       ['save', () => api.save('g'), () => jsonResponse({ name: 's' })],
       ['deleteGame', () => api.deleteGame('g'), () => jsonResponse({})],
+      ['deleteSave', () => api.deleteSave('s'), () => new Response(null, { status: 204 })],
       ['gameDecision', () => api.gameDecision('g', 'd'), () => jsonResponse({})],
       ['turn', () => api.turn('g', { text: 'hi' }), done],
       ['confirm', () => api.confirm('g', { pending_id: 'p', answer: 'yes' }), done],
