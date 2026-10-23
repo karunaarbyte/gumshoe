@@ -39,6 +39,7 @@ from gumshoe.api.redact import for_player
 from gumshoe.api.service import AgentService
 from gumshoe.api.session import Owner, Sessions
 from gumshoe.api.shield import OriginCheck
+from gumshoe.api.static import mount_ui
 from gumshoe.api.wiring import default_service
 from gumshoe.config import Settings, get_settings
 from gumshoe.decider import DeciderConfigError, describe_failure
@@ -320,4 +321,6 @@ def create_app(
             top_clients=[ClientUsage(key=k, tokens=t) for k, t in top],
         )
 
+    # Last, after every API route (and the docs), so those always win over the UI's catch-all.
+    mount_ui(app, settings.ui_dist)
     return app

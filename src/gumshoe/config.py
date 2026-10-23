@@ -106,6 +106,8 @@ class Settings(BaseSettings):
     saves_dir: Path = Field(
         Path("saves"), validation_alias=AliasChoices("saves_dir", "gumshoe_saves")
     )
+    # The built UI, served at `/` when its index.html exists (`npm run build` in frontend/).
+    ui_dist: Path = Path("frontend/dist")
 
     # Prices in US dollars per million tokens, for the cost columns of the stats (0 = free).
     jev_usd_per_mtok_in: float = Field(0.0, ge=0, allow_inf_nan=False)
@@ -168,7 +170,7 @@ class Settings(BaseSettings):
     def _blank_saves_means_default(cls, value: Any) -> Any:
         return "saves" if value == "" else value
 
-    @field_validator("stats_db_path", "saves_dir", mode="after")
+    @field_validator("stats_db_path", "saves_dir", "ui_dist", mode="after")
     @classmethod
     def _resolve_against_the_project_root(cls, value: Path) -> Path:
         return _under_root(value)
