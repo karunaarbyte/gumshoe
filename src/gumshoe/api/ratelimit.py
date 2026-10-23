@@ -1,10 +1,12 @@
 """Rate limits and the turn gate. In memory, one process: see the spec's risks."""
 
+import asyncio
 import ipaddress
 import math
 import time
 from collections import deque
 from collections.abc import Callable
+from typing import Any, Literal
 
 from fastapi import Request
 
@@ -137,3 +139,85 @@ def request_ip(request: Request) -> str:
     peer = request.client.host if request.client else None
     forwarded = request.headers.get("x-forwarded-for")
     return client_ip(peer, forwarded, trust_proxy=request.app.state.trust_proxy)
+
+
+class Busy(Exception):
+    """Every running and waiting place is taken."""
+
+
+class Ticket:
+    """One turn's place at the gate: reserved by `admit`, then waited on, then closed."""
+
+    def __init__(self, gate: "TurnGate | None") -> None:
+        self._gate = gate
+        self._state: Literal["queued", "running", "closed"] = "queued"
+
+    async def wait(
+        self, abort: asyncio.Event, on_queue: Callable[[int], None] | None = None
+    ) -> Literal["ready", "timeout", "left"]:
+        gate = self._gate
+        if gate is None:
+            self._state = "closed"
+            return "ready"
+        if gate.semaphore.locked() and on_queue is not None:
+            on_queue(gate.queued)
+        acquire = asyncio.ensure_future(gate.semaphore.acquire())
+        left = asyncio.ensure_future(abort.wait())
+        try:
+            done, _ = await asyncio.wait(
+                {acquire, left}, timeout=gate.wait_s, return_when=asyncio.FIRST_COMPLETED
+            )
+        except asyncio.CancelledError:
+            await self._give_up(acquire, left)
+            raise
+        if acquire in done:
+            left.cancel()
+            self._state = "running"
+            gate.queued -= 1
+            gate.running += 1
+            return "ready"
+        await self._give_up(acquire, left)
+        return "left" if left in done else "timeout"
+
+    async def _give_up(self, acquire: "asyncio.Future[Any]", left: "asyncio.Future[Any]") -> None:
+        assert self._gate is not None
+        left.cancel()
+        acquire.cancel()
+        await asyncio.gather(acquire, left, return_exceptions=True)
+        if acquire.done() and not acquire.cancelled():  # it won the race: hand the slot back
+            self._gate.semaphore.release()
+        if self._state == "queued":
+            self._gate.queued -= 1
+        self._state = "closed"
+
+    def close(self) -> None:
+        gate = self._gate
+        if gate is not None:
+            if self._state == "queued":
+                gate.queued -= 1
+            elif self._state == "running":
+                gate.running -= 1
+                gate.semaphore.release()
+        self._state = "closed"
+
+
+class TurnGate:
+    """At most `parallel` turns run at once; up to `queue` more may wait, each for at most
+    `wait_s`. `parallel == 0` turns the gate off."""
+
+    def __init__(self, parallel: int, queue: int, wait_s: float) -> None:
+        self.parallel = parallel
+        self.queue = queue
+        self.wait_s = wait_s
+        self.semaphore = asyncio.Semaphore(max(parallel, 1))
+        self.running = 0
+        self.queued = 0
+
+    def admit(self) -> Ticket:
+        """A place for one turn, or `Busy` at once when running and waiting turns fill the gate."""
+        if self.parallel == 0:
+            return Ticket(None)
+        if self.running + self.queued >= self.parallel + self.queue:
+            raise Busy
+        self.queued += 1
+        return Ticket(self)
