@@ -1,4 +1,5 @@
-"""What a player may see of a decision: the verdicts, not the words that led to them.
+"""What a player may see of a decision (the verdicts, not the words that led to them) and of
+the case brief (a locked suspect or place without its name).
 
 The case's secret is its locked names (suspects and places the player has not reached). Any text
 here may hold one: the player's own words and the state sent to the models (`state_preview`), a
@@ -7,7 +8,11 @@ object is built field by field from the sets below, a field not named in them is
 and a test fails when a view gains a field no set names."""
 
 import re
+from typing import Annotated
 
+from pydantic import AfterValidator
+
+from gumshoe.cases import LocationView, PlayerCaseView, SuspectView
 from gumshoe.stats.queries import AnswerView, CallView, DecisionView
 
 # copied as they are: numbers, flags, and strings the server makes (an id, a timestamp, the node,
@@ -87,3 +92,25 @@ def for_player(view: DecisionView) -> DecisionView:
         calls=[_call(view.node, call) for call in view.calls],
         agrees={q: same for q, same in view.agrees.items() if _safe(q)},
     )
+
+
+def _blank_locked[E: (LocationView, SuspectView)](entries: tuple[E, ...]) -> tuple[E, ...]:
+    return tuple(
+        e.model_copy(update={"name": "", "description": ""}) if e.locked else e for e in entries
+    )
+
+
+def player_brief(brief: PlayerCaseView) -> PlayerCaseView:
+    """The brief as the player may see it: a locked suspect or place keeps its number, handle and
+    lock, but its name and description are sent empty until it opens. The engine's own brief keeps
+    them: the agent needs them to tell which entry a typed message means."""
+    return brief.model_copy(
+        update={
+            "locations": _blank_locked(brief.locations),
+            "suspects": _blank_locked(brief.suspects),
+        }
+    )
+
+
+# The type of every brief the API sends: whatever model carries it, it is redacted on the way in.
+PlayerBrief = Annotated[PlayerCaseView, AfterValidator(player_brief)]

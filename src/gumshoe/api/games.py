@@ -13,9 +13,9 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt
 from gumshoe.agent import EVENT_ADAPTER, SaveView, ToolFailure, TurnEvent
 from gumshoe.api.errors import ApiError
 from gumshoe.api.ratelimit import request_ip
+from gumshoe.api.redact import PlayerBrief
 from gumshoe.api.service import AgentService, GameState, GameSummary, SaveSummary, TurnRecord
 from gumshoe.api.session import NewOwner, Owner, optional_owner
-from gumshoe.cases import PlayerCaseView
 
 router = APIRouter(prefix="/api/games")
 saves_router = APIRouter(prefix="/api/saves")
@@ -44,7 +44,7 @@ class GameCreated(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     game: str
-    brief: PlayerCaseView
+    brief: PlayerBrief  # locked names blanked
     preset: str | None
 
 

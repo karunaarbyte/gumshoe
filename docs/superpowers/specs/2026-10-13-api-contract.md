@@ -99,8 +99,11 @@ integer: a string, float or boolean fails validation with 422 `bad_request`; an 
 ```
 
 `PlayerCaseView`: `{intro, locations[], suspects[], record_kinds[], attempts_left, status}`.
-`locations[]` and `suspects[]` items: `{number, handle, name, description, locked}`;
-`record_kinds[]` items: `{key, label}`; `status` is `playing | won | lost`.
+`locations[]` and `suspects[]` items: `{number, handle, name, description, locked}`. A locked
+item's `name` and `description` are `""` until it opens (every brief the API sends: create, load,
+`GET /api/games/{game}`). Items are in a fixed order that does not depend on names (so a locked
+item's place tells nothing), and `number` is stable for the whole case, across unlocks and a
+save and load; `handle` changes on a load. `record_kinds[]` items: `{key, label}`; `status` is `playing | won | lost`.
 
 ### `GET /api/games` -> `GameSummary[]`
 

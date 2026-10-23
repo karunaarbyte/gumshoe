@@ -39,6 +39,7 @@ from gumshoe.agent import (
 from gumshoe.agent.events import Clarify, Done, Queued
 from gumshoe.api.errors import BAD_SAVE_MESSAGE, UNKNOWN_GAME, ApiError
 from gumshoe.api.ratelimit import Busy, Quotas, Ticket, TurnGate
+from gumshoe.api.redact import PlayerBrief
 from gumshoe.api.saveowners import SaveOwners
 from gumshoe.cases import NotebookView, PlayerCaseView, RevealView
 from gumshoe.config import Settings
@@ -109,7 +110,7 @@ class GameState(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    brief: PlayerCaseView
+    brief: PlayerBrief  # locked names blanked
     notebook: NotebookView
     outcome: Outcome
     pending: PendingView | None
