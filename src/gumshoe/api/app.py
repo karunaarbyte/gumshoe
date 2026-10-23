@@ -21,6 +21,7 @@ from gumshoe.api.admin import admin_token_of, require_admin
 from gumshoe.api.errors import ApiError, describe_validation, error_body, http_code, status_for
 from gumshoe.api.games import MAX_TURN_CHARS, Service, saves_router
 from gumshoe.api.games import router as games_router
+from gumshoe.api.headers import SecurityHeaders
 from gumshoe.api.info import (
     MAX_ATTEMPTS,
     AdminUsage,
@@ -111,7 +112,15 @@ def create_app(
             yield
 
     # No slash redirects: a 307 from `/api/admin/usage/` would show the route exists.
-    app = FastAPI(title="Gumshoe API", lifespan=lifespan, redirect_slashes=False)
+    docs = settings.api_docs  # never in public mode: Settings refuses that
+    app = FastAPI(
+        title="Gumshoe API",
+        lifespan=lifespan,
+        redirect_slashes=False,
+        docs_url="/docs" if docs else None,
+        redoc_url="/redoc" if docs else None,
+        openapi_url="/openapi.json" if docs else None,
+    )
     app.state.game_off = NOT_STARTED  # until the lifespan has run
     app.state.sessions = sessions
     app.state.quotas = quotas
@@ -124,13 +133,15 @@ def create_app(
     )
     app.add_middleware(OriginCheck, allowed=allowed_origins, local=not settings.public_mode)
     app.add_middleware(RequestRate, quotas=quotas, trust_proxy=settings.trust_proxy)
-    if origins := settings.cors_origin_list:  # added last, so it is outermost: 413s carry it too
+    if origins := settings.cors_origin_list:  # outside the limits, so 413s carry it too
         app.add_middleware(
             CORSMiddleware,
             allow_origins=list(origins),
             allow_methods=["GET", "POST", "DELETE"],
             allow_headers=["content-type", "authorization"],
         )
+    # Outermost of all, so every refusal above (413, 403, 429) carries the headers too.
+    app.add_middleware(SecurityHeaders, hsts=settings.public_mode)
 
     @app.exception_handler(ApiError)
     async def api_error(request: Request, exc: ApiError) -> JSONResponse:

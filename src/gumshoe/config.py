@@ -131,6 +131,9 @@ class Settings(BaseSettings):
     # Admin access to the stats and decisions (32+ characters; empty = those endpoints are off).
     admin_token: SecretStr = SecretStr("")
     decision_retention_days: int = Field(30, ge=0)  # older decisions are deleted; 0 = keep forever
+    # /docs, /redoc and /openapi.json, for local use only (refused with PUBLIC_ORIGIN). The strict
+    # CSP stops the /docs and /redoc pages loading their scripts from a CDN; /openapi.json works.
+    api_docs: bool = False
 
     # Limits (0 = unlimited). Per session, per client IP, and global.
     session_games_open: int = Field(3, ge=0)
@@ -248,6 +251,13 @@ class Settings(BaseSettings):
             raise ValueError(
                 "SESSION_SECRET must be at least 32 characters when PUBLIC_ORIGIN is set"
             )
+        return value
+
+    @field_validator("api_docs", mode="after")
+    @classmethod
+    def _no_docs_in_public_mode(cls, value: bool, info: ValidationInfo) -> bool:
+        if value and info.data.get("public_origin"):
+            raise ValueError("API_DOCS must be off when PUBLIC_ORIGIN is set")
         return value
 
     def _settle_decider_roles(self) -> None:

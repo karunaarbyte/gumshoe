@@ -336,6 +336,10 @@ def test_no_warning_when_the_roles_were_not_set(monkeypatch, caplog):
     assert not caplog.records
 
 
+def test_the_api_docs_are_off_by_default():
+    assert Settings(_env_file=None).api_docs is False
+
+
 def test_public_mode_is_off_by_default():
     s = Settings(_env_file=None)
     assert s.public_origin == "" and s.public_mode is False
