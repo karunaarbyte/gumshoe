@@ -9,7 +9,7 @@ import gumshoe.api.wiring as wiring
 from gumshoe.agent import AgentConfig
 from gumshoe.api import create_app
 from gumshoe.api.games import MAX_TURN_CHARS
-from gumshoe.api.service import AgentService
+from gumshoe.api.service import AgentService, Caps
 from gumshoe.api.wiring import agent_config, default_service, save_index
 from gumshoe.config import Settings
 from gumshoe.decider import DeciderConfigError
@@ -184,3 +184,20 @@ def test_the_save_index_leaves_out_saves_the_caller_does_not_own(tmp_path):
     host.save_game(host.new_game(2, "short").game)
     assert [s.name for s in save_index(tmp_path, lambda name: name == mine)] == [mine]
     assert save_index(tmp_path, lambda name: False) == []
+
+
+async def test_default_service_applies_the_limit_settings(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        decider_primary="nimble",
+        decider_shadow=None,
+        saves_dir=tmp_path,
+        session_games_open=2,
+        max_parallel_turns=3,
+        turn_queue_size=5,
+    )
+    store = SqliteStatsStore(tmp_path / "d.db")
+    async with default_service(store, settings) as service:
+        assert service._caps == Caps.from_settings(settings)
+        assert service._gate is not None and (service._gate.parallel, service._gate.queue) == (3, 5)
+        assert service._quotas is not None

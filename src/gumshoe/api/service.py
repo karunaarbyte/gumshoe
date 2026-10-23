@@ -4,13 +4,19 @@ A turn runs in a detached task that holds the game's lock, so a dropped client n
 work. One turn at a time per game: a second one while the first runs is refused with 409
 `turn_in_progress` (each turn is billed, so they are never queued). Save and delete wait for the
 lock. The reader of a turn only drains a queue.
+
+The limits: open games per session and per IP, turns in flight per session and per IP, the
+creation and turn rates (`Quotas`), and the gate (`TurnGate`) that caps the turns processed at
+once across every game. A turn takes its gate place only once it holds its game's lock, so a
+long save never holds one. Every place a refused, finished, failed or abandoned turn held is
+given back exactly once (the task's done callbacks).
 """
 
 import asyncio
 import hmac
 import logging
 import uuid
-from collections import deque
+from collections import Counter, deque
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -28,19 +34,52 @@ from gumshoe.agent import (
     take_confirm,
     take_turn,
 )
-from gumshoe.agent.events import Clarify, Done
+from gumshoe.agent.events import Clarify, Done, Queued
 from gumshoe.api.errors import BAD_SAVE_MESSAGE, UNKNOWN_GAME, ApiError
+from gumshoe.api.ratelimit import Busy, Quotas, Ticket, TurnGate
 from gumshoe.api.saveowners import SaveOwners
 from gumshoe.cases import NotebookView, PlayerCaseView, RevealView
+from gumshoe.config import Settings
 from gumshoe.decider import describe_failure
 
 logger = logging.getLogger(__name__)
 
 SHUTTING_DOWN = "The game server is shutting down. Please try again in a moment."
+BUSY_TEXT = "The detectives are busy right now. Please try again in a moment."
 MAX_TURNS_KEPT = 200  # per game, for the transcript; the oldest are dropped first
 
 
 Outcome = Literal["playing", "won", "lost", "gave_up"]
+
+
+@dataclass(frozen=True)
+class Caps:
+    """How much one session or one IP may hold at once. 0 = unlimited."""
+
+    games_per_session: int = 0
+    games_per_ip: int = 0
+    turns_per_session: int = 0
+    turns_in_flight_per_ip: int = 0
+
+    @classmethod
+    def from_settings(cls, settings: Settings) -> "Caps":
+        return cls(
+            games_per_session=settings.session_games_open,
+            games_per_ip=settings.ip_games_open,
+            turns_per_session=settings.session_turns_in_flight,
+            turns_in_flight_per_ip=settings.ip_turns_in_flight,
+        )
+
+
+NO_CAPS = Caps()
+
+
+def _drop(counter: "Counter[str]", key: str) -> None:
+    """Count one down, never keeping a zero entry (unbounded keys would be unbounded memory)."""
+    if counter[key] <= 1:
+        counter.pop(key, None)
+    else:
+        counter[key] -= 1
 
 
 class PendingView(BaseModel):
@@ -116,6 +155,7 @@ class _Slot:
     busy: bool = False  # a turn is running or waiting for the lock: the next one is refused
     turns: "deque[TurnRecord]" = field(default_factory=_transcript)
     preset: str | None = None  # None for a loaded game
+    ip: str = ""  # the network that opened it, for the per-IP open-game cap
 
 
 @dataclass
@@ -123,6 +163,7 @@ class _Reader:
     """Shared by a turn and its reader: set once the client has stopped reading."""
 
     gone: bool = False
+    left: asyncio.Event = field(default_factory=asyncio.Event)  # `gone`, for a turn to wait on
 
 
 async def _drain(
@@ -133,6 +174,7 @@ async def _drain(
             yield event
     finally:
         reader.gone = True  # a turn still waiting for the lock now has nobody to serve
+        reader.left.set()  # nor one waiting at the gate
 
 
 ListSaves = Callable[[Callable[[str], bool]], list[SaveSummary]]
@@ -146,13 +188,24 @@ class AgentService:
         grace_s: float = 5.0,
         list_saves: ListSaves | None = None,
         owners: SaveOwners | None = None,
+        quotas: Quotas | None = None,
+        gate: TurnGate | None = None,
+        caps: Caps = NO_CAPS,
     ) -> None:
         self._deps = deps
         self._grace_s = grace_s
         self._list_saves = list_saves  # blocking file reads: called in a worker thread
         self._owners = owners
+        self._quotas = quotas
+        self._gate = gate
+        self._caps = caps
         self._slots: dict[str, _Slot] = {}
         self._tasks: set[asyncio.Task[None]] = set()
+        # turns running, and games being created; keys at zero are dropped (see `_drop`)
+        self._flying_by_owner: Counter[str] = Counter()
+        self._flying_by_ip: Counter[str] = Counter()
+        self._reserved_by_owner: Counter[str] = Counter()
+        self._reserved_by_ip: Counter[str] = Counter()
 
     def _slot(self, game: str, owner: str) -> _Slot:
         """The game's slot for its owner. A missing game and someone else's game fail alike, so a
@@ -162,17 +215,53 @@ class AgentService:
             raise ToolFailure("unknown_game", UNKNOWN_GAME)
         return slot
 
-    def _register(self, view: NewGameView, preset: str | None, owner: str) -> NewGameView:
-        self._slots[view.game] = _Slot(TurnContext(game=view.game), owner, preset=preset)
+    def _register(self, view: NewGameView, preset: str | None, owner: str, ip: str) -> NewGameView:
+        self._slots[view.game] = _Slot(TurnContext(game=view.game), owner, preset=preset, ip=ip)
         return view
 
-    async def new_game(self, seed: int, preset: str = "standard", *, owner: str) -> NewGameView:
-        return self._register(await self._deps.client.new_game(seed, preset), preset, owner)
+    def _admit_game(self, owner: str, ip: str) -> Callable[[], None]:
+        """Check the open-game quotas and reserve a place; the returned function releases it.
+        Synchronous, so concurrent requests cannot all pass the check before one registers."""
+        slots = self._slots.values()
+        mine = sum(1 for s in slots if s.owner == owner) + self._reserved_by_owner[owner]
+        if 0 < self._caps.games_per_session <= mine:
+            raise ApiError(429, "quota", "you have too many games open; finish or delete one")
+        if ip:
+            theirs = sum(1 for s in slots if s.ip == ip) + self._reserved_by_ip[ip]
+            if 0 < self._caps.games_per_ip <= theirs:
+                raise ApiError(429, "quota", "too many games are open from your network")
+        if self._quotas is not None:
+            self._quotas.game_created(owner)
+        self._reserved_by_owner[owner] += 1
+        if ip:
+            self._reserved_by_ip[ip] += 1
 
-    async def load_game(self, name: str, *, owner: str) -> NewGameView:
+        def release() -> None:
+            _drop(self._reserved_by_owner, owner)
+            if ip:
+                _drop(self._reserved_by_ip, ip)
+
+        return release
+
+    async def new_game(
+        self, seed: int, preset: str = "standard", *, owner: str, ip: str = ""
+    ) -> NewGameView:
+        release = self._admit_game(owner, ip)
+        try:
+            view = await self._deps.client.new_game(seed, preset)
+            return self._register(view, preset, owner, ip)
+        finally:
+            release()
+
+    async def load_game(self, name: str, *, owner: str, ip: str = "") -> NewGameView:
         if self._owners is not None and not await asyncio.to_thread(self._owners.owns, name, owner):
             raise ToolFailure("bad_save", BAD_SAVE_MESSAGE)
-        return self._register(await self._deps.client.load_game(name), None, owner)
+        release = self._admit_game(owner, ip)
+        try:
+            view = await self._deps.client.load_game(name)
+            return self._register(view, None, owner, ip)
+        finally:
+            release()
 
     @staticmethod
     def _outcome(slot: _Slot, brief: PlayerCaseView) -> Outcome:
@@ -242,33 +331,71 @@ class AgentService:
         return list(self._slot(game, owner).turns)
 
     def start_turn(
-        self, game: str, text: str, *, owner: str, pending_id: str | None = None
+        self,
+        game: str,
+        text: str,
+        *,
+        owner: str,
+        ip: str = "",
+        pending_id: str | None = None,
     ) -> AsyncGenerator[TurnEvent]:
-        """Raises at once (before any streaming) for an unknown game or a turn in progress."""
-        slot = self._slot(game, owner)
+        """Raises at once (before any streaming) for an unknown game, a turn in progress, a
+        quota or rate refusal, or a full gate."""
+        slot = self._slot(game, owner)  # first: a stranger learns nothing and uses up nothing
+        self._ensure_free(slot)
+        ticket = self._admit_turn(owner, ip)
         return self._start(
             slot,
             lambda: take_turn(self._deps, slot.ctx, text, pending_id=pending_id),
             kind="turn",
             text=text,
+            owner=owner,
+            ip=ip,
+            ticket=ticket,
         )
 
     def start_confirm(
-        self, game: str, pending_id: str, answer: Literal["yes", "no"], *, owner: str
+        self,
+        game: str,
+        pending_id: str,
+        answer: Literal["yes", "no"],
+        *,
+        owner: str,
+        ip: str = "",
     ) -> AsyncGenerator[TurnEvent]:
-        """The confirm button. Raises at once for an unknown game, a turn in progress, or a
-        confirmation that is not the one waiting (409 `no_such_pending`)."""
+        """The confirm button. Raises at once for an unknown game, a turn in progress, a
+        confirmation that is not the one waiting (409 `no_such_pending`), or a limit."""
         slot = self._slot(game, owner)
         self._ensure_free(slot)
         pending = slot.ctx.pending
-        if pending is None or pending.id != pending_id:
+        if pending is None or pending.id != pending_id:  # before the limits: costs no quota
             raise ApiError(409, "no_such_pending", "that confirmation is not waiting any more")
+        ticket = self._admit_turn(owner, ip)
         return self._start(
             slot,
             lambda: take_confirm(self._deps, slot.ctx, pending_id, answer),
             kind="confirm",
             text=answer,
+            owner=owner,
+            ip=ip,
+            ticket=ticket,
         )
+
+    def _admit_turn(self, owner: str, ip: str) -> Ticket:
+        """Check the in-flight caps and the turn rates, then take a place at the gate."""
+        if 0 < self._caps.turns_per_session <= self._flying_by_owner[owner]:
+            raise ApiError(409, "turn_in_progress", "you already have a turn running; wait for it")
+        if ip and 0 < self._caps.turns_in_flight_per_ip <= self._flying_by_ip[ip]:
+            message = "too many turns are running from your network"
+            raise ApiError(429, "busy", message, retry_after=5)
+        if self._quotas is not None:
+            self._quotas.turn(owner, ip)
+        if self._gate is None:
+            return Ticket(None)
+        try:
+            return self._gate.admit()
+        except Busy:
+            raise ApiError(429, "busy", BUSY_TEXT, retry_after=5) from None
 
     @staticmethod
     def _ensure_free(slot: _Slot) -> None:
@@ -284,9 +411,16 @@ class AgentService:
         *,
         kind: Literal["turn", "confirm"],
         text: str,
+        owner: str,
+        ip: str,
+        ticket: Ticket,
     ) -> AsyncGenerator[TurnEvent]:
-        self._ensure_free(slot)
+        # the callers ran `_ensure_free` with no await since, so the game is still free; from
+        # here nothing raises before the done callbacks that give back the ticket are in place
         slot.busy = True
+        self._flying_by_owner[owner] += 1
+        if ip:
+            self._flying_by_ip[ip] += 1
         queue: asyncio.Queue[TurnEvent | None] = asyncio.Queue()
         reader = _Reader()
         record = TurnRecord(
@@ -297,13 +431,14 @@ class AgentService:
             events=[],
             complete=False,
         )
-        task = asyncio.create_task(self._run(slot, events, queue, reader, record))
+        task = asyncio.create_task(self._run(slot, events, queue, reader, record, ticket))
         self._tasks.add(task)  # a strong reference: the loop only keeps a weak one
         task.add_done_callback(self._finished)
         # Done callbacks run in order and however the task ended, even when it was cancelled
         # before its first step (a finally block would never be entered): free the game first,
         # then end the reader's stream, so a client that saw the end can start the next turn.
         task.add_done_callback(lambda _task: setattr(slot, "busy", False))
+        task.add_done_callback(lambda _task: self._landed(owner, ip, ticket))
         task.add_done_callback(lambda _task: queue.put_nowait(None))
         return _drain(queue, reader)
 
@@ -314,6 +449,7 @@ class AgentService:
         queue: "asyncio.Queue[TurnEvent | None]",
         reader: _Reader,
         record: TurnRecord,
+        ticket: Ticket,
     ) -> None:
         def emit(event: TurnEvent) -> None:
             record.events.append(event)
@@ -326,6 +462,16 @@ class AgentService:
                     return
                 if reader.gone:  # the client left while this turn waited: do not run it
                     return
+                # wait() exactly once; the done callback closes the ticket however this ends
+                outcome = await ticket.wait(
+                    reader.left, lambda place: queue.put_nowait(Queued(position=place))
+                )
+                if outcome == "left":  # the client left while queued: give up the place
+                    return
+                if outcome == "timeout":  # never recorded: it did not run
+                    queue.put_nowait(Clarify(reason="error", text=BUSY_TEXT))
+                    queue.put_nowait(Done())
+                    return
                 slot.turns.append(record)  # only turns that really run are kept
                 async for event in events():
                     emit(event)
@@ -336,6 +482,13 @@ class AgentService:
             raise
         finally:
             record.complete = True
+
+    def _landed(self, owner: str, ip: str, ticket: Ticket) -> None:
+        """Give back what a turn held: its in-flight counts and its gate place."""
+        _drop(self._flying_by_owner, owner)
+        if ip:
+            _drop(self._flying_by_ip, ip)
+        ticket.close()
 
     def _finished(self, task: "asyncio.Task[None]") -> None:
         self._tasks.discard(task)

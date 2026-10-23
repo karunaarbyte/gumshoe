@@ -1,6 +1,7 @@
 import pytest
 
 from gumshoe.api import create_app
+from gumshoe.api.ratelimit import TurnGate
 from gumshoe.config import Settings
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script
@@ -71,3 +72,22 @@ def test_with_a_trusted_proxy_the_last_forwarded_entry_is_the_client(store):
 def test_a_zero_limit_means_unlimited(store):
     with client_for(store, ip_requests_per_minute=0) as client:
         assert all(client.get("/api/meta").status_code == 200 for _ in range(50))
+
+
+def test_a_full_gate_is_a_real_429_before_any_streaming(store):
+    async def up():
+        return True
+
+    gate = TurnGate(parallel=1, queue=0, wait_s=5)
+    gate.running = 1  # a turn is running (a test shortcut: the gate only counts)
+    app = create_app(
+        store,
+        make_service=fake_factory(Script(), gate=gate),
+        settings=Settings(_env_file=None),
+        personas_up=up,
+    )
+    with TestClient(app) as client:
+        game = client.post("/api/games", json={"seed": 1}).json()["game"]
+        r = client.post(f"/api/games/{game}/turn", json={"text": "hello"})
+    assert (r.status_code, r.json()["code"], r.headers["retry-after"]) == (429, "busy", "5")
+    assert r.headers["content-type"].startswith("application/json")

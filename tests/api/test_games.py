@@ -7,6 +7,7 @@ from gumshoe.agent.events import EVENT_ADAPTER, Done
 from gumshoe.api import create_app
 from gumshoe.api.errors import status_for
 from gumshoe.api.games import PING, sse, with_pings
+from gumshoe.mcp_server import GameHost
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script, ScriptedDecider
 from tests.api.client import TestClient
@@ -138,8 +139,8 @@ def test_delete_frees_the_game(store):
 
 
 def test_the_open_game_cap_answers_429_and_delete_lifts_it(store, monkeypatch):
-    # the host reads its module constant at call time; 1000 real games would take ~12 s
-    monkeypatch.setattr("gumshoe.mcp_server.host.MAX_GAMES", 3)
+    # the test helpers build GameHost() with its default cap; 1000 real games would take ~12 s
+    monkeypatch.setattr(GameHost.__init__, "__kwdefaults__", {"max_games": 3})
     with client_for(store, Script()) as client:
         ids = [new_game(client, seed=i)["game"] for i in range(1, 4)]
         full = client.post("/api/games", json={"seed": 99})

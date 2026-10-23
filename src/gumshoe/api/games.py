@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from gumshoe.agent import EVENT_ADAPTER, SaveView, ToolFailure, TurnEvent
 from gumshoe.api.errors import ApiError
+from gumshoe.api.ratelimit import request_ip
 from gumshoe.api.service import AgentService, GameState, GameSummary, SaveSummary, TurnRecord
 from gumshoe.api.session import NewOwner, Owner, optional_owner
 from gumshoe.cases import PlayerCaseView
@@ -78,8 +79,10 @@ def sse(event: TurnEvent) -> bytes:
 
 
 @router.post("")
-async def create(body: NewGameBody, service: Service, owner: NewOwner) -> GameCreated:
-    view = await service.new_game(body.seed, body.preset, owner=owner)
+async def create(
+    body: NewGameBody, request: Request, service: Service, owner: NewOwner
+) -> GameCreated:
+    view = await service.new_game(body.seed, body.preset, owner=owner, ip=request_ip(request))
     return GameCreated(game=view.game, brief=view.brief, preset=body.preset)
 
 
@@ -93,8 +96,8 @@ async def open_games(
 
 
 @router.post("/load")
-async def load(body: LoadBody, service: Service, owner: NewOwner) -> GameCreated:
-    view = await service.load_game(body.name, owner=owner)
+async def load(body: LoadBody, request: Request, service: Service, owner: NewOwner) -> GameCreated:
+    view = await service.load_game(body.name, owner=owner, ip=request_ip(request))
     return GameCreated(game=view.game, brief=view.brief, preset=None)
 
 
@@ -168,19 +171,26 @@ def event_stream(events: AsyncIterator[TurnEvent]) -> StreamingResponse:
 
 
 @router.post("/{game}/turn")
-async def play(game: str, body: TurnBody, service: Service, owner: Owner) -> StreamingResponse:
-    # an unknown game (404) or a turn in progress (409) raises here, before streaming starts
+async def play(
+    game: str, body: TurnBody, request: Request, service: Service, owner: Owner
+) -> StreamingResponse:
+    # an unknown game (404), a turn in progress (409) or a limit (429) raises here, before
+    # streaming starts
+    ip = request_ip(request)
     return event_stream(
-        service.start_turn(game, body.text, owner=owner, pending_id=body.pending_id)
+        service.start_turn(game, body.text, owner=owner, ip=ip, pending_id=body.pending_id)
     )
 
 
 @router.post("/{game}/confirm")
 async def confirm(
-    game: str, body: ConfirmBody, service: Service, owner: Owner
+    game: str, body: ConfirmBody, request: Request, service: Service, owner: Owner
 ) -> StreamingResponse:
     """The confirm and cancel buttons: no decision, the same events as a turn."""
-    return event_stream(service.start_confirm(game, body.pending_id, body.answer, owner=owner))
+    ip = request_ip(request)
+    return event_stream(
+        service.start_confirm(game, body.pending_id, body.answer, owner=owner, ip=ip)
+    )
 
 
 @router.get("/{game}/turns")

@@ -98,6 +98,11 @@ class GameOver(_Event):
     reveal: RevealView
 
 
+class Queued(_Event):
+    kind: Literal["queued"] = "queued"
+    position: int  # 1 = next in line
+
+
 class Done(_Event):
     kind: Literal["done"] = "done"
     turn_ms: float | None = None  # wall time of the whole turn
@@ -113,6 +118,7 @@ TurnEvent = Annotated[
     | Confirm
     | Cancelled
     | GameOver
+    | Queued
     | Done,
     Field(discriminator="kind"),
 ]

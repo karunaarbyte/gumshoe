@@ -10,8 +10,9 @@ from pathlib import Path
 from mcp.client import Client
 
 from gumshoe.agent import AgentConfig, Deps, GameClient, OllamaLlm
+from gumshoe.api.ratelimit import Quotas, TurnGate
 from gumshoe.api.saveowners import SaveOwners
-from gumshoe.api.service import AgentService, SaveSummary
+from gumshoe.api.service import AgentService, Caps, SaveSummary
 from gumshoe.api.session import Sessions
 from gumshoe.config import Settings, get_settings
 from gumshoe.decider import make_decider
@@ -71,24 +72,33 @@ async def default_service(
     store: SqliteStatsStore,
     settings: Settings | None = None,
     sessions: Sessions | None = None,
+    quotas: Quotas | None = None,
 ) -> AsyncIterator[AgentService]:
     """The service the app runs on. The injected store doubles as the decision recorder (never a
     second store on the same file). A missing Jev key raises `DeciderConfigError` before
     anything is opened. On exit: turns are cancelled, then the MCP client closes, then the
-    decider (so background records drain), then the Ollama client."""
+    decider (so background records drain), then the Ollama client. `quotas` is the app's own
+    (shared with its middleware); a fresh one is made when none is given."""
     settings = settings or get_settings()
     sessions = sessions or Sessions.from_settings(settings)
+    quotas = quotas or Quotas(settings)
+    gate = TurnGate(
+        settings.max_parallel_turns, settings.turn_queue_size, settings.turn_queue_wait_s
+    )
     decider = make_decider(settings, recorder=store)
     llm = OllamaLlm(settings.ollama_base_url, timeout=settings.llm_timeout_s)
     async with AsyncExitStack() as stack:
         stack.push_async_callback(llm.aclose)
         stack.push_async_callback(decider.aclose)
-        host = GameHost(saves_dir=settings.saves_dir)
+        host = GameHost(saves_dir=settings.saves_dir, max_games=settings.effective_max_games)
         raw = await stack.enter_async_context(Client(build_server(host)))
         service = AgentService(
             Deps(GameClient(raw), decider, llm, agent_config(settings)),
             list_saves=partial(save_index, settings.saves_dir),
             owners=SaveOwners(settings.saves_dir, sessions),
+            quotas=quotas,
+            gate=gate,
+            caps=Caps.from_settings(settings),
         )
         stack.push_async_callback(service.aclose)
         yield service

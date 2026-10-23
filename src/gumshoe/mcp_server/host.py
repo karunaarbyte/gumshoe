@@ -167,8 +167,15 @@ def _check_probabilities(value: object) -> None:
 
 
 class GameHost:
-    def __init__(self, ids: IdSource | None = None, saves_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        ids: IdSource | None = None,
+        saves_dir: Path | None = None,
+        *,
+        max_games: int = MAX_GAMES,
+    ) -> None:
         self._ids: IdSource = ids or RandomIds()
+        self._max_games = max_games
         self._saves_dir = saves_dir
         self._lock = threading.RLock()
         self._games: dict[str, _Game] = {}
@@ -203,8 +210,9 @@ class GameHost:
         raise RuntimeError("no unused save name")
 
     def _check_capacity(self) -> None:
-        if len(self._games) >= MAX_GAMES:
-            raise GameError("too_many_games", f"{MAX_GAMES} games are open; close_game one first")
+        if len(self._games) >= self._max_games:
+            message = f"{self._max_games} games are open; close_game one first"
+            raise GameError("too_many_games", message)
 
     def _fresh_game_id(self) -> str:
         self._check_capacity()

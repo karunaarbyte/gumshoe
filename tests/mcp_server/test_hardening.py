@@ -18,14 +18,17 @@ def test_close_game_forgets_the_game_and_frees_its_slot():
     assert code_of(lambda: host.close_game(game)) == "unknown_game"
 
 
-def test_the_open_game_cap_refuses_a_new_game_until_one_is_closed(monkeypatch):
-    monkeypatch.setattr(host_module, "MAX_GAMES", 2)
-    host = GameHost(ids=SeqIds())
+def test_the_open_game_cap_refuses_a_new_game_until_one_is_closed():
+    host = GameHost(ids=SeqIds(), max_games=2)
     first = host.new_game(1).game
     host.new_game(2)
     assert code_of(lambda: host.new_game(3)) == "too_many_games"
     host.close_game(first)
     assert host.new_game(3).brief.status == "playing"
+
+
+def test_the_default_open_game_cap_is_max_games():
+    assert GameHost()._max_games == host_module.MAX_GAMES
 
 
 def test_close_game_keeps_the_saved_file(tmp_path):
@@ -119,8 +122,7 @@ def test_a_wrongly_typed_argument_is_a_bad_argument_not_a_crash(call):
 
 
 def test_a_full_host_refuses_a_new_game_before_generating_it(monkeypatch):
-    monkeypatch.setattr(host_module, "MAX_GAMES", 1)
-    host = GameHost(ids=SeqIds())
+    host = GameHost(ids=SeqIds(), max_games=1)
     host.new_game(1)
     made: list[int] = []
 
@@ -137,10 +139,11 @@ def test_a_full_host_refuses_a_load_before_rebuilding_the_case(tmp_path, monkeyp
     host = host_in(tmp_path)
     game, _ = played(host)
     name = host.save_game(game).name
-    monkeypatch.setattr(host_module, "MAX_GAMES", 1)
+    full = GameHost(ids=SeqIds(500), saves_dir=tmp_path, max_games=1)
+    full.new_game(1)
 
     def rebuilding(*args, **kwargs):
         raise AssertionError("must not rebuild")
 
     monkeypatch.setattr(host_module, "regenerate_case", rebuilding)
-    assert code_of(lambda: host.load_game(name)) == "too_many_games"
+    assert code_of(lambda: full.load_game(name)) == "too_many_games"

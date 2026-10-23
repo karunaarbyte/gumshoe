@@ -72,7 +72,10 @@ def create_app(
         ).up
     )
     prices = prices_of(settings)
-    factory: ServiceFactory = make_service or (lambda s: default_service(s, settings, sessions))
+    quotas = Quotas(settings)  # one table for the middleware and the service
+    factory: ServiceFactory = make_service or (
+        lambda s: default_service(s, settings, sessions, quotas)
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -88,7 +91,6 @@ def create_app(
 
     app = FastAPI(title="Gumshoe API", lifespan=lifespan)
     app.state.game_off = NOT_STARTED  # until the lifespan has run
-    quotas = Quotas(settings)
     app.state.sessions = sessions
     app.state.quotas = quotas
     app.state.trust_proxy = settings.trust_proxy
