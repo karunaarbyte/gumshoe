@@ -5,12 +5,14 @@ bind to anything other than the loopback address only on a network you trust.
 """
 
 import argparse
+import logging
 from collections.abc import Sequence
 
 import uvicorn
 from fastapi import FastAPI
 
 from gumshoe.api.app import create_app
+from gumshoe.api.startup import startup_warnings
 from gumshoe.config import Settings, get_settings
 from gumshoe.stats import SqliteStatsStore
 
@@ -34,7 +36,10 @@ def build_parser(settings: Settings) -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    args = build_parser(get_settings()).parse_args(argv)
+    settings = get_settings()
+    args = build_parser(settings).parse_args(argv)
+    for message in startup_warnings(settings, args.host):
+        logging.getLogger("gumshoe.api").warning(message)
     uvicorn.run(
         APP,
         factory=True,

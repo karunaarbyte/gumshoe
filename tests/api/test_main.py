@@ -72,3 +72,9 @@ def test_the_env_example_names_only_real_settings_and_keeps_the_default_roles():
     live = [m[2] for m in found if m[1] is None]
     # following the README (copy, then fill in the key) must run Jev with Nimble as the shadow
     assert "DECIDER_PRIMARY" not in live and "DECIDER_SHADOW" not in live
+
+
+def test_main_logs_the_warnings(served, caplog):
+    with caplog.at_level("WARNING"):
+        entry.main(["--host", "0.0.0.0"])
+    assert "TRUST_PROXY" in caplog.text
