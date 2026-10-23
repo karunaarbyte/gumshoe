@@ -537,3 +537,23 @@ def test_settings_has_no_model_level_after_validator():
         "dict in its errors, which holds plain-str secrets from the environment. Use a field "
         "validator, or raise from Settings.__init__ as _settle_decider_roles does."
     )
+
+
+def test_public_mode_refuses_jev_as_the_shadow(monkeypatch):
+    # a Jev shadow is never metered or capped, so a public server must not run one
+    monkeypatch.setenv("JEV_API_KEY", "s3cret-jev-key")
+    monkeypatch.setenv("SESSION_SECRET", "p" * 40)
+    monkeypatch.setenv("DECIDER_PRIMARY", "nimble")
+    monkeypatch.setenv("DECIDER_SHADOW", "jev")
+    monkeypatch.setenv("PUBLIC_ORIGIN", "https://gumshoe.example.com")
+    with pytest.raises(ValidationError, match="DECIDER_SHADOW=jev") as err:
+        Settings(_env_file=None)
+    text = str(err.value) + repr(err.value.errors())
+    assert "s3cret-jev-key" not in text and "p" * 40 not in text
+
+
+def test_jev_as_the_shadow_is_allowed_locally(monkeypatch):
+    monkeypatch.setenv("DECIDER_PRIMARY", "nimble")
+    monkeypatch.setenv("DECIDER_SHADOW", "jev")
+    s = Settings(_env_file=None)
+    assert (s.decider_primary, s.decider_shadow, s.public_mode) == ("nimble", "jev", False)

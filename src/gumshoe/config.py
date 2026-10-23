@@ -299,6 +299,12 @@ class Settings(BaseSettings):
                 "DECIDER_SHADOW must differ from DECIDER_PRIMARY "
                 "(leave it blank to disable shadowing)"
             )
+        if self.decider_shadow == "jev" and self.public_mode:
+            # the Jev budget meters and caps only a Jev primary; a Jev shadow would be unbounded
+            raise ValueError(
+                "DECIDER_SHADOW=jev is not allowed when PUBLIC_ORIGIN is set (Jev spend is "
+                "capped only as the primary): use DECIDER_PRIMARY=jev or no Jev shadow"
+            )
         return self
 
     @property
