@@ -13,6 +13,7 @@ import asyncio
 import logging
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
+from typing import Literal
 
 from gumshoe.decider.contract.base import Decider
 from gumshoe.decider.contract.models import DecisionResult, Question
@@ -155,3 +156,67 @@ class MeteredDecider:
             await self._meter.flush(self._flush_grace_s)
         finally:
             await self._inner.aclose()
+
+
+class BudgetDecider:
+    """Jev while today's budget lasts, Nimble alone after. `normal` is the usual decider (Jev
+    primary, Nimble shadow); `fallback` is Nimble alone. A client over its own share is moved to
+    the fallback without affecting anyone else.
+
+    Each call is routed once, from memory, before its first await: a call already on Jev runs
+    to the end even if the cap is reached meanwhile. A fallback failure raises as usual."""
+
+    def __init__(
+        self,
+        normal: Decider,
+        fallback: Decider,
+        meter: UsageMeter,
+        *,
+        daily_tokens: int,
+        ip_tokens: int,
+    ) -> None:
+        self.name = normal.name
+        self._normal = normal
+        self._fallback = fallback
+        self._meter = meter
+        self._daily = daily_tokens  # 0 means unlimited
+        self._ip = ip_tokens  # 0 means unlimited
+
+    @property
+    def shadow_skipped(self) -> int:
+        """Shadow calls the normal decider skipped (for the admin report)."""
+        return int(getattr(self._normal, "shadow_skipped", 0))
+
+    @property
+    def mode(self) -> Literal["normal", "slow"]:
+        return "slow" if self._daily > 0 and self._meter.total() >= self._daily else "normal"
+
+    def _choose(self) -> Decider:
+        if self.mode == "slow":
+            return self._fallback
+        key = client_key.get()
+        if key and self._ip > 0 and self._meter.tokens(key) >= self._ip:
+            return self._fallback
+        return self._normal
+
+    async def decide(
+        self,
+        state: str,
+        questions: Mapping[str, Question],
+        *,
+        node: str = "adhoc",
+        decision_id: str | None = None,
+    ) -> DecisionResult:
+        return await self._choose().decide(state, questions, node=node, decision_id=decision_id)
+
+    async def drain(self, grace_s: float | None = None) -> None:
+        for inner in (self._normal, self._fallback):
+            drain = getattr(inner, "drain", None)
+            if drain is not None:
+                await drain(grace_s)
+
+    async def aclose(self) -> None:
+        try:
+            await self._normal.aclose()
+        finally:
+            await self._fallback.aclose()

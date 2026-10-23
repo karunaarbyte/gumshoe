@@ -10,7 +10,7 @@ from gumshoe.decider import client_key, estimate_tokens
 from gumshoe.decider.contract.errors import DeciderError
 from gumshoe.decider.contract.models import DecisionResult, Usage
 from gumshoe.decider.contract.samples import DEMO_QUESTIONS, DEMO_STATE
-from gumshoe.decider.shadow.budget import MeteredDecider, UsageMeter
+from gumshoe.decider.shadow.budget import BudgetDecider, MeteredDecider, UsageMeter
 from tests.decider.fakes import FakeDecider
 
 
@@ -362,3 +362,180 @@ async def test_aclose_gives_up_on_a_hanging_ledger_write_after_the_grace(result,
         assert "still pending" in caplog.text
     finally:
         ledger.release.set()
+
+
+def budget(result, *, daily=100, ip=0, ledger=None, clock=None):
+    normal = FakeDecider("jev", result)
+    fallback = FakeDecider("nimble", result)
+    meter = UsageMeter(ledger or MemoryLedger(), now=clock or Clock(NOON))
+    decider = BudgetDecider(normal, fallback, meter, daily_tokens=daily, ip_tokens=ip)
+    return decider, normal, fallback, meter
+
+
+async def test_under_the_cap_the_normal_decider_answers(result):
+    decider, normal, fallback, meter = budget(result)
+    await decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent")
+    assert (len(normal.nodes), len(fallback.nodes), decider.mode) == (1, 0, "normal")
+
+
+async def test_at_the_global_cap_the_fallback_answers_and_mode_is_slow(result):
+    decider, normal, fallback, meter = budget(result, daily=100)
+    await meter.add("x", 100)
+    await decider.decide(DEMO_STATE, DEMO_QUESTIONS, node="intent")
+    assert (len(normal.nodes), len(fallback.nodes), decider.mode) == (0, 1, "slow")
+
+
+async def test_the_next_day_goes_back_to_normal(result):
+    clock = Clock(datetime(2026, 10, 16, 23, 59, tzinfo=UTC))
+    decider, normal, fallback, meter = budget(result, daily=100, clock=clock)
+    await meter.add("x", 100)
+    assert decider.mode == "slow"
+    clock.at += timedelta(minutes=2)
+    assert decider.mode == "normal"
+    await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    assert len(normal.nodes) == 1
+
+
+async def test_a_client_over_its_share_gets_the_fallback_while_others_keep_the_normal(result):
+    decider, normal, fallback, meter = budget(result, daily=10_000, ip=50)
+    await meter.add("1.1.1.1", 60)
+    client_key.set("1.1.1.1")
+    try:
+        await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+        client_key.set("2.2.2.2")
+        await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+        client_key.set("")
+        await decider.decide(DEMO_STATE, DEMO_QUESTIONS)  # no client key: only the global cap
+    finally:
+        client_key.set("")
+    assert (len(fallback.nodes), len(normal.nodes)) == (1, 2)
+    assert decider.mode == "normal"  # one client's share is not "slow mode" for the site
+
+
+async def test_zero_caps_mean_unlimited(result):
+    decider, normal, fallback, meter = budget(result, daily=0, ip=0)
+    await meter.add("x", 10**12)
+    client_key.set("x")
+    try:
+        await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    finally:
+        client_key.set("")
+    assert len(normal.nodes) == 1 and decider.mode == "normal"
+
+
+async def test_a_restart_keeps_slow_mode_for_the_rest_of_the_day(result):
+    ledger = MemoryLedger()
+    first, *_, meter = budget(result, daily=100, ledger=ledger)
+    await meter.add("x", 100)
+    second, normal, fallback, second_meter = budget(result, daily=100, ledger=ledger)
+    await second_meter.load()  # startup reads the ledger once; reads after that never do I/O
+    assert second.mode == "slow"
+    await second.decide(DEMO_STATE, DEMO_QUESTIONS)
+    assert len(fallback.nodes) == 1 and len(normal.nodes) == 0
+
+
+async def test_mode_never_touches_the_ledger(result):
+    ledger = SpyLedger()
+    decider, *_ = budget(result, daily=100, ip=10, ledger=ledger)
+    client_key.set("1.1.1.1")
+    try:
+        assert decider.mode == "normal"
+        await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    finally:
+        client_key.set("")
+    assert ledger.reads == []
+
+
+async def test_a_failing_fallback_raises_its_decider_error(result):
+    normal = FakeDecider("jev", result)
+    fallback = FakeDecider("nimble", error=DeciderError("nimble", "down"))
+    meter = UsageMeter(None, now=Clock(NOON))
+    decider = BudgetDecider(normal, fallback, meter, daily_tokens=100, ip_tokens=0)
+    await meter.add("x", 100)
+    with pytest.raises(DeciderError, match="down"):
+        await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    assert normal.nodes == []  # no silent retry on Jev past the cap
+
+
+async def test_a_call_in_flight_on_the_normal_decider_finishes_when_the_cap_is_reached(result):
+    release = asyncio.Event()
+    normal = StartedDecider("jev", result, gate=release)
+    fallback = FakeDecider("nimble", result)
+    meter = UsageMeter(None, now=Clock(NOON))
+    decider = BudgetDecider(normal, fallback, meter, daily_tokens=100, ip_tokens=0)
+    call = asyncio.create_task(decider.decide(DEMO_STATE, DEMO_QUESTIONS))
+    await normal.started.wait()
+    await meter.add("x", 100)  # the cap is reached while Jev is still answering
+    assert decider.mode == "slow"
+    release.set()
+    assert await call is result
+    assert not normal.cancelled.is_set() and fallback.nodes == []
+    await decider.decide(DEMO_STATE, DEMO_QUESTIONS)  # the next call is routed afresh
+    assert (len(normal.nodes), len(fallback.nodes)) == (1, 1)
+
+
+async def test_slow_mode_runs_no_shadow_comparison(result):
+    from gumshoe.decider.shadow.shadow import ShadowDecider
+    from tests.decider.fakes import FakeRecorder
+
+    shadow, recorder = FakeDecider("nimble", result), FakeRecorder()
+    normal = ShadowDecider(FakeDecider("jev", result), shadow, recorder, shadow_parallel=1)
+    meter = UsageMeter(None, now=Clock(NOON))
+    fallback = FakeDecider("nimble", result)
+    decider = BudgetDecider(normal, fallback, meter, daily_tokens=100, ip_tokens=0)
+    await meter.add("x", 100)
+    await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    await decider.drain()
+    assert (len(fallback.nodes), shadow.nodes, recorder.batches) == (1, [], [])
+
+
+async def test_shadow_skipped_is_read_from_the_normal_decider(result):
+    from gumshoe.decider.shadow.shadow import ShadowDecider
+    from tests.decider.fakes import FakeRecorder
+
+    release = asyncio.Event()
+    normal = ShadowDecider(
+        FakeDecider("jev", result),
+        FakeDecider("nimble", result, gate=release),
+        FakeRecorder(),
+        shadow_parallel=1,
+    )
+    meter = UsageMeter(None, now=Clock(NOON))
+    decider = BudgetDecider(
+        normal, FakeDecider("nimble", result), meter, daily_tokens=0, ip_tokens=0
+    )
+    await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    await asyncio.sleep(0)
+    await decider.decide(DEMO_STATE, DEMO_QUESTIONS)
+    assert decider.shadow_skipped == 1
+    release.set()
+    await decider.drain()
+
+
+async def test_aclose_closes_both_even_if_one_fails(result):
+    class Exploding(FakeDecider):
+        async def aclose(self):
+            await super().aclose()
+            raise RuntimeError("close failed")
+
+    normal = Exploding("jev", result)
+    fallback = FakeDecider("nimble", result)
+    meter = UsageMeter(None, now=Clock(NOON))
+    decider = BudgetDecider(normal, fallback, meter, daily_tokens=1, ip_tokens=0)
+    with pytest.raises(RuntimeError):
+        await decider.aclose()
+    assert normal.closed and fallback.closed
+
+
+async def test_drain_reaches_the_inner_deciders_that_have_one(result):
+    class Drainable(FakeDecider):
+        drained = False
+
+        async def drain(self, grace_s=None):
+            self.drained = True
+
+    normal, fallback = Drainable("jev", result), FakeDecider("nimble", result)
+    meter = UsageMeter(None, now=Clock(NOON))
+    decider = BudgetDecider(normal, fallback, meter, daily_tokens=1, ip_tokens=0)
+    await decider.drain()
+    assert normal.drained
