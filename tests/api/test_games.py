@@ -2,11 +2,13 @@ import asyncio
 from contextlib import asynccontextmanager
 
 import pytest
+from pydantic import SecretStr
 
 from gumshoe.agent.events import EVENT_ADAPTER, Done
 from gumshoe.api import create_app
 from gumshoe.api.errors import status_for
 from gumshoe.api.games import PING, sse, with_pings
+from gumshoe.config import Settings
 from gumshoe.mcp_server import GameHost
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script, ScriptedDecider
@@ -150,10 +152,13 @@ def test_the_open_game_cap_answers_429_and_delete_lifts_it(store, monkeypatch):
 
 
 def test_the_stats_endpoints_still_work_beside_the_games(store):
-    with client_for(store, Script()) as client:
+    settings = Settings(_env_file=None, admin_token=SecretStr("t" * 40))
+    app = create_app(store, make_service=fake_factory(Script()), settings=settings)
+    with TestClient(app) as client:
         health = client.get("/api/health").json()
         assert (health["status"], health["game"]) == ("ok", "on")
-        assert client.get("/api/decisions").json() == []
+        admin = {"authorization": "Bearer " + "t" * 40}
+        assert client.get("/api/decisions", headers=admin).json() == []
 
 
 def test_a_save_write_failure_is_500(store):

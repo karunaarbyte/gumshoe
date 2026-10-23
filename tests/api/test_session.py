@@ -19,6 +19,11 @@ def test_a_cookie_round_trips_to_its_session_id():
     assert s.read(value) == sid and len(sid) == 22
 
 
+def test_issued_counts_the_sessions_made():
+    s = Sessions(SECRET, secure=False)
+    assert s.issued == 0 and (s.issue(), s.issue(), s.issued)[2] == 2
+
+
 def test_two_issues_differ():
     s = Sessions(SECRET, secure=False)
     assert s.issue()[0] != s.issue()[0]

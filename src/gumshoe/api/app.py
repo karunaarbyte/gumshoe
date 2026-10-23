@@ -1,21 +1,31 @@
 """FastAPI app: the comparative decision stats and the game."""
 
 import logging
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 
-from fastapi import FastAPI, Path, Query, Request
+from fastapi import Depends, FastAPI, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from gumshoe.agent import ToolFailure
+from gumshoe.api.admin import admin_token_of, require_admin
 from gumshoe.api.errors import ApiError, describe_validation, error_body, http_code, status_for
 from gumshoe.api.games import MAX_TURN_CHARS, saves_router
 from gumshoe.api.games import router as games_router
-from gumshoe.api.info import MAX_ATTEMPTS, Health, Meta, PersonaModels, presets
+from gumshoe.api.info import (
+    MAX_ATTEMPTS,
+    AdminUsage,
+    ClientUsage,
+    Health,
+    Meta,
+    PersonaModels,
+    presets,
+)
 from gumshoe.api.limits import BodyLimit
 from gumshoe.api.probe import PersonaProbe
 from gumshoe.api.ratelimit import Quotas
@@ -61,6 +71,7 @@ def create_app(
     settings: Settings | None = None,
     personas_up: Callable[[], Awaitable[bool]] | None = None,
     sessions: Sessions | None = None,
+    clock: Callable[[], float] | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     sessions = sessions or Sessions.from_settings(settings)
@@ -72,7 +83,8 @@ def create_app(
         ).up
     )
     prices = prices_of(settings)
-    quotas = Quotas(settings)  # one table for the middleware and the service
+    # one table for the middleware and the service; `clock` is for tests (a fake one)
+    quotas = Quotas(settings, clock=clock or time.monotonic)
     factory: ServiceFactory = make_service or (
         lambda s: default_service(s, settings, sessions, quotas)
     )
@@ -94,6 +106,7 @@ def create_app(
     app.state.sessions = sessions
     app.state.quotas = quotas
     app.state.trust_proxy = settings.trust_proxy
+    app.state.admin_token = admin_token_of(settings.admin_token.get_secret_value())
     app.add_middleware(BodyLimit, max_bytes=settings.max_body_bytes)
     allowed_origins = (
         *settings.cors_origin_list,
@@ -166,7 +179,7 @@ def create_app(
             max_turn_chars=MAX_TURN_CHARS,
         )
 
-    @app.get("/api/stats/decisions")
+    @app.get("/api/stats/decisions", dependencies=[Depends(require_admin)])
     def decision_stats(
         node: str | None = None, since: datetime | None = None, include_cold: bool = False
     ) -> StatsReport:
@@ -180,7 +193,7 @@ def create_app(
             dramatic_from=settings.dramatic_from,
         )
 
-    @app.get("/api/decisions")
+    @app.get("/api/decisions", dependencies=[Depends(require_admin)])
     def decisions(
         limit: int = Query(20, ge=1, le=200),
         node: str | None = None,
@@ -213,7 +226,7 @@ def create_app(
         )
         return views if ids is not None else views[:limit]
 
-    @app.get("/api/decisions/{decision_id}")
+    @app.get("/api/decisions/{decision_id}", dependencies=[Depends(require_admin)])
     def decision(decision_id: str = Path(max_length=64)) -> DecisionView:
         """One decision. Until its first row is written (a primary's record lands a moment
         after the turn's event), 404 `not_recorded_yet`: the UI retries."""
@@ -226,5 +239,27 @@ def create_app(
         if not views:
             raise ApiError(404, "not_recorded_yet", "that decision has not been recorded yet")
         return views[0]
+
+    @app.get("/api/admin/usage", dependencies=[Depends(require_admin)])
+    def admin_usage(request: Request) -> AdminUsage:
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        totals = store.usage_totals(today)
+        service: AgentService | None = getattr(request.app.state, "service", None)
+        snap = service.usage_snapshot() if service is not None else {}
+        top = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:5]
+        return AdminUsage(
+            day=today,
+            jev_tokens_today=sum(totals.values()),
+            jev_daily_cap=settings.jev_daily_tokens,
+            jev_ip_daily_cap=settings.jev_ip_daily_tokens,
+            mode=service.decider_mode() if service is not None else "normal",
+            games_open=snap.get("games_open", 0),
+            turns_running=snap.get("turns_running", 0),
+            queued=snap.get("queued", 0),
+            shadow_skipped=snap.get("shadow_skipped", 0),
+            sessions_seen=request.app.state.sessions.issued,
+            saves_held=snap.get("saves_held", 0),
+            top_clients=[ClientUsage(key=k, tokens=t) for k, t in top],
+        )
 
     return app

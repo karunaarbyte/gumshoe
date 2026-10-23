@@ -37,6 +37,7 @@ class Sessions:
         self._owner_key = _derive(secret, b"save-owner")
         self.secure = secure
         self.cookie_name = "__Host-gs_session" if secure else "gs_session"
+        self.issued = 0  # sessions made since the server started
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "Sessions":
@@ -54,6 +55,7 @@ class Sessions:
     def issue(self) -> tuple[str, str]:
         """A new session: its id and the cookie value to send."""
         session_id = secrets.token_urlsafe(16)
+        self.issued += 1
         return session_id, f"{session_id}.{self._signature(session_id)}"
 
     def read(self, value: str | None) -> str | None:

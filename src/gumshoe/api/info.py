@@ -43,6 +43,32 @@ class Meta(BaseModel):
     max_turn_chars: int
 
 
+class ClientUsage(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    key: str
+    tokens: int
+
+
+class AdminUsage(BaseModel):
+    """The operator's view of today's Jev spend and the server's load (`/api/admin/usage`)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    day: str
+    jev_tokens_today: int
+    jev_daily_cap: int
+    jev_ip_daily_cap: int
+    mode: Literal["normal", "slow"]
+    games_open: int
+    turns_running: int
+    queued: int
+    shadow_skipped: int
+    sessions_seen: int  # sessions issued since the server started
+    saves_held: int
+    top_clients: list[ClientUsage]  # the five biggest Jev spenders today
+
+
 @cache
 def presets() -> tuple[str, ...]:
     return supported_presets(load_builtin_pack(PACK))

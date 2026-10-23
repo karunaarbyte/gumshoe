@@ -1,5 +1,6 @@
 import httpx
 import pytest
+from pydantic import SecretStr
 
 from gumshoe.api.app import create_app
 from gumshoe.config import Settings
@@ -9,6 +10,9 @@ from gumshoe.stats.store import SqliteStatsStore
 from tests.decider.fakes import FakeDecider
 from tests.stats.factories import choice, make_record
 
+TOKEN = "t" * 40
+HEADERS = {"origin": "http://test", "authorization": "Bearer " + TOKEN}
+
 
 @pytest.fixture
 def store(tmp_path):
@@ -17,10 +21,10 @@ def store(tmp_path):
 
 @pytest.fixture
 async def client(store):
-    transport = httpx.ASGITransport(app=create_app(store))
-    async with httpx.AsyncClient(
-        transport=transport, base_url="http://test", headers={"origin": "http://test"}
-    ) as c:
+    transport = httpx.ASGITransport(
+        app=create_app(store, settings=Settings(_env_file=None, admin_token=SecretStr(TOKEN)))
+    )
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=HEADERS) as c:
         yield c
 
 
@@ -195,12 +199,15 @@ async def test_disagree_keeps_only_decisions_where_the_backends_differ(client, s
 
 
 async def test_costs_use_the_configured_prices(store):
-    settings = Settings(_env_file=None, jev_usd_per_mtok_in=1.0, jev_usd_per_mtok_out=1.0)
+    settings = Settings(
+        _env_file=None,
+        jev_usd_per_mtok_in=1.0,
+        jev_usd_per_mtok_out=1.0,
+        admin_token=SecretStr(TOKEN),
+    )
     seed(store, "d1")
     transport = httpx.ASGITransport(app=create_app(store, settings=settings))
-    async with httpx.AsyncClient(
-        transport=transport, base_url="http://test", headers={"origin": "http://test"}
-    ) as c:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=HEADERS) as c:
         [decision] = (await c.get("/api/decisions")).json()
         report = (await c.get("/api/stats/decisions")).json()
     jev = decision["calls"][0]
@@ -294,12 +301,10 @@ async def test_each_decision_says_which_questions_agree(client, store):
 
 
 async def test_the_weight_threshold_comes_from_the_settings(store):
-    settings = Settings(_env_file=None, dramatic_from=3.0)
+    settings = Settings(_env_file=None, dramatic_from=3.0, admin_token=SecretStr(TOKEN))
     seed_weighed(store, "d", minute="01", weight=(2.8, 3.2))  # one band under the default 2.5
     transport = httpx.ASGITransport(app=create_app(store, settings=settings))
-    async with httpx.AsyncClient(
-        transport=transport, base_url="http://test", headers={"origin": "http://test"}
-    ) as c:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=HEADERS) as c:
         [view] = (await c.get("/api/decisions")).json()
         [node] = (await c.get("/api/stats/decisions")).json()["nodes"]
     assert view["agrees"]["weight"] is False and node["question_agreement"]["weight"] == 0.0

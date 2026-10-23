@@ -29,6 +29,15 @@ def test_a_claimed_save_is_owned_by_its_claimer_only(tmp_path):
     assert o.owns(NAME, "alice") and not o.owns(NAME, "bob")
 
 
+def test_count_all_counts_the_save_files_with_a_host_name(tmp_path):
+    assert SaveOwners(tmp_path / "missing", sessions()).count_all() == 0
+    (tmp_path / f"{NAME}.json").write_text("{}")
+    (tmp_path / "fedcba9876543210.json").write_text("{}")
+    (tmp_path / "notasave.json").write_text("{}")
+    (tmp_path / f"{NAME}.owner").write_text("x")
+    assert owners_in(tmp_path).count_all() == 2
+
+
 def test_an_unclaimed_or_badly_named_save_is_owned_by_nobody(tmp_path):
     o = owners_in(tmp_path)
     assert not o.owns(NAME, "alice")

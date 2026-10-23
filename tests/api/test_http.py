@@ -16,6 +16,8 @@ from tests.api.client import TestClient
 from tests.api.helpers import fake_factory
 
 CAP = 1024  # the smallest MAX_BODY_BYTES the settings accept
+TOKEN = "t" * 40
+ADMIN = {"authorization": "Bearer " + TOKEN}
 
 
 @pytest.fixture
@@ -28,6 +30,7 @@ async def personas_up():
 
 
 def app_for(store, *, personas=personas_up, **settings):
+    settings.setdefault("admin_token", SecretStr(TOKEN))
     return create_app(
         store,
         make_service=fake_factory(Script()),
@@ -46,7 +49,7 @@ def test_framework_errors_have_the_same_code_and_message_shape(store):
         bad_json = client.post(
             "/api/games", content=b"{not json", headers={"content-type": "application/json"}
         )
-        bad_query = client.get("/api/decisions", params={"limit": "lots"})
+        bad_query = client.get("/api/decisions", params={"limit": "lots"}, headers=ADMIN)
     assert (missing.status_code, missing.json()["code"]) == (404, "not_found")
     assert (wrong.status_code, wrong.json()["code"]) == (405, "method_not_allowed")
     assert "allow" in wrong.headers  # the 405's own header survives

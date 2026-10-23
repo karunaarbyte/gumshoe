@@ -62,6 +62,12 @@ class SaveOwners:
             p for p in self._folder.glob("*.owner") if NAME.fullmatch(p.stem) and not p.is_symlink()
         ]
 
+    def count_all(self) -> int:
+        """The saves held: `<name>.json` files with a name the host makes."""
+        if not self._folder.is_dir():
+            return 0
+        return sum(1 for p in self._folder.glob("*.json") if NAME.fullmatch(p.stem))
+
     def count_owned(self, owner: str) -> int:
         tag = self._sessions.owner_tag(owner)
         return sum(1 for p in self._sidecars() if self._tags(p)[0] == tag)

@@ -70,6 +70,16 @@ class WindowLimiter:
         hits.append(now)
         return None
 
+    def peek(self, key: str) -> int | None:
+        """The seconds until `key` may hit again, or None if it may now. Records nothing."""
+        if self._limit == 0:
+            return None
+        now = self._clock()
+        hits = self._expire(key, now)
+        if hits is None or len(hits) < self._limit:
+            return None
+        return max(1, math.ceil(hits[0] + self._window - now))
+
 
 def client_ip(peer: str | None, forwarded: str | None, *, trust_proxy: bool) -> str:
     """The key that stands for a client. IPv6 clients are keyed by their /64 (a home network
@@ -102,7 +112,8 @@ def _limited(retry_after: int, what: str) -> ApiError:
 
 
 class Quotas:
-    """The rate limits, each raising a 429 with Retry-After."""
+    """The rate limits, each raising a 429 with Retry-After; the admin failures only count, for
+    the admin gate's silent block."""
 
     def __init__(self, settings: Settings, *, clock: Callable[[], float] = time.monotonic) -> None:
         keys = settings.limiter_max_keys
@@ -115,6 +126,7 @@ class Quotas:
         self._ip_turns = make(settings.ip_turns_per_minute, 60)
         self._games_created = make(settings.session_games_per_hour, 3600)
         self._session_turns = make(settings.session_turns_per_minute, 60)
+        self._admin_failures = make(10, 60)  # wrong admin tokens: a silent block, never a 429
 
     @staticmethod
     def _check(limiter: WindowLimiter, key: str, what: str) -> None:
@@ -133,6 +145,13 @@ class Quotas:
     def turn(self, owner: str, ip: str) -> None:
         self._check(self._session_turns, owner, "turns")
         self._check(self._ip_turns, ip, "turns from your network")
+
+    def admin_blocked(self, ip: str) -> bool:
+        """True when `ip` has 10 wrong admin tokens in the last minute."""
+        return self._admin_failures.peek(ip) is not None
+
+    def admin_failed(self, ip: str) -> None:
+        self._admin_failures.hit(ip)
 
 
 def request_ip(request: Request) -> str:

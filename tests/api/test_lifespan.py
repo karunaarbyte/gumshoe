@@ -1,6 +1,9 @@
 from contextlib import asynccontextmanager
 
+from pydantic import SecretStr
+
 from gumshoe.api import create_app
+from gumshoe.config import Settings
 from gumshoe.decider import DeciderConfigError
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script
@@ -32,10 +35,12 @@ def test_no_jev_key_means_503_for_games_and_stats_still_work(tmp_path):
         raise DeciderConfigError("jev", "JEV_API_KEY is not set")
         yield  # pragma: no cover
 
-    app = create_app(SqliteStatsStore(tmp_path / "d.db"), make_service=factory)
+    settings = Settings(_env_file=None, admin_token=SecretStr("t" * 40))
+    app = create_app(SqliteStatsStore(tmp_path / "d.db"), make_service=factory, settings=settings)
     with TestClient(app) as client:
         assert client.get("/api/health").status_code == 200
-        assert client.get("/api/decisions").json() == []
+        admin = {"authorization": "Bearer " + "t" * 40}
+        assert client.get("/api/decisions", headers=admin).json() == []
         for method, path, body in [
             ("post", "/api/games", {"seed": 1}),
             ("post", "/api/games/load", {"name": "0123456789abcdef"}),
