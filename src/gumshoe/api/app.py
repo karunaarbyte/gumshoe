@@ -1,6 +1,8 @@
 """FastAPI app: the comparative decision stats and the game."""
 
+import asyncio
 import logging
+import re
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
@@ -17,7 +19,7 @@ from starlette.routing import Match
 from gumshoe.agent import ToolFailure
 from gumshoe.api.admin import admin_token_of, require_admin
 from gumshoe.api.errors import ApiError, describe_validation, error_body, http_code, status_for
-from gumshoe.api.games import MAX_TURN_CHARS, saves_router
+from gumshoe.api.games import MAX_TURN_CHARS, Service, saves_router
 from gumshoe.api.games import router as games_router
 from gumshoe.api.info import (
     MAX_ATTEMPTS,
@@ -32,8 +34,9 @@ from gumshoe.api.limits import BodyLimit
 from gumshoe.api.probe import PersonaProbe
 from gumshoe.api.ratelimit import Quotas
 from gumshoe.api.ratemiddleware import RequestRate
+from gumshoe.api.redact import for_player
 from gumshoe.api.service import AgentService
-from gumshoe.api.session import Sessions
+from gumshoe.api.session import Owner, Sessions
 from gumshoe.api.shield import OriginCheck
 from gumshoe.api.wiring import default_service
 from gumshoe.config import Settings, get_settings
@@ -57,6 +60,10 @@ NOT_STARTED = "the server has not finished starting"
 
 
 MAX_IDS = 200
+
+# The shape every decision id takes (`uuid4().hex`). Anything else is refused before any lookup.
+DECISION_ID = re.compile(r"[0-9a-f]{32}")
+NO_SUCH_DECISION = "no such decision"
 
 
 def prices_of(settings: Settings) -> dict[str, Price]:
@@ -258,6 +265,27 @@ def create_app(
         if not views:
             raise ApiError(404, "not_recorded_yet", "that decision has not been recorded yet")
         return views[0]
+
+    @app.get("/api/games/{game}/decisions/{decision_id}")
+    async def player_decision(
+        game: str, decision_id: str, service: Service, owner: Owner
+    ) -> DecisionView:
+        """A decision from the caller's own game, without the player's typed text. The owner check
+        comes first (a stranger gets the missing game's answer); then an id that is malformed or
+        not in this game's transcript gets one plain 404, whether or not it exists elsewhere."""
+        mentioned = service.decision_ids(game, owner=owner)  # on the loop: in-memory state
+        if DECISION_ID.fullmatch(decision_id) is None or decision_id not in mentioned:
+            raise ApiError(404, "not_found", NO_SUCH_DECISION)
+        calls = await asyncio.to_thread(store.fetch_decisions, [decision_id])  # blocking SQLite
+        views = recent_decisions(
+            calls,
+            prices=prices,
+            confirm_gate=settings.confirm_gate,
+            dramatic_from=settings.dramatic_from,
+        )
+        if not views:
+            raise ApiError(404, "not_recorded_yet", "that decision has not been recorded yet")
+        return for_player(views[0])
 
     @app.get("/api/admin/usage", dependencies=[Depends(require_admin)])
     def admin_usage(request: Request) -> AdminUsage:

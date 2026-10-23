@@ -382,6 +382,16 @@ class AgentService:
         """The game's transcript, oldest first; a running turn is the last, not yet complete."""
         return list(self._slot(game, owner).turns)
 
+    def decision_ids(self, game: str, *, owner: str) -> set[str]:
+        """Every decision id the game's turns mention, for deciding who may read which decision."""
+        found: set[str] = set()
+        for record in self._slot(game, owner).turns:
+            for event in record.events:
+                decision_id = getattr(event, "decision_id", None)
+                if decision_id:
+                    found.add(decision_id)
+        return found
+
     def start_turn(
         self,
         game: str,

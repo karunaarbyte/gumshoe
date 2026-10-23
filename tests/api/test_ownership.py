@@ -32,7 +32,7 @@ async def test_the_owner_sees_the_game_and_a_stranger_gets_the_missing_game_erro
     assert stranger.value.message == UNKNOWN_GAME
 
 
-@pytest.mark.parametrize("method", ["state", "turns", "save_game", "delete_game"])
+@pytest.mark.parametrize("method", ["state", "turns", "decision_ids", "save_game", "delete_game"])
 async def test_every_game_method_refuses_a_stranger(method):
     async with serving(Script()) as s:
         new = await s.service.new_game(1, owner=OWNER)
@@ -131,6 +131,7 @@ def send(client, method, path, body, game):
 ROUTES = [
     ("get", "/api/games/{g}", None),
     ("get", "/api/games/{g}/turns", None),
+    ("get", "/api/games/{g}/decisions/0123456789abcdef0123456789abcdef", None),
     ("post", "/api/games/{g}/turn", {"text": "hello"}),
     ("post", "/api/games/{g}/confirm", {"pending_id": "p", "answer": "yes"}),
     ("post", "/api/games/{g}/save", None),

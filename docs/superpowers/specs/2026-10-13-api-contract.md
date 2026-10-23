@@ -33,8 +33,8 @@ Written from the code after plan 4d-2 (tasks 1-12). Interactive docs for the pla
 | `game_over` | 409 | the action needs a game still being played |
 | `not_over` | 409 | the reveal was asked for before the game ended |
 | `state_mismatch` | 409 | the engine's state does not match the request; any new engine code also maps to 409 |
-| `not_found` | 404 | no such route |
-| `not_recorded_yet` | 404 | `GET /api/decisions/{id}` before that decision is written: retry |
+| `not_found` | 404 | no such route; or, on a game's decision read, no such decision in that game |
+| `not_recorded_yet` | 404 | a decision read (`GET /api/decisions/{id}`, `GET /api/games/{game}/decisions/{id}`) before it is written: retry |
 | `method_not_allowed` | 405 | wrong HTTP method for a route |
 | `too_large` | 413 | request body over the cap |
 | `unavailable` | 503 | the game endpoints are off (see `GET /api/health`) |
@@ -150,6 +150,26 @@ The transcript for a reloaded page: at most the last 200 turns, oldest first.
 `text` is what the player typed, or `yes`/`no` for a button. `complete` is false for a turn still
 running (its `events` so far, last in the list). Only turns that really ran are kept.
 
+### `GET /api/games/{game}/decisions/{decision_id}` -> `DecisionView`
+
+One decision of the caller's own game, for the player's trace drawer. No admin token; the session
+cookie is read, never issued. In order:
+
+- The ownership check comes first: a stranger, no session, and a missing game all get the same
+  404 `unknown_game` as `GET /api/games/{game}` (410 `cold` for the owner of an expired game).
+- `decision_id` must be 32 lowercase hex characters and appear in this game's own transcript
+  events (`GET /api/games/{game}/turns`). Anything else, malformed or another game's id or an id
+  that exists only in the stats store, is the same 404 `{"code": "not_found", "message": "no such
+  decision"}` (never a 422), so the answer says nothing about ids outside this game.
+- An id in the transcript whose record has not landed yet: 404 `not_recorded_yet`, retry.
+- A store failure is a plain 500 `internal` ("something went wrong").
+
+The view is redacted for the player (an allow-list): `state_preview` is `""`; a call's `error` is
+`"failed"` or null; `answers` are kept only on the `understand` and `post_check` nodes and only
+where the question and verdict are plain tokens (`suspect_3`, `yes`, `2.00`), so `parse_accusation`
+shows none; `agrees` keeps only plain-token question names. Timing, tokens, cost, confidence,
+backend and role stay. The request rate limit applies as to any request.
+
 ### `POST /api/games/{game}/save` -> `{name: string}`
 
 Waits for a running turn first, then saves. 404 `unknown_game`; 410 `cold`; 429 `quota` when the session
@@ -253,7 +273,8 @@ Notes:
   `unreachable` (the suspect asked about is not available yet: still locked).
 - `confirm.decision_id` is the accusation-parsing decision (accuse only).
 - `done.turn_ms` is the wall time of the whole turn.
-- Every `decision_id` can be looked up with `GET /api/decisions/{id}` (section 7). The primary's
+- Every `decision_id` can be looked up with `GET /api/decisions/{id}` (section 7), and by the
+  game's owner, redacted, with `GET /api/games/{game}/decisions/{id}` (section 3). The primary's
   record can land a moment after the event: 404 `not_recorded_yet`, retry.
 
 ## 5. Confirmations
