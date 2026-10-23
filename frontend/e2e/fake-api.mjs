@@ -13,7 +13,7 @@ const brief = {
   intro: 'Lord Ashby lies dead in the long gallery.',
   suspects: [
     { number: 1, handle: 's1', name: 'Mr Grey the butler', description: 'Stiff and correct.', locked: false },
-    { number: 2, handle: 's2', name: 'Mrs Pike the cook', description: 'Floury hands.', locked: true },
+    { number: 2, handle: 's2', name: '', description: '', locked: true }, // locked: sent without its name
   ],
   locations: [{ number: 1, handle: 'l1', name: 'Long gallery', description: 'Portraits and a body.', locked: false }],
   record_kinds: [{ key: 'letters', label: 'Letters' }],

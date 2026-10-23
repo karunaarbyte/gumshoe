@@ -81,7 +81,9 @@ Cards (all from `GameState`/brief; nothing invented):
 
 Strings:
 - **Game strings (red):** drawn automatically for each `notebook.contradictions` entry (lie fact to
-  exposer fact) and for each fact's `relates_to` entries (suspect display names, matched to suspect cards by name).
+  exposer fact) and for each fact's `relates_to` entries (suspect display names, matched to the open
+  suspects' cards by name). Suspect and place cards are keyed by their brief `number` (fixed for the
+  case, across unlocks and a load), never by name: a locked one arrives with an empty name.
 - **Player threads (black ink, dashed):** the player drags from a pin on one card to another to make a
   thread, and clicks a thread to delete it. Threads are personal theories: unlabelled, no effect on
   the game.

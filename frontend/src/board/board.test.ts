@@ -7,8 +7,8 @@ import { copyBoard, gameKey, loadBoard, saveKey, storeBoard } from './storage';
 import { addThread, removeThread } from './threads';
 
 const state = states[2]!;
-const S1 = suspectCard('Mr Grey the butler');
-const S3 = suspectCard('Dr Wren the physician');
+const S1 = suspectCard(1);
+const S3 = suspectCard(3);
 const F1 = factCard('Long gallery', 'A stained glass lies by the body.');
 const F2 = factCard('Mr Grey the butler', 'He was in the pantry all evening.');
 const F3 = factCard('Letters', 'The cook saw Grey in the gallery at nine.');
@@ -32,6 +32,30 @@ describe('cards', () => {
     expect(cards.map((c) => c.type)).toEqual(['suspect', 'suspect', 'suspect', 'location', 'location', 'record', 'record', 'fact', 'fact', 'fact']);
     expect(cards.find((c) => c.id === S3)?.locked).toBe(true);
     expect(cards.find((c) => c.id === F2)).toMatchObject({ contradicted: true, speaker: 'Mr Grey the butler' });
+  });
+
+  test('locked entries arrive without names, and each is still its own card', () => {
+    const hidden = { ...state, brief: { ...state.brief, suspects: state.brief.suspects.map((x) => ({ ...x, name: '', description: '', locked: true })) } };
+    const ids = buildCards(hidden)
+      .filter((c) => c.type === 'suspect')
+      .map((c) => c.id);
+    expect(ids).toEqual([suspectCard(1), suspectCard(2), suspectCard(3)]);
+  });
+
+  test('a card keeps its id when it unlocks: the number, never the name', () => {
+    const open = {
+      ...state,
+      brief: { ...state.brief, suspects: state.brief.suspects.map((x) => (x.number === 3 ? { ...x, name: 'Dr Wren', locked: false } : x)) },
+    };
+    expect(buildCards(open).map((c) => c.id)).toEqual(buildCards(state).map((c) => c.id));
+  });
+
+  test('relates_to never strings a fact to a locked card', () => {
+    const named = {
+      ...state,
+      notebook: { ...state.notebook, sections: state.notebook.sections.map((x) => ({ ...x, facts: x.facts.map((f) => ({ ...f, relates_to: [''] })) })) },
+    };
+    expect(gameStrings(named).filter((s) => s.kind === 'relates')).toEqual([]);
   });
 
   test('the same text twice in one section is one card', () => {
@@ -59,7 +83,7 @@ describe('cards', () => {
       [F2, F3, 'contradiction'],
       [F1, S1, 'relates'],
       [F3, S1, 'relates'],
-      [F3, suspectCard('Mrs Pike the cook'), 'relates'],
+      [F3, suspectCard(2), 'relates'],
     ]);
   });
 
@@ -89,8 +113,8 @@ describe('layout', () => {
 
   test('suspects sit above places, places above evidence', () => {
     const p = initialLayout(buildCards(state));
-    expect(p[S1]!.y).toBeLessThan(p[locationCard('Long gallery')]!.y);
-    expect(p[locationCard('Long gallery')]!.y).toBeLessThan(p[F1]!.y);
+    expect(p[S1]!.y).toBeLessThan(p[locationCard(1)]!.y);
+    expect(p[locationCard(1)]!.y).toBeLessThan(p[F1]!.y);
   });
 
   test('tilt stays within two degrees', () => {

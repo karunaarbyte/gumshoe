@@ -3,8 +3,10 @@ import type { GameState } from '../api/types';
 export type CardType = 'suspect' | 'location' | 'fact' | 'record';
 
 export interface BoardCard {
-  /** Stable across a save and a load: built from names and text, never from handles, because
-   * a loaded game gets new handles (and a new game id). */
+  /** Stable across a save and a load, and across an unlock: never from handles, because a
+   * loaded game gets new handles (and a new game id). A suspect or place is keyed by its number
+   * (fixed for the whole case), never its name, which a locked one does not have; facts and
+   * records by their text. */
   id: string;
   type: CardType;
   label: string; // the chip: SUSPECT, PLACE, EVIDENCE, RECORDS
@@ -16,8 +18,8 @@ export interface BoardCard {
   source: string | null; // facts: the notebook section
 }
 
-export const suspectCard = (name: string) => `suspect:${name}`;
-export const locationCard = (name: string) => `location:${name}`;
+export const suspectCard = (number: number) => `suspect:${number}`;
+export const locationCard = (number: number) => `location:${number}`;
 export const recordCard = (label: string) => `record:${label}`;
 export const factCard = (source: string, text: string) => `fact:${source}|${text}`;
 
@@ -28,7 +30,7 @@ export function buildCards(state: GameState): BoardCard[] {
   const cards = [
     ...brief.suspects.map((s): BoardCard => ({
       ...base,
-      id: suspectCard(s.name),
+      id: suspectCard(s.number),
       type: 'suspect',
       label: 'Suspect',
       title: s.name,
@@ -37,7 +39,7 @@ export function buildCards(state: GameState): BoardCard[] {
     })),
     ...brief.locations.map((l): BoardCard => ({
       ...base,
-      id: locationCard(l.name),
+      id: locationCard(l.number),
       type: 'location',
       label: 'Place',
       title: l.name,
@@ -80,9 +82,10 @@ export interface GameString {
 }
 
 /** The red strings: each contradiction (lie fact to exposer fact), and each fact to the suspects
- * it relates to. `relates_to` holds suspect display names, matched to suspect cards by name. */
+ * it relates to. `relates_to` holds suspect display names, matched by name to the open suspects
+ * (a locked one has no name to match). */
 export function gameStrings(state: GameState): GameString[] {
-  const suspects = new Set(state.brief.suspects.map((s) => s.name));
+  const suspects = new Map(state.brief.suspects.filter((s) => !s.locked && s.name !== '').map((s) => [s.name, s.number]));
   const factByHandle = new Map<string, string>();
   for (const section of state.notebook.sections) {
     for (const f of section.facts) factByHandle.set(f.handle, factCard(section.source, f.text));
@@ -97,7 +100,8 @@ export function gameStrings(state: GameState): GameString[] {
     for (const f of section.facts) {
       const from = factCard(section.source, f.text);
       for (const name of f.relates_to) {
-        if (suspects.has(name)) out.push({ id: `r:${from}~${name}`, from, to: suspectCard(name), kind: 'relates' });
+        const number = suspects.get(name);
+        if (number !== undefined) out.push({ id: `r:${from}~${suspectCard(number)}`, from, to: suspectCard(number), kind: 'relates' });
       }
     }
   }

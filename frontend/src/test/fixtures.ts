@@ -25,11 +25,12 @@ export const brief: PlayerCaseView = {
   suspects: [
     { number: 1, handle: 's1', name: 'Mr Grey the butler', description: 'Stiff and correct.', locked: false },
     { number: 2, handle: 's2', name: 'Mrs Pike the cook', description: 'Floury hands.', locked: false },
-    { number: 3, handle: 's3', name: 'Dr Wren the physician', description: 'Arrived late.', locked: true },
+    // a locked entry comes without its name and description: the server sends them empty
+    { number: 3, handle: 's3', name: '', description: '', locked: true },
   ],
   locations: [
     { number: 1, handle: 'l1', name: 'Long gallery', description: 'Portraits and a body.', locked: false },
-    { number: 2, handle: 'l2', name: 'Wine cellar', description: 'Dark and damp.', locked: true },
+    { number: 2, handle: 'l2', name: '', description: '', locked: true },
   ],
   record_kinds: [
     { key: 'letters', label: 'Letters' },
@@ -175,8 +176,8 @@ export const transcript: TurnRecord[] = [
       { kind: 'tool_result', tool: 'interrogate', ok: false, code: 'unknown_handle', message: 'no such suspect', data: null },
       {
         kind: 'reply',
-        speaker: 'Dr Wren the physician',
-        text: 'Dr Wren is not available yet.',
+        speaker: null, // the server never names a locked suspect
+        text: "You haven't found a way to them yet.",
         source: 'unreachable',
         degraded: false,
         violations: [],

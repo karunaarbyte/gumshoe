@@ -9,8 +9,8 @@ import { initialLayout } from './layout';
 import { gameKey, loadBoard } from './storage';
 
 const state = states[2]!;
-const S1 = suspectCard('Mr Grey the butler');
-const S2 = suspectCard('Mrs Pike the cook');
+const S1 = suspectCard(1);
+const S2 = suspectCard(2);
 const F2 = factCard('Mr Grey the butler', 'He was in the pantry all evening.');
 
 describe('Board', () => {
@@ -20,6 +20,14 @@ describe('Board', () => {
     expect(screen.getByRole('article', { name: 'Suspect: Mr Grey the butler' })).toBeInTheDocument();
     expect(screen.getByRole('article', { name: 'Suspect, locked' })).toHaveTextContent('REDACTED');
     expect(screen.queryByText('Dr Wren the physician')).not.toBeInTheDocument();
+  });
+
+  test('every locked entry lies face down, though none of them has a name', () => {
+    preferReducedMotion(true);
+    const hidden = { ...state, brief: { ...state.brief, suspects: state.brief.suspects.map((s) => ({ ...s, name: '', description: '', locked: true })) } };
+    render(<Board game="g1" state={hidden} />);
+    expect(screen.getAllByRole('article', { name: 'Suspect, locked' })).toHaveLength(3);
+    expect(screen.queryByRole('article', { name: /^Suspect: / })).not.toBeInTheDocument();
   });
 
   test('a locked card never leaks its name or id into the DOM', () => {
@@ -32,10 +40,12 @@ describe('Board', () => {
   test('a card that unlocks shows its face, flipping over', () => {
     preferReducedMotion(false);
     const { rerender } = render(<Board game="g1" state={state} />);
-    const unlocked = { ...state, brief: { ...state.brief, suspects: state.brief.suspects.map((s) => ({ ...s, locked: false })) } };
+    // the next state names the suspect that opened
+    const wren = { name: 'Dr Wren the physician', description: 'Arrived late.', locked: false };
+    const unlocked = { ...state, brief: { ...state.brief, suspects: state.brief.suspects.map((s) => (s.locked ? { ...s, ...wren } : s)) } };
     rerender(<Board game="g1" state={unlocked} />);
     expect(screen.getByRole('article', { name: 'Suspect: Dr Wren the physician' })).toBeInTheDocument();
-    expect(screen.getByTestId(`card-${suspectCard('Dr Wren the physician')}`)).toHaveAttribute('data-flipped', 'true');
+    expect(screen.getByTestId(`card-${suspectCard(3)}`)).toHaveAttribute('data-flipped', 'true');
     expect(screen.getByTestId(`card-${S1}`)).toHaveAttribute('data-flipped', 'false');
   });
 
