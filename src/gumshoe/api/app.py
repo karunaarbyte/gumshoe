@@ -22,7 +22,7 @@ from gumshoe.api.admin import admin_token_of, require_admin
 from gumshoe.api.errors import ApiError, describe_validation, error_body, http_code, status_for
 from gumshoe.api.games import MAX_TURN_CHARS, Service, saves_router
 from gumshoe.api.games import router as games_router
-from gumshoe.api.headers import SecurityHeaders
+from gumshoe.api.headers import SecurityHeaders, security_headers
 from gumshoe.api.info import (
     MAX_ATTEMPTS,
     AdminUsage,
@@ -241,8 +241,13 @@ def create_app(
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, exc: Exception) -> JSONResponse:
-        # Starlette logs the exception itself; the body never carries its text
-        return JSONResponse(error_body("internal", "something went wrong"), status_code=500)
+        # Starlette logs the exception itself; the body never carries its text. This handler runs
+        # in the outermost error middleware, outside SecurityHeaders: add the headers here.
+        return JSONResponse(
+            error_body("internal", "something went wrong"),
+            status_code=500,
+            headers=security_headers(hsts=settings.public_mode),
+        )
 
     app.include_router(games_router)
     app.include_router(saves_router)
@@ -357,24 +362,29 @@ def create_app(
         return for_player(views[0])
 
     @app.get("/api/admin/usage", dependencies=[Depends(require_admin)])
-    def admin_usage(request: Request) -> AdminUsage:
+    async def admin_usage(request: Request) -> AdminUsage:
+        # Async: the live figures (games, the gate, the budget meter) belong to the event loop and
+        # are read on it; only the file and SQLite reads go to a thread.
         today = datetime.now(UTC).strftime("%Y-%m-%d")
-        totals = store.usage_totals(today)
         service: AgentService | None = getattr(request.app.state, "service", None)
         snap = service.usage_snapshot() if service is not None else {}
+        mode = service.decider_mode() if service is not None else "normal"
+        sessions_seen = request.app.state.sessions.issued
+        totals = await asyncio.to_thread(store.usage_totals, today)
+        saves_held = await asyncio.to_thread(service.saves_held) if service is not None else 0
         top = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:5]
         return AdminUsage(
             day=today,
             jev_tokens_today=sum(totals.values()),
             jev_daily_cap=settings.jev_daily_tokens,
             jev_ip_daily_cap=settings.jev_ip_daily_tokens,
-            mode=service.decider_mode() if service is not None else "normal",
+            mode=mode,
             games_open=snap.get("games_open", 0),
             turns_running=snap.get("turns_running", 0),
             queued=snap.get("queued", 0),
             shadow_skipped=snap.get("shadow_skipped", 0),
-            sessions_seen=request.app.state.sessions.issued,
-            saves_held=snap.get("saves_held", 0),
+            sessions_seen=sessions_seen,
+            saves_held=saves_held,
             top_clients=[ClientUsage(key=k, tokens=t) for k, t in top],
         )
 

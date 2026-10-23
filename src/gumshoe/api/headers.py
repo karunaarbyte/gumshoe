@@ -23,6 +23,16 @@ FIXED = {
 HSTS = "max-age=31536000"
 
 
+def security_headers(*, hsts: bool) -> dict[str, str]:
+    """The headers `SecurityHeaders` adds, for a response that is sent outside it (the 500
+    handler runs in Starlette's outermost error middleware)."""
+    headers = dict(FIXED)
+    if hsts:
+        headers["strict-transport-security"] = HSTS
+    headers["cache-control"] = "no-store"
+    return headers
+
+
 class SecurityHeaders:
     def __init__(self, app: ASGIApp, *, hsts: bool = False) -> None:
         self.app = app

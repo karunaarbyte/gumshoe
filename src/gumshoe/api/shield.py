@@ -8,6 +8,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from gumshoe.api.errors import error_body
 from gumshoe.api.refusals import log_scope_refusal
+from gumshoe.config import LOCAL_HOSTS
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 FORBIDDEN = "this request does not come from the site"
@@ -33,7 +34,9 @@ def is_json(content_type: str) -> bool:
 
 class OriginCheck:
     """`allowed` are the exact origins accepted. With `local` set (no PUBLIC_ORIGIN) the request's
-    own `scheme://Host` is accepted too; in public mode the Host header is never trusted."""
+    own `scheme://Host` is accepted too, but only for a loopback Host (localhost, 127.0.0.1,
+    ::1): a rebound DNS name pointing here sends an Origin equal to its own Host, so any other
+    name must be listed in CORS_ORIGINS. In public mode the Host header is never trusted."""
 
     def __init__(
         self,
@@ -61,7 +64,13 @@ class OriginCheck:
         if origin in self.allowed:
             return True
         host = headers.get("host")
-        return self.local and host is not None and origin == f"{scope['scheme']}://{host}".lower()
+        if not self.local or host is None or origin != f"{scope['scheme']}://{host}".lower():
+            return False
+        try:
+            hostname = urlsplit(f"//{host}").hostname  # drops the port and IPv6 brackets
+        except ValueError:
+            return False
+        return hostname in LOCAL_HOSTS
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or scope["method"] in SAFE_METHODS:

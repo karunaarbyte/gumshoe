@@ -560,15 +560,18 @@ class AgentService:
             client_key.reset(token)
 
     def usage_snapshot(self) -> dict[str, int]:
-        """The load figures for the admin usage report."""
+        """The load figures for the admin usage report. Event-loop state: call it on the loop."""
         gate = self._gate
         return {
             "games_open": len(self._slots),
             "turns_running": sum(1 for s in self._slots.values() if s.busy),
             "queued": gate.queued if gate is not None else 0,
             "shadow_skipped": int(getattr(self._deps.decider, "shadow_skipped", 0)),
-            "saves_held": self._owners.count_all() if self._owners is not None else 0,
         }
+
+    def saves_held(self) -> int:
+        """The saves on disk. Reads the folder: call it off the loop (in a thread)."""
+        return self._owners.count_all() if self._owners is not None else 0
 
     def decider_mode(self) -> Literal["normal", "slow"]:
         """Slow mode is the global Jev budget spent (the decider's `mode`); a decider with no

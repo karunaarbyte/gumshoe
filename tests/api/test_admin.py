@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import UTC, datetime
 
@@ -438,3 +439,39 @@ def test_the_real_admin_routes_are_all_the_apps_own(store):
     assert admin_routes_under_routers(app.router.routes) == []
     direct = {r.path for r in app.router.routes if isinstance(r, APIRoute)}
     assert {"/api/stats/decisions", "/api/decisions", "/api/admin/usage"} <= direct
+
+
+def _where() -> str:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return "thread"
+    return "loop"
+
+
+def test_the_usage_report_reads_live_state_on_the_loop_and_files_off_it(store):
+    with client_for(store, admin_token=SecretStr(TOKEN), jev_daily_tokens=5000) as client:
+        service = client.app.state.service
+        seen: dict[str, str] = {}
+        for name in ("usage_snapshot", "decider_mode", "saves_held"):
+            real = getattr(service, name)
+
+            def spy(*args, _real=real, _name=name, **kwargs):
+                seen[_name] = _where()
+                return _real(*args, **kwargs)
+
+            setattr(service, name, spy)
+        real_totals = store.usage_totals
+
+        def totals_spy(day):
+            seen["usage_totals"] = _where()
+            return real_totals(day)
+
+        store.usage_totals = totals_spy
+        assert client.get("/api/admin/usage", headers=bearer()).status_code == 200
+    assert seen == {
+        "usage_snapshot": "loop",
+        "decider_mode": "loop",
+        "saves_held": "thread",
+        "usage_totals": "thread",
+    }

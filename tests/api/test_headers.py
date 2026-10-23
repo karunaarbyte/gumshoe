@@ -186,3 +186,37 @@ def test_mixed_case_headers_from_downstream_are_neither_duplicated_nor_kept():
     assert values[b"content-security-policy"] == CSP.encode()
     assert values[b"x-content-type-options"] == b"nosniff"
     assert values[b"content-type"] == b"text/plain"
+
+
+def _client_with_a_failing_route(store, **settings):
+    from starlette.routing import Route
+
+    async def up():
+        return True
+
+    app = create_app(
+        store,
+        make_service=fake_factory(Script()),
+        settings=Settings(_env_file=None, **settings),
+        personas_up=up,
+    )
+
+    def boom(request):
+        raise RuntimeError("an unexpected failure")
+
+    app.router.routes.insert(0, Route("/api/boom", boom))
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.mark.parametrize("public", [False, True])
+def test_an_unexpected_500_carries_the_security_headers(store, public):
+    settings = PUBLIC_MODE if public else {}
+    with _client_with_a_failing_route(store, **settings) as client:
+        r = client.get("/api/boom", headers={"origin": PUBLIC} if public else {})
+    assert (r.status_code, r.json()["code"]) == (500, "internal")
+    assert "unexpected failure" not in r.text
+    assert_secured(r)
+    assert r.headers["cache-control"] == "no-store"
+    assert ("strict-transport-security" in r.headers) is public
+    if public:
+        assert r.headers["strict-transport-security"] == "max-age=31536000"
