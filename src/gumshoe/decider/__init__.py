@@ -45,6 +45,7 @@ from gumshoe.decider.contract.models import (
     Usage,
 )
 from gumshoe.decider.contract.samples import DEMO_PLAYER_INPUTS, DEMO_QUESTIONS
+from gumshoe.decider.contract.usage import UsageLedger, client_key, estimate_tokens
 from gumshoe.decider.shadow.records import CallRecord, Recorder
 from gumshoe.decider.shadow.shadow import ShadowDecider
 
@@ -72,9 +73,12 @@ __all__ = [
     "ScoreQuestion",
     "ShadowDecider",
     "Usage",
+    "UsageLedger",
     "answer_confidence",
     "answer_verdict",
     "answers_agree",
+    "client_key",
     "describe_failure",
+    "estimate_tokens",
     "make_decider",
 ]

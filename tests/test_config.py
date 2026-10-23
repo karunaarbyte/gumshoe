@@ -428,3 +428,11 @@ def test_expiry_and_save_settings_reject_negative_numbers():
     for name in ("game_idle_minutes", "save_retention_days", "session_saves", "ip_saves"):
         with pytest.raises(ValidationError):
             Settings(_env_file=None, **{name: -1})
+
+
+def test_jev_budget_defaults_and_validation():
+    s = Settings(_env_file=None)
+    assert (s.jev_daily_tokens, s.jev_ip_daily_tokens) == (5_000_000, 300_000)
+    for name in ("jev_daily_tokens", "jev_ip_daily_tokens"):
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None, **{name: -1})

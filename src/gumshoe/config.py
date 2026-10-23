@@ -98,6 +98,10 @@ class Settings(BaseSettings):
     nimble_usd_per_mtok_in: float = Field(0.0, ge=0, allow_inf_nan=False)
     nimble_usd_per_mtok_out: float = Field(0.0, ge=0, allow_inf_nan=False)
 
+    # Jev spend caps per UTC day, in input tokens (0 = no cap). Over a cap, Nimble alone decides.
+    jev_daily_tokens: int = Field(5_000_000, ge=0)
+    jev_ip_daily_tokens: int = Field(300_000, ge=0)
+
     # The HTTP API: comma-separated browser origins allowed by CORS (empty = none, never "*").
     cors_origins: str = ""
     api_host: str = "127.0.0.1"
