@@ -13,7 +13,13 @@ from gumshoe.agent import AgentConfig
 from gumshoe.api import create_app
 from gumshoe.api.games import MAX_TURN_CHARS
 from gumshoe.api.service import AgentService, Caps
-from gumshoe.api.wiring import agent_config, default_service, save_index, thirty_five_days_ago
+from gumshoe.api.wiring import (
+    agent_config,
+    default_service,
+    housekeeping,
+    save_index,
+    thirty_five_days_ago,
+)
 from gumshoe.config import Settings
 from gumshoe.decider import BudgetDecider, DeciderConfigError
 from gumshoe.mcp_server import GameHost
@@ -23,6 +29,7 @@ from tests.agent.fakes import Script, ScriptedDecider, ScriptedLlm
 from tests.api.client import TestClient
 from tests.api.helpers import OWNER
 from tests.mcp_server.helpers import SeqIds
+from tests.stats.factories import make_record
 
 
 def test_default_settings_give_the_default_agent_config():
@@ -294,3 +301,63 @@ def test_the_usage_cutoff_is_35_days_back_as_a_zero_padded_iso_day():
     assert thirty_five_days_ago(datetime(2026, 2, 10, 23, 59, tzinfo=UTC)) == "2026-01-06"
     assert thirty_five_days_ago(datetime(2026, 3, 5, 0, 0, tzinfo=UTC)) == "2026-01-29"
     assert thirty_five_days_ago(datetime(2026, 1, 20, tzinfo=UTC)) == "2025-12-16"
+
+
+def _decision_store(tmp_path):
+    store = SqliteStatsStore(tmp_path / "d.db")
+    store.insert(
+        [
+            make_record(decision_id="old", ts="2026-08-17T00:00:00.000000+00:00"),
+            make_record(decision_id="mid", ts="2026-09-06T00:00:00.000000+00:00"),
+            make_record(decision_id="new", ts="2026-10-11T00:00:00.000000+00:00"),
+        ]
+    )
+    store.add_usage("2026-08-01", "k", 5)
+    store.add_usage("2026-10-15", "k", 5)
+    return store
+
+
+NOW = lambda: datetime(2026, 10, 16, tzinfo=UTC)  # noqa: E731
+
+
+def test_housekeeping_purges_old_usage_and_decisions(tmp_path):
+    store = _decision_store(tmp_path)
+    housekeeping(store, 30, now=NOW)()
+    assert store.fetch_decisions(["old"]) == []
+    assert store.fetch_decisions(["mid"]) == []  # 40 days old
+    assert len(store.fetch_decisions(["new"])) == 1
+    assert store.usage_totals("2026-08-01") == {}
+    assert store.usage_totals("2026-10-15") == {"k": 5}
+
+
+def test_zero_retention_never_calls_the_decision_purge(tmp_path):
+    store = _decision_store(tmp_path)
+    calls: list[datetime] = []
+    store.purge_decisions = calls.append  # type: ignore[method-assign, assignment]
+    housekeeping(store, 0, now=NOW)()
+    assert calls == []
+    assert store.usage_totals("2026-08-01") == {}  # the usage purge still ran
+    assert len(store.fetch_decisions(["old"])) == 1
+
+
+def test_a_failing_decision_purge_does_not_skip_the_usage_purge(tmp_path, caplog):
+    store = _decision_store(tmp_path)
+
+    def boom(_: datetime) -> int:
+        raise RuntimeError("secret detail")
+
+    store.purge_decisions = boom  # type: ignore[method-assign]
+    housekeeping(store, 30, now=NOW)()  # does not raise
+    assert store.usage_totals("2026-08-01") == {}
+    assert "RuntimeError" in caplog.text and "secret detail" not in caplog.text
+
+
+def test_a_failing_usage_purge_does_not_skip_the_decision_purge(tmp_path, caplog):
+    store = _decision_store(tmp_path)
+
+    def boom(_: str) -> int:
+        raise RuntimeError("x")
+
+    store.purge_usage = boom  # type: ignore[method-assign]
+    housekeeping(store, 30, now=NOW)()
+    assert store.fetch_decisions(["old"]) == []

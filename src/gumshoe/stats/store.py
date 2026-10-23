@@ -115,6 +115,28 @@ class SqliteStatsStore:
         with closing(self._connect()) as conn, conn:
             return conn.execute("DELETE FROM jev_usage WHERE day < ?", (before_day,)).rowcount
 
+    def purge_decisions(self, older_than: datetime) -> int:
+        """Delete every decision whose first call is older than `older_than`, all its rows
+        (primary and shadow) together. Returns how many decisions went. A naive `older_than` is
+        read as UTC. One transaction, so a reader sees a decision whole or not at all; the ids
+        go in chunks to stay under SQLite's variable limit. Not batched across transactions: at
+        this store's size one delete is brief, and batching would only add complexity."""
+        cutoff = to_utc_iso(older_than)
+        with closing(self._connect()) as conn, conn:
+            ids = [
+                row["decision_id"]
+                for row in conn.execute(
+                    "SELECT decision_id FROM decision_calls GROUP BY decision_id "
+                    "HAVING MIN(ts) < ?",
+                    (cutoff,),
+                )
+            ]
+            for start in range(0, len(ids), 500):
+                chunk = ids[start : start + 500]
+                marks = ", ".join("?" for _ in chunk)
+                conn.execute(f"DELETE FROM decision_calls WHERE decision_id IN ({marks})", chunk)
+            return len(ids)
+
     def fetch_calls(
         self, *, node: str | None = None, since: datetime | None = None
     ) -> list[CallRecord]:

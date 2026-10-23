@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -22,6 +23,8 @@ from gumshoe.mcp_server import GameError, GameHost
 from gumshoe.mcp_server.saves import NAME, read_save
 from gumshoe.mcp_server.tools import build_server
 from gumshoe.stats import SqliteStatsStore
+
+logger = logging.getLogger(__name__)
 
 
 def agent_config(settings: Settings) -> AgentConfig:
@@ -74,6 +77,30 @@ def thirty_five_days_ago(now: datetime | None = None) -> str:
     return ((now or datetime.now(UTC)) - timedelta(days=35)).strftime("%Y-%m-%d")
 
 
+def housekeeping(
+    store: SqliteStatsStore,
+    retention_days: int,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> Callable[[], None]:
+    """One callback that tidies the stats store: usage rows older than 35 days, and decisions
+    older than `retention_days` (0 = keep forever, so the decision purge is skipped entirely).
+    Each step is guarded alone, so a failure in one never skips the other; a failure is logged
+    by class name only."""
+
+    def run() -> None:
+        try:
+            store.purge_usage(thirty_five_days_ago(now()))
+        except Exception as exc:
+            logger.error("purging old usage failed: %s", type(exc).__name__)
+        if retention_days > 0:
+            try:
+                store.purge_decisions(now() - timedelta(days=retention_days))
+            except Exception as exc:
+                logger.error("purging old decisions failed: %s", type(exc).__name__)
+
+    return run
+
+
 @asynccontextmanager
 async def default_service(
     store: SqliteStatsStore,
@@ -114,10 +141,12 @@ async def default_service(
             idle_s=settings.game_idle_minutes * 60.0,
         )
         stack.push_async_callback(service.aclose)
+        tidy = housekeeping(store, settings.decision_retention_days)
+        await asyncio.to_thread(tidy)  # once at startup, then on the maintenance schedule
         maintenance = asyncio.create_task(
             service.maintain(
                 retention_s=settings.save_retention_days * 86400.0,
-                housekeeping=lambda: store.purge_usage(thirty_five_days_ago()),
+                housekeeping=tidy,
             )
         )
 
