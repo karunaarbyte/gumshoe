@@ -436,3 +436,37 @@ def test_jev_budget_defaults_and_validation():
     for name in ("jev_daily_tokens", "jev_ip_daily_tokens"):
         with pytest.raises(ValidationError):
             Settings(_env_file=None, **{name: -1})
+
+
+def test_admin_is_off_by_default_and_a_token_must_be_long():
+    assert Settings(_env_file=None).admin_enabled is False
+    assert Settings(_env_file=None, admin_token=SecretStr("t" * 32)).admin_enabled is True
+    with pytest.raises(ValidationError, match="ADMIN_TOKEN"):
+        Settings(_env_file=None, admin_token=SecretStr("short"))
+
+
+def test_admin_token_never_leaks_into_errors_repr_or_str():
+    secret = "sEcReT-short-value"
+    with pytest.raises(ValidationError) as exc:
+        Settings(_env_file=None, admin_token=SecretStr(secret))
+    assert secret not in str(exc.value)
+    assert secret not in repr(exc.value)
+    good = "g" * 40
+    s = Settings(_env_file=None, admin_token=SecretStr(good))
+    assert good not in repr(s)
+    assert good not in str(s)
+
+
+@pytest.mark.parametrize("padding", ["\n", " ", "\t", "\r\n"])
+def test_admin_token_with_whitespace_is_rejected(padding):
+    token = "t" * 32
+    for bad in (token + padding, padding + token, padding * 40):
+        with pytest.raises(ValidationError, match="ADMIN_TOKEN") as exc:
+            Settings(_env_file=None, admin_token=SecretStr(bad))
+        assert token not in str(exc.value)
+
+
+def test_decision_retention_default_and_validation():
+    assert Settings(_env_file=None).decision_retention_days == 30
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, decision_retention_days=-1)

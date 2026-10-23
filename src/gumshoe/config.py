@@ -113,6 +113,9 @@ class Settings(BaseSettings):
     # signs the session cookie and keys the save owners (32+ characters in public mode).
     public_origin: str = ""
     session_secret: SecretStr = SecretStr("")
+    # Admin access to the stats and decisions (32+ characters; empty = those endpoints are off).
+    admin_token: SecretStr = SecretStr("")
+    decision_retention_days: int = Field(30, ge=0)  # decisions older than this are deleted
 
     # Limits (0 = unlimited). Per session, per client IP, and global.
     session_games_open: int = Field(3, ge=0)
@@ -151,6 +154,20 @@ class Settings(BaseSettings):
     @classmethod
     def _resolve_against_the_project_root(cls, value: Path) -> Path:
         return _under_root(value)
+
+    @field_validator("admin_token", mode="after")
+    @classmethod
+    def _admin_token_is_long(cls, value: SecretStr) -> SecretStr:
+        # The message never includes the value. Padding (a trailing newline from an env file)
+        # is rejected, not stripped, so the token a person types is the token that is checked.
+        token = value.get_secret_value()
+        if token != token.strip():
+            raise ValueError("ADMIN_TOKEN must not start or end with whitespace")
+        if token and len(token) < 32:
+            raise ValueError(
+                "ADMIN_TOKEN must be at least 32 characters (or empty to turn admin off)"
+            )
+        return value
 
     @field_validator("jev_base_url", mode="after")
     @classmethod
@@ -215,6 +232,10 @@ class Settings(BaseSettings):
                 "(leave it blank to disable shadowing)"
             )
         return self
+
+    @property
+    def admin_enabled(self) -> bool:
+        return bool(self.admin_token.get_secret_value())
 
     @property
     def public_mode(self) -> bool:
