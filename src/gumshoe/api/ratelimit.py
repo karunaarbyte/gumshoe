@@ -6,6 +6,8 @@ import time
 from collections import deque
 from collections.abc import Callable
 
+from fastapi import Request
+
 from gumshoe.api.errors import ApiError
 from gumshoe.config import Settings
 
@@ -129,3 +131,9 @@ class Quotas:
     def turn(self, owner: str, ip: str) -> None:
         self._check(self._session_turns, owner, "turns")
         self._check(self._ip_turns, ip, "turns from your network")
+
+
+def request_ip(request: Request) -> str:
+    peer = request.client.host if request.client else None
+    forwarded = request.headers.get("x-forwarded-for")
+    return client_ip(peer, forwarded, trust_proxy=request.app.state.trust_proxy)

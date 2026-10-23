@@ -18,6 +18,8 @@ from gumshoe.api.games import router as games_router
 from gumshoe.api.info import MAX_ATTEMPTS, Health, Meta, PersonaModels, presets
 from gumshoe.api.limits import BodyLimit
 from gumshoe.api.probe import PersonaProbe
+from gumshoe.api.ratelimit import Quotas
+from gumshoe.api.ratemiddleware import RequestRate
 from gumshoe.api.service import AgentService
 from gumshoe.api.session import Sessions
 from gumshoe.api.shield import OriginCheck
@@ -86,13 +88,17 @@ def create_app(
 
     app = FastAPI(title="Gumshoe API", lifespan=lifespan)
     app.state.game_off = NOT_STARTED  # until the lifespan has run
+    quotas = Quotas(settings)
     app.state.sessions = sessions
+    app.state.quotas = quotas
+    app.state.trust_proxy = settings.trust_proxy
     app.add_middleware(BodyLimit, max_bytes=settings.max_body_bytes)
     allowed_origins = (
         *settings.cors_origin_list,
         *([settings.public_origin] if settings.public_origin else []),
     )
     app.add_middleware(OriginCheck, allowed=allowed_origins, local=not settings.public_mode)
+    app.add_middleware(RequestRate, quotas=quotas, trust_proxy=settings.trust_proxy)
     if origins := settings.cors_origin_list:  # added last, so it is outermost: 413s carry it too
         app.add_middleware(
             CORSMiddleware,

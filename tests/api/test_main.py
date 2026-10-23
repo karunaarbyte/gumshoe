@@ -28,9 +28,21 @@ def test_host_and_port_come_from_the_settings(served):
     assert served == [
         (
             ("gumshoe.api.__main__:build_app",),
-            {"factory": True, "host": "127.0.0.2", "port": 9001, "reload": False},
+            {
+                "factory": True,
+                "host": "127.0.0.2",
+                "port": 9001,
+                "reload": False,
+                "proxy_headers": False,
+            },
         )
     ]
+
+
+def test_uvicorn_does_not_rewrite_the_client_from_forwarded_headers(served):
+    entry.main([])
+    [(_, kw)] = served
+    assert kw["proxy_headers"] is False
 
 
 def test_the_command_line_overrides_them_and_can_reload(served):

@@ -6,6 +6,7 @@ from pydantic import SecretStr
 from starlette.testclient import TestClient
 
 from gumshoe.api.errors import UNKNOWN_GAME
+from gumshoe.api.ratelimit import Quotas
 from gumshoe.api.session import NewOwner, Owner, Sessions
 from gumshoe.config import Settings
 
@@ -72,6 +73,8 @@ def test_public_mode_uses_the_host_prefix_and_secure():
 def app_with(sessions: Sessions) -> FastAPI:
     app = FastAPI()
     app.state.sessions = sessions
+    app.state.quotas = Quotas(Settings(_env_file=None))
+    app.state.trust_proxy = False
 
     @app.post("/new")
     def new(owner: NewOwner) -> dict[str, str]:

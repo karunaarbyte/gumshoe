@@ -17,6 +17,7 @@ from fastapi import Depends, Request, Response
 
 from gumshoe.agent import ToolFailure
 from gumshoe.api.errors import UNKNOWN_GAME
+from gumshoe.api.ratelimit import request_ip
 from gumshoe.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -102,6 +103,7 @@ def issue_owner(request: Request, response: Response) -> str:
     sessions = sessions_of(request)
     session_id = sessions.read(request.cookies.get(sessions.cookie_name))
     if not session_id:
+        request.app.state.quotas.new_session(request_ip(request))
         session_id, value = sessions.issue()
         sessions.set_cookie(response, value)
     return session_id

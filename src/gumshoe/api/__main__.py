@@ -35,7 +35,14 @@ def build_parser(settings: Settings) -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = build_parser(get_settings()).parse_args(argv)
-    uvicorn.run(APP, factory=True, host=args.host, port=args.port, reload=args.reload)
+    uvicorn.run(
+        APP,
+        factory=True,
+        host=args.host,
+        port=args.port,
+        reload=args.reload,
+        proxy_headers=False,
+    )
 
 
 if __name__ == "__main__":
