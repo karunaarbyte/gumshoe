@@ -71,11 +71,19 @@ def test_a_revealed_suspect_keeps_the_name_but_not_the_description():
 
     def sus(n, revealed):
         return SuspectView(
-            number=n, handle=f"s{n}", name=f"Name {n}", description="secret", locked=True,
+            number=n,
+            handle=f"s{n}",
+            name=f"Name {n}",
+            description="secret",
+            locked=True,
             revealed=revealed,
         )
 
-    brief = GameHost().new_game(SEED).brief.model_copy(update={"suspects": (sus(1, True), sus(2, False))})
+    brief = (
+        GameHost()
+        .new_game(SEED)
+        .brief.model_copy(update={"suspects": (sus(1, True), sus(2, False))})
+    )
     shown = player_brief(brief).suspects
     assert (shown[0].name, shown[0].description, shown[0].locked) == ("Name 1", "", True)
     assert (shown[1].name, shown[1].description) == ("", "")
@@ -119,13 +127,13 @@ def test_locked_names_never_reach_the_browser_until_they_unlock(store, tmp_path,
         assert_absent(saved.text, secrets_of(truth, still))
 
 
-def play_until_revealed(seed, preset="standard", run=0):
+def play_until_revealed(seed):
     """Play a game with a fixed random strategy until a suspect is revealed; return the session."""
     import random
 
-    rng = random.Random(seed * 1000 + run)
+    rng = random.Random(seed * 1000)
     host = GameHost(max_games=10)
-    session = host._games[host.new_game(seed, preset).game].session
+    session = host._games[host.new_game(seed, "standard").game].session
     for _ in range(400):
         brief = session.brief()
         if any(s.revealed for s in brief.suspects):

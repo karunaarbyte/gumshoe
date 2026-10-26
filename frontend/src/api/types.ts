@@ -29,7 +29,10 @@ export interface CaseEntry {
   name: string;
   description: string;
   locked: boolean;
-  /** Suspects only: locked, yet the game lets you accuse them, so the name is sent. */
+}
+
+export interface SuspectEntry extends CaseEntry {
+  /** Locked, yet the game lets you accuse them, so the name is sent. Absent in older payloads. */
   revealed?: boolean;
 }
 
@@ -41,7 +44,7 @@ export interface RecordKind {
 export interface PlayerCaseView {
   intro: string;
   locations: CaseEntry[];
-  suspects: CaseEntry[];
+  suspects: SuspectEntry[];
   record_kinds: RecordKind[];
   attempts_left: number;
   status: GameStatus;

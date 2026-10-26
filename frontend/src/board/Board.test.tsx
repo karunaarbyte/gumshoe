@@ -18,9 +18,10 @@ describe('Board', () => {
     preferReducedMotion(true);
     const suspects = state.brief.suspects.map((x) => (x.locked ? { ...x, name: 'Lady Vane', revealed: true } : x));
     render(<Board game="g1" state={{ ...state, brief: { ...state.brief, suspects } }} />);
-    const card = screen.getByRole('article', { name: 'Suspect: Lady Vane, locked' });
+    const card = screen.getByRole('article', { name: 'Suspect: Lady Vane, not found yet' });
     expect(card).toHaveTextContent('Lady Vane');
     expect(card).toHaveTextContent('NOT FOUND YET');
+    expect(screen.getByRole('button', { name: 'Pin on suspect Lady Vane, not found yet' })).toBeInTheDocument();
   });
 
   test('shows every card; a locked one is redacted', () => {

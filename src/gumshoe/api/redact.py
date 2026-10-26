@@ -95,11 +95,11 @@ def for_player(view: DecisionView) -> DecisionView:
 
 
 def _blank_locked[E: (LocationView, SuspectView)](entries: tuple[E, ...]) -> tuple[E, ...]:
-    # a revealed suspect (locked, yet the accusation picker names them) keeps its name, never its description
+    # a revealed suspect (locked, yet the picker names them) keeps its name, never its description
     return tuple(
         e.model_copy(
             update={
-                "name": e.name if getattr(e, "revealed", False) else "",
+                "name": e.name if isinstance(e, SuspectView) and e.revealed else "",
                 "description": "",
             }
         )
