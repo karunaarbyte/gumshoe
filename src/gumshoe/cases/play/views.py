@@ -24,8 +24,10 @@ class SuspectView(View):
     name: str
     description: str
     locked: bool
-    # locked, yet the gate lets the player accuse them (by elimination): their name is already
-    # in the accusation picker, so the board shows it too, as a face-up "not found yet" card
+    # locked, yet the gate lets the player accuse them (in practice because every other suspect
+    # is ruled out): the accusation picker already names them, so the board shows the name too,
+    # as a face-up "not found yet" card. It follows the gate, so it can turn false again: ruling
+    # a suspect out on a lie is undone once the lie is exposed, and the picker drops the name too
     revealed: bool = False
 
 

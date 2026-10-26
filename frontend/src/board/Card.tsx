@@ -56,7 +56,7 @@ export function Card({ card, domKey, at, onGrab, onPin, expanded = false }: Prop
         <button
           type="button"
           aria-label={
-            card.locked ? `Pin on ${card.label.toLowerCase()}, locked` : `Pin on ${card.label.toLowerCase()} ${card.type === 'fact' ? card.body : card.title}`
+            card.locked ? `Pin on ${card.label.toLowerCase()}${card.revealed ? ` ${card.title}, not found yet` : ', locked'}` : `Pin on ${card.label.toLowerCase()} ${card.type === 'fact' ? card.body : card.title}`
           }
           className="absolute top-0 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center"
           onPointerDown={(e) => {

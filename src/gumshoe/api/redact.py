@@ -95,7 +95,7 @@ def for_player(view: DecisionView) -> DecisionView:
 
 
 def _blank_locked[E: (LocationView, SuspectView)](entries: tuple[E, ...]) -> tuple[E, ...]:
-    # a revealed suspect (locked but accusable by elimination) keeps its name, never its description
+    # a revealed suspect (locked, yet the accusation picker names them) keeps its name, never its description
     return tuple(
         e.model_copy(
             update={

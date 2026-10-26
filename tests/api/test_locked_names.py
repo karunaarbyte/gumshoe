@@ -119,6 +119,50 @@ def test_locked_names_never_reach_the_browser_until_they_unlock(store, tmp_path,
         assert_absent(saved.text, secrets_of(truth, still))
 
 
+def play_until_revealed(seed, preset="standard", run=0):
+    """Play a game with a fixed random strategy until a suspect is revealed; return the session."""
+    import random
+
+    rng = random.Random(seed * 1000 + run)
+    host = GameHost(max_games=10)
+    session = host._games[host.new_game(seed, preset).game].session
+    for _ in range(400):
+        brief = session.brief()
+        if any(s.revealed for s in brief.suspects):
+            return session
+        moves = [("search", p.handle) for p in brief.locations if not p.locked]
+        moves += [("interrogate", s.handle) for s in brief.suspects]
+        moves += [("records", s.handle) for s in brief.suspects]
+        moves += [("records", p.handle) for p in brief.locations if not p.locked]
+        rng.shuffle(moves)
+        for kind, handle in moves:
+            act = {"search": session.search, "interrogate": session.interrogate}.get(
+                kind, session.check_records
+            )
+            if act(handle).new_facts:
+                break
+        else:
+            break
+    raise AssertionError("no suspect was ever revealed")
+
+
+def test_revealed_exactly_when_the_picker_names_a_locked_suspect():
+    """Seed 16 (standard) rules suspects out until a locked one is accusable: that suspect is
+    revealed, named as the picker names it, and no other locked suspect is."""
+    from gumshoe.api.redact import player_brief
+
+    session = play_until_revealed(16)
+    brief = session.brief()
+    picker = {c.handle: c.name for c in session.nameable("who").options}
+    sent = player_brief(brief).suspects
+    for real, shown in zip(brief.suspects, sent, strict=True):
+        assert real.revealed == (real.locked and real.handle in picker)
+        if real.locked:
+            assert shown.description == ""
+            assert shown.name == (picker[real.handle] if real.revealed else "")
+    assert any(s.revealed for s in sent)
+
+
 def test_numbers_are_stable_across_an_unlock_and_a_load(store, tmp_path):
     """A card keyed by its number keeps its identity when it flips and after a load."""
     script = Script()
