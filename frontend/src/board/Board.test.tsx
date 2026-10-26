@@ -14,6 +14,15 @@ const S2 = suspectCard(2);
 const F2 = factCard('Mr Grey the butler', 'He was in the pantry all evening.');
 
 describe('Board', () => {
+  test('a locked suspect the game lets you accuse is named, face up, as not found yet', () => {
+    preferReducedMotion(true);
+    const suspects = state.brief.suspects.map((x) => (x.locked ? { ...x, name: 'Lady Vane', revealed: true } : x));
+    render(<Board game="g1" state={{ ...state, brief: { ...state.brief, suspects } }} />);
+    const card = screen.getByRole('article', { name: 'Suspect: Lady Vane, locked' });
+    expect(card).toHaveTextContent('Lady Vane');
+    expect(card).toHaveTextContent('NOT FOUND YET');
+  });
+
   test('shows every card; a locked one is redacted', () => {
     preferReducedMotion(true);
     render(<Board game="g1" state={state} />);

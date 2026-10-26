@@ -13,6 +13,8 @@ export interface BoardCard {
   title: string;
   body: string;
   locked: boolean;
+  /** A locked suspect whose name is known because the accusation picker already names them. */
+  revealed: boolean;
   contradicted: boolean;
   speaker: string | null;
   source: string | null; // facts: the notebook section
@@ -36,6 +38,7 @@ export function buildCards(state: GameState): BoardCard[] {
       title: s.name,
       body: s.description,
       locked: s.locked,
+      revealed: s.revealed === true,
     })),
     ...brief.locations.map((l): BoardCard => ({
       ...base,
@@ -45,6 +48,7 @@ export function buildCards(state: GameState): BoardCard[] {
       title: l.name,
       body: l.description,
       locked: l.locked,
+      revealed: false,
     })),
     ...brief.record_kinds.map((r): BoardCard => ({
       ...base,
@@ -54,6 +58,7 @@ export function buildCards(state: GameState): BoardCard[] {
       title: r.label,
       body: '',
       locked: false,
+      revealed: false,
     })),
     ...notebook.sections.flatMap((section) =>
       section.facts.map((f): BoardCard => ({
@@ -63,6 +68,7 @@ export function buildCards(state: GameState): BoardCard[] {
         title: section.source,
         body: f.text,
         locked: false,
+        revealed: false,
         contradicted: f.contradicted,
         speaker: f.speaker,
         source: section.source,

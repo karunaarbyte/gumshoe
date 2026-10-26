@@ -272,6 +272,7 @@ class GameSession:
                     name=self._suspect_name(sus.id),
                     description=sus.description,
                     locked=not self._subject_open(sus.id),
+                    revealed=self._nameable_suspect(sus.id),
                 )
                 for n, sus in enumerate(suspects, start=1)
             ),
@@ -428,6 +429,12 @@ class GameSession:
         if axis is Axis.HOW:
             return self._ix.methods[candidate].label
         return self._ix.motives[candidate].label
+
+    def _nameable_suspect(self, suspect: str) -> bool:
+        """True when the gate lets the player accuse this suspect right now."""
+        return gate.permission(self._ix, self._state.held, Axis.WHO, suspect).allowed and (
+            not self._subject_open(suspect)
+        )
 
     def nameable(self, axis: str) -> AxisOptions:
         """The candidates the gate lets the player name right now, with a warning flag."""

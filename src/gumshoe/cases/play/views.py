@@ -24,6 +24,9 @@ class SuspectView(View):
     name: str
     description: str
     locked: bool
+    # locked, yet the gate lets the player accuse them (by elimination): their name is already
+    # in the accusation picker, so the board shows it too, as a face-up "not found yet" card
+    revealed: bool = False
 
 
 class RecordKindView(View):

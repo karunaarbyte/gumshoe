@@ -60,8 +60,25 @@ def assert_absent(body: str, secrets):
 
 def test_an_entry_has_no_field_the_redaction_does_not_know():
     """The redaction blanks `name` and `description`: a new text field must be decided on."""
-    for view in (LocationView, SuspectView):
-        assert set(view.model_fields) == {"number", "handle", "name", "description", "locked"}
+    base = {"number", "handle", "name", "description", "locked"}
+    assert set(LocationView.model_fields) == base
+    assert set(SuspectView.model_fields) == base | {"revealed"}
+
+
+def test_a_revealed_suspect_keeps_the_name_but_not_the_description():
+    """Locked yet accusable by elimination: the picker names them, so the board may too."""
+    from gumshoe.api.redact import player_brief
+
+    def sus(n, revealed):
+        return SuspectView(
+            number=n, handle=f"s{n}", name=f"Name {n}", description="secret", locked=True,
+            revealed=revealed,
+        )
+
+    brief = GameHost().new_game(SEED).brief.model_copy(update={"suspects": (sus(1, True), sus(2, False))})
+    shown = player_brief(brief).suspects
+    assert (shown[0].name, shown[0].description, shown[0].locked) == ("Name 1", "", True)
+    assert (shown[1].name, shown[1].description) == ("", "")
 
 
 def test_locked_names_never_reach_the_browser_until_they_unlock(store, tmp_path, truth):

@@ -29,6 +29,8 @@ export interface CaseEntry {
   name: string;
   description: string;
   locked: boolean;
+  /** Suspects only: locked, yet the game lets you accuse them, so the name is sent. */
+  revealed?: boolean;
 }
 
 export interface RecordKind {

@@ -50,7 +50,7 @@ export function Card({ card, domKey, at, onGrab, onPin, expanded = false }: Prop
         initial={flip ? { rotateY: 180 } : false}
         animate={{ rotateY: 0 }}
         transition={{ duration: 0.6 }}
-        aria-label={card.locked ? `${card.label}, locked` : `${card.label}: ${card.title}`}
+        aria-label={card.locked ? `${card.label}${card.revealed ? `: ${card.title}` : ''}, locked` : `${card.label}: ${card.title}`}
         className={`relative ${open ? '' : 'h-full'} w-full overflow-hidden border border-ink p-2 shadow-hard ${card.locked ? 'bg-ink/80' : face}`}
       >
         <button
@@ -76,7 +76,14 @@ export function Card({ card, domKey, at, onGrab, onPin, expanded = false }: Prop
           )}
         </div>
         {card.locked ? (
-          <p className="mt-3 font-display text-lg tracking-widest text-card-light">REDACTED</p>
+          card.revealed ? (
+            <>
+              <h3 className={`mt-1 ${open ? '' : 'truncate'} font-bold text-card-light uppercase`}>{card.title}</h3>
+              <p className="mt-1 font-display text-sm tracking-widest text-card-light">NOT FOUND YET</p>
+            </>
+          ) : (
+            <p className="mt-3 font-display text-lg tracking-widest text-card-light">REDACTED</p>
+          )
         ) : (
           <>
             {card.type === 'fact' ? (
