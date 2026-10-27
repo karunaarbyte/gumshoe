@@ -82,7 +82,7 @@ def pack_sample(pack: Pack) -> dict[str, str]:
     place = next((e for d in pack.location_defs for e in d.names), None)
     if place is not None:
         sample["place"] = phrase(place)
-        sample["place.in"] = f"in {phrase(place)}"
+        sample["place.in"] = f"{place.prep or 'in'} {phrase(place)}"
     if pack.victims:
         lord = pack.victims[0]
         subject = lord.pronoun or "they"

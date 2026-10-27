@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from gumshoe.cases.model.pack import Capacity, Pack, RoleDef, SceneType
+from tests.generate.helpers import castle
 
 
 def make_pack(**overrides):
@@ -85,3 +86,19 @@ def test_pack_rejects_duplicate_scene_or_role_keys():
         make_pack(scene_types=(scene, scene))
     with pytest.raises(ValidationError, match="duplicate"):
         make_pack(roles=(role, role))
+
+
+def test_a_preposition_is_wording_so_it_never_changes_the_skeleton_hash():
+    pack = castle()
+    first = pack.location_defs[0]
+    changed = first.model_copy(
+        update={"names": tuple(e.model_copy(update={"prep": "on"}) for e in first.names)}
+    )
+    other = pack.model_copy(update={"location_defs": (changed, *pack.location_defs[1:])})
+    assert other.skeleton_hash() == pack.skeleton_hash()
+
+
+def test_the_castle_skeleton_hash_is_pinned():
+    assert castle().skeleton_hash() == (
+        "b4bc72f6e36be40c4baa3cb59bd3d29ac22cfbb1dfafb80c10a6f9b160408e4a"
+    )

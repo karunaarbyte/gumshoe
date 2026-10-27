@@ -37,7 +37,7 @@ def person(entry: Entry, prefix: str = "who") -> dict[str, str]:
 
 
 def place(entry: Entry) -> dict[str, str]:
-    return {"place": phrase(entry), "place.in": f"in {phrase(entry)}"}
+    return {"place": phrase(entry), "place.in": f"{entry.prep or 'in'} {phrase(entry)}"}
 
 
 def slot_time(pack: Pack, slot: int) -> dict[str, str]:

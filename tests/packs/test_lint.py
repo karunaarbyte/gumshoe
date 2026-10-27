@@ -4,10 +4,12 @@ from gumshoe.cases.packs.check.lint import (
     double_space,
     doubled_word,
     mid_sentence_capital,
+    pack_sample,
     placeholders,
     render,
     stray_brace,
 )
+from tests.generate.helpers import castle
 
 
 def test_placeholders_lists_names_without_the_caret():
@@ -77,3 +79,15 @@ def test_pack_sample_uses_the_first_record_name_and_survives_a_pack_without_reco
         capacity=Capacity(max_suspects=1, max_locations=1, max_methods=1, max_record_kinds=1),
     )
     assert pack_sample(empty)["record"] == "the register"  # keeps the default sample
+
+
+def test_the_pack_sample_uses_the_first_places_preposition():
+    pack = castle()
+    first = pack.location_defs[0]
+    names = (first.names[0].model_copy(update={"prep": "on"}), *first.names[1:])
+    changed = pack.model_copy(
+        update={
+            "location_defs": (first.model_copy(update={"names": names}), *pack.location_defs[1:])
+        }
+    )
+    assert pack_sample(changed)["place.in"].startswith("on ")

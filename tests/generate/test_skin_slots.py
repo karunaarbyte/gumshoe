@@ -24,6 +24,12 @@ def test_a_place_carries_its_article_and_its_in_phrase():
     assert slots.place(place) == {"place": "the Chapel", "place.in": "in the Chapel"}
 
 
+def test_a_place_uses_its_own_preposition_and_defaults_to_in():
+    deck = Entry(text="promenade deck", article="the", prep="on")
+    assert slots.place(deck) == {"place": "the promenade deck", "place.in": "on the promenade deck"}
+    assert slots.place(Entry(text="stage", article="the"))["place.in"] == "in the stage"
+
+
 def test_a_time_comes_from_the_packs_slot_phrases_and_must_exist():
     pack = castle()
     first = slots.slot_time(pack, 0)

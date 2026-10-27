@@ -33,6 +33,16 @@ def test_a_wrong_type_reports_the_key_path_and_the_pack_is_none():
     ]
 
 
+@pytest.mark.parametrize("prep", ["", "In", "on2"])
+def test_a_bad_preposition_is_refused(prep):
+    text = replace(
+        'names = [{ text = "Study", article = "the" }]',
+        f'names = [{{ text = "Study", article = "the", prep = "{prep}" }}]',
+    )(BASE_TOML)
+    assert load(text).pack is None
+    assert any("prep" in path for _, path in codes_and_paths(text))
+
+
 def test_keyed_tables_report_the_key_not_an_index():
     text = replace('label = "stabbed with a dagger"\n', "")(BASE_TOML)
     assert codes_and_paths(text) == [("MISSING_FIELD", "method_defs.dagger.label")]

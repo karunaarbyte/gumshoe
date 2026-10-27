@@ -44,6 +44,9 @@ class Entry(Frozen):
     plural: bool = False
     pronoun: Literal["he", "she", "they", "it"] | None = None
     proper: bool = False
+    prep: str | None = Field(
+        default=None, pattern=r"^[a-z]+( [a-z]+)?$"
+    )  # what `{place.in}` starts with ("on", "at"); in when unset; read for location names only
 
 
 class SlotDef(Frozen):
@@ -177,7 +180,7 @@ class Pack(Frozen):
         slot phrases and the variants of a family, and neither its text nor its amount counts."""
 
         def entries(items: tuple[Entry, ...]) -> list[dict[str, Any]]:
-            return [e.model_dump(mode="json") for e in items]
+            return [e.model_dump(mode="json", exclude={"prep"}) for e in items]
 
         return {
             "id": self.id,

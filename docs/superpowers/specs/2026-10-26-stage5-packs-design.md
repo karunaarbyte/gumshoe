@@ -122,7 +122,7 @@ The saves and open-games lists show each setting.
 would read "in the bridge" and the theatre "in the stage". The fix (a per-entry preposition, or an
 equivalent) must keep wording-only fields out of `skeleton_view` (which dumps whole entries) and leave every
 castle text unchanged. It is planned and reviewed as its own step so castle compatibility is ruled on once.
-Any further format gap the liner exposes joins this step.
+Any further format gap the liner exposes joins this step. Done in 5b: `Entry.prep`, location names only; the castle is unchanged.
 
 **Authoring workflow (per pack).** A subagent drafts the TOML against the format; load checks run; `smoke`
 runs; the quality tests run; an independent reviewer reads 10 generated cases against a written checklist
