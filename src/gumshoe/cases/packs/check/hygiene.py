@@ -1,6 +1,7 @@
 """Stage 4: label hygiene and leak rules (spec 4.4). A candidate's distinctive label tokens
 may appear only in its own entries, and a motive's secret never reuses its own label."""
 
+import re
 import unicodedata
 from collections import Counter
 from collections.abc import Iterator
@@ -14,6 +15,7 @@ from gumshoe.cases.packs.check.lint import SAMPLES, blank_placeholders, render, 
 from gumshoe.cases.packs.issues import PackIssue
 
 LENGTH_TOLERANCE = Fraction(1, 5)  # 20%
+RECORD_KEY = re.compile(r"[a-z0-9_]{1,30}")
 
 
 def candidate_tokens(pack: Pack) -> dict[str, frozenset[str]]:
@@ -238,6 +240,14 @@ def duplicate_problems(pack: Pack) -> list[PackIssue]:
     return out
 
 
+def record_key_problems(pack: Pack) -> list[PackIssue]:
+    return [
+        make("RECORD_KEY_INVALID", f"record_defs.{d.key}", key=d.key)
+        for d in pack.record_defs
+        if not RECORD_KEY.fullmatch(d.key)
+    ]
+
+
 def check(pack: Pack) -> list[PackIssue]:
     return [
         *_leaks(pack),
@@ -245,4 +255,5 @@ def check(pack: Pack) -> list[PackIssue]:
         *_role_collisions(pack),
         *name_problems(pack),
         *duplicate_problems(pack),
+        *record_key_problems(pack),
     ]

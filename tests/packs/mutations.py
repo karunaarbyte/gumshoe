@@ -368,3 +368,9 @@ mutation(
         'allowed_methods = ["dagger", "poison", "rope", "rope"]',
     ),
 )
+mutation(
+    "RECORD_EVENT_SUBJECT",
+    replace('[record_defs.ledger]\nsubject = "suspect"', '[record_defs.ledger]\nsubject = "event"'),
+    {"RECORD_EVENT_SUBJECT", "ROLE_NO_SUSPECT_RECORD"},
+)
+mutation("RECORD_KEY_INVALID", lambda text: text.replace("gate_log", "Gate-Log"))

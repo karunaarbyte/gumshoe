@@ -23,6 +23,7 @@
 | DUPLICATE_ENTRY | 4 | error | the list names {value!r} more than once |
 | LABEL_TOKEN_LEAK | 4 | error | this text uses the token {token!r}, distinctive to candidate {candidate!r} |
 | NAME_DUPLICATE | 4 | error | the name {name!r} equals {other!r} (same text after Unicode normalisation and case) |
+| RECORD_KEY_INVALID | 4 | error | the record kind key {key!r} must be lowercase letters, digits and underscores (1 to 30) |
 | ROLE_NO_NAME | 4 | error | the role has no name to give a suspect |
 | ROLE_TOKEN_COLLISION | 4 | error | a token ({token!r}) of this role's {what} is also used by {other!r} |
 | SECRET_REUSES_LABEL | 4 | error | an owned text of {candidate!r}, a secret or a hint, reuses its own label token {token!r} |
@@ -30,6 +31,7 @@
 | TRACE_LENGTH_SKEW | 4 | error | mean trace length {mean} is more than 20% from the overall mean {overall} |
 | METHOD_TOO_RARE | 5 | error | the method is allowed in {count} scene types; needs at least {needed} |
 | MOTIVE_UNREACHABLE | 5 | error | no role allows this motive type |
+| RECORD_EVENT_SUBJECT | 5 | error | the record kind is about an event; the generator supports suspects and places only |
 | RECORD_NO_LOCATION_KIND | 5 | error | the record kind lists no location kind |
 | RECORD_NO_NAME | 5 | error | the record kind has no display name |
 | ROLE_NO_NOUN | 5 | error | the role has no display noun |

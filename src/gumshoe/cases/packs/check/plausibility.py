@@ -46,6 +46,8 @@ def check(pack: Pack) -> list[PackIssue]:
             out.append(make("RECORD_NO_NAME", f"{base}.names"))
         if not record_def.location_kinds:
             out.append(make("RECORD_NO_LOCATION_KIND", f"{base}.location_kinds"))
+        if record_def.subject == "event":
+            out.append(make("RECORD_EVENT_SUBJECT", f"{base}.subject"))
     for motive in pack.motive_defs:
         if motive.key not in allowed:
             out.append(make("MOTIVE_UNREACHABLE", f"motive_defs.{motive.key}"))

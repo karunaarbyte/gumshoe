@@ -98,6 +98,12 @@ _ROWS = (
         "other",
     ),
     _row("DUPLICATE_ENTRY", 4, "the list names {value!r} more than once", "value"),
+    _row(
+        "RECORD_KEY_INVALID",
+        4,
+        "the record kind key {key!r} must be lowercase letters, digits and underscores (1 to 30)",
+        "key",
+    ),
     # stage 5: plausibility
     _row("ROLE_NO_NOUN", 5, "the role has no display noun"),
     _row("ROLE_NO_RECORD_KIND", 5, "the role has no record kind"),
@@ -133,6 +139,11 @@ _ROWS = (
     ),
     _row("RECORD_NO_NAME", 5, "the record kind has no display name"),
     _row("RECORD_NO_LOCATION_KIND", 5, "the record kind lists no location kind"),
+    _row(
+        "RECORD_EVENT_SUBJECT",
+        5,
+        "the record kind is about an event; the generator supports suspects and places only",
+    ),
     _row("SLOT_DEFS_TOO_FEW", 5, "{defs} slot definitions for {slots} slots", "defs", "slots"),
     # stage 6: capacity and presets
     _row("PRESET_UNSUPPORTED", 6, "the pack cannot host this preset: {reason}", "reason"),
