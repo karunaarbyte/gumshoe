@@ -9,6 +9,7 @@ from gumshoe.cases.model.spec import PRESET_ORDER, PresetDef, UnsupportedPreset,
 from gumshoe.cases.packs.catalogue import make
 from gumshoe.cases.packs.issues import PackIssue
 
+MIN_LOCATION_KINDS = 3
 MIN_HOSTING_SCENES = 3  # scene types able to carry a preset's method count, else it is one place
 SIZES = ("suspects", "methods", "locations", "record_kinds", "slots")
 # Stage 7 enumerates every matching of every roster; a preset whose upper bound on that work is
@@ -107,4 +108,39 @@ def check(pack: Pack, presets: Mapping[str, PresetDef]) -> list[PackIssue]:
                         preset=name,
                     )
                 )
+    return out
+
+
+def pool_problems(pack: Pack) -> list[PackIssue]:
+    """Capacity above the pool it draws from can never be used up; fewer than three location
+    kinds leaves a case with a crime scene and nowhere to search."""
+    out: list[PackIssue] = []
+    cap = pack.capacity
+    chosen_kinds = sum(1 for d in pack.record_defs if d.subject in ("suspect", "location"))
+    pools = (
+        ("max_suspects", "suspects", cap.max_suspects, len(pack.roles)),
+        ("max_locations", "locations", cap.max_locations, len(pack.location_defs)),
+        ("max_methods", "methods", cap.max_methods, len(pack.method_defs)),
+        ("max_record_kinds", "record kinds", cap.max_record_kinds, chosen_kinds),
+    )
+    for key, what, capacity, pool in pools:
+        if capacity > pool:
+            out.append(
+                make(
+                    "CAPACITY_EXCEEDS_POOL",
+                    f"capacity.{key}",
+                    what=what,
+                    capacity=capacity,
+                    pool=pool,
+                )
+            )
+    if len(pack.location_defs) < MIN_LOCATION_KINDS:
+        out.append(
+            make(
+                "LOCATION_KINDS_TOO_FEW",
+                "location_defs",
+                count=len(pack.location_defs),
+                needed=MIN_LOCATION_KINDS,
+            )
+        )
     return out

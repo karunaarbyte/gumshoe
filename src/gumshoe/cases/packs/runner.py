@@ -32,5 +32,6 @@ def check_pack(pack: Pack, presets: Mapping[str, PresetDef] = PRESETS) -> tuple[
     found += plausibility_issues
     if not plausibility_issues:
         found += capacity.check(pack, presets)
+        found += capacity.pool_problems(pack)
         found += matching.check(pack, presets)
     return sorted_issues(found)

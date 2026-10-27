@@ -129,6 +129,21 @@ _ROWS = (
         "previous",
         "preset",
     ),
+    _row(
+        "CAPACITY_EXCEEDS_POOL",
+        6,
+        "capacity allows {capacity} {what} but the pack defines only {pool}",
+        "what",
+        "capacity",
+        "pool",
+    ),
+    _row(
+        "LOCATION_KINDS_TOO_FEW",
+        6,
+        "the pack defines {count} location kinds; needs at least {needed}",
+        "count",
+        "needed",
+    ),
     # stage 7: motive matching
     _row(
         "NO_PERFECT_MATCHING",

@@ -154,3 +154,16 @@ def test_a_role_naming_an_unknown_record_kind_is_not_eligible_and_never_raises()
     roles = tuple(r.model_copy(update={"record_kinds": ("nope",)}) for r in pack.roles)
     pack = pack.model_copy(update={"roles": roles})
     assert capacity.eligible_roles(pack, pack.scene_types[0]) == []
+
+
+def test_capacity_above_the_pool_is_reported():
+    pack = rich_pack().model_copy(
+        update={"capacity": CAPACITY.model_copy(update={"max_suspects": 99})}
+    )
+    codes = [(i.code, i.path) for i in capacity.pool_problems(pack)]
+    assert ("CAPACITY_EXCEEDS_POOL", "capacity.max_suspects") in codes
+
+
+def test_fewer_than_three_location_kinds_is_reported():
+    pack = rich_pack()  # two location kinds
+    assert [i.code for i in capacity.pool_problems(pack)].count("LOCATION_KINDS_TOO_FEW") == 1

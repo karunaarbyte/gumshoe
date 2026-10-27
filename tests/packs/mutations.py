@@ -213,6 +213,41 @@ mutation(
 mutation("PRESET_UNSUPPORTED", replace('presets = ["tiny"]', 'presets = ["tiny", "huge"]'))
 mutation("PRESET_NOT_MONOTONE", replace('presets = ["tiny"]', 'presets = ["short", "standard"]'))
 
+
+mutation("CAPACITY_EXCEEDS_POOL", replace("max_suspects = 3", "max_suspects = 4"))
+
+
+def _every(old: str, new: str) -> Edit:
+    def apply(text: str) -> str:
+        assert old in text, f"not in the base pack: {old!r}"
+        return text.replace(old, new)
+
+    return apply
+
+
+mutation(
+    "LOCATION_KINDS_TOO_FEW",
+    chain(
+        replace(
+            '[location_defs.cellar]\nnames = [{ text = "Cellar", article = "the" }]\n'
+            'descriptions = ["{^place} is damp, low and lined with dusty racks."]\n',
+            "",
+        ),
+        replace('location_kinds = ["cellar"]\npresence', 'location_kinds = ["garden"]\npresence'),
+        _every(
+            'location_kinds = ["cellar", "garden", "study"]', 'location_kinds = ["garden", "study"]'
+        ),
+        replace(
+            '[scene_types.cellar_murder]\nlocation_kinds = ["cellar"]\n'
+            'allowed_methods = ["dagger", "poison", "rope"]\n'
+            'allowed_trace_kinds = ["fibre", "residue", "wound"]\n',
+            "",
+        ),
+        replace("max_locations = 3", "max_locations = 2"),
+    ),
+    {"LOCATION_KINDS_TOO_FEW", "PRESET_UNSUPPORTED"},
+)
+
 # ---- stage 7: motive matching ----------------------------------------------------------------
 
 _QUAD = chain(
