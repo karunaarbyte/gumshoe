@@ -103,6 +103,12 @@ _ROWS = (
     _row("MOTIVE_UNREACHABLE", 5, "no role allows this motive type"),
     _row("SCENE_NO_CRIME_LOCATION", 5, "the scene type has no location kind for the crime"),
     _row(
+        "SCENE_MANY_CRIME_LOCATIONS",
+        5,
+        "the scene type lists {count} location kinds; the generator needs exactly one",
+        "count",
+    ),
+    _row(
         "METHOD_TOO_RARE",
         5,
         "the method is allowed in {count} scene types; needs at least {needed}",

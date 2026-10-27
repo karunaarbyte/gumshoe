@@ -33,6 +33,7 @@
 | ROLE_NO_RECORD_KIND | 5 | error | the role has no record kind |
 | ROLE_NO_SUSPECT_RECORD | 5 | error | the role has no record kind about a suspect |
 | ROLE_TOO_FEW_MOTIVES | 5 | error | the role allows {count} motive types; needs at least {needed} |
+| SCENE_MANY_CRIME_LOCATIONS | 5 | error | the scene type lists {count} location kinds; the generator needs exactly one |
 | SCENE_METHOD_IMPOSSIBLE | 5 | error | no trace of method {method!r} can be placed at scene type {scene!r} |
 | SCENE_NO_CRIME_LOCATION | 5 | error | the scene type has no location kind for the crime |
 | SLOT_DEFS_TOO_FEW | 5 | error | {defs} slot definitions for {slots} slots |

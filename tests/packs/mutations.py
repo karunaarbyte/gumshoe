@@ -173,6 +173,13 @@ mutation(
 )
 mutation("SCENE_NO_CRIME_LOCATION", replace('location_kinds = ["study"]', "location_kinds = []"))
 mutation(
+    "SCENE_MANY_CRIME_LOCATIONS",
+    replace(
+        '[scene_types.garden_murder]\nlocation_kinds = ["garden"]',
+        '[scene_types.garden_murder]\nlocation_kinds = ["garden", "study"]',
+    ),
+)
+mutation(
     "METHOD_TOO_RARE",
     chain(
         replace(
