@@ -1,6 +1,6 @@
 # Stage 5: pack hardening, pack choice, and two new packs (design)
 
-Status: design approved in conversation 2026-10-26; revised the same day after an independent review that
+Status: plan 5a (the hardening checks) is implemented; design approved in conversation 2026-10-26; revised the same day after an independent review that
 checked the draft against the code (one blocker, nine important findings, all folded in). Awaiting the
 owner's read of this revision. Implements stage 5 of `docs/superpowers/roadmap-after-5.md`. Builds on the
 pack format (2c), the generator (2d) and the hardening list in
@@ -59,7 +59,7 @@ only when stage 5 is clean). The plan confirms each placement against the runner
 | names | every role has at least one name; names are distinct across the whole pack after NFC and casefold (the roster compares raw text, so this is a pack rule) |
 | duplicate entries | no duplicate keys inside a scene's lists, nor in role `record_kinds` / `motive_types`, nor trace / record `location_kinds` (`SetTexts` sorts but does not dedupe) |
 | preset feasibility | for every claimed preset and every reachable count of location-subject record kinds, `generate.facts.feasible_depths(spec, location_records)` is non-empty. The check calls that function, so the closed form (including `L <= 2M`) cannot drift from the generator |
-| roster feasibility | a walk of every reachable draw (hosting scene x S-subset of eligible roles x record kinds with holders and secrets x M-subset of allowed methods) finds a location subset meeting the roster contracts (roster.py: c, b', g') and a feasible depth. Includes the generator's trace rule (a trace whose kind the scene allows and that fits a chosen non-scene location); does not repeat `SCENE_METHOD_IMPOSSIBLE`. Budget `ROSTER_CHECK_BUDGET = 1_000_000` combinations; a preset over budget is `PRESET_UNSUPPORTED` with that reason. The castle measures 20,092 combinations in 0.08 s |
+| roster feasibility | a walk of every reachable draw (hosting scene x S-subset of eligible roles x record kinds with holders and secrets x M-subset of allowed methods) finds a location subset meeting the roster contracts (roster.py: c, b', g') and a feasible depth. Includes the generator's trace rule (a trace whose kind the scene allows and that fits a chosen non-scene location); does not repeat `SCENE_METHOD_IMPOSSIBLE`. Budget `ROSTER_CHECK_BUDGET = 1_000_000` combinations; a preset over budget is `PRESET_UNSUPPORTED` with that reason. The castle's walk draws, pinned by `tests/packs/test_feasibility.py`, are 5950 (short), 2429 (standard) and 72 (long) work units |
 | record kind keys | every kind matches `[a-z0-9_]{1,30}`, so `n_<kind>` is a valid id (`ID_PATTERN` is `[a-z][a-z0-9_]{1,31}`) |
 | record subjects | no `event`-subject record kind (policy check: the roster already skips them) |
 | size budget | roles and motives stay inside the matching budget `C(roles, S) x P(motives, S) <= 5,000,000` (already `PRESET_UNSUPPORTED`; the spec only states it as a target for authors, section 6) |
