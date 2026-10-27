@@ -4,7 +4,6 @@ Pool samples use rendezvous `rank` (never file order). Choices among combination
 the feasible ones and `choice` one by index, so there is no re-draw loop and no cap.
 """
 
-from collections.abc import Iterator
 from itertools import combinations
 
 from gumshoe.cases.generate.errors import GenerationError
@@ -19,6 +18,8 @@ from gumshoe.cases.generate.outputs import (
 from gumshoe.cases.generate.streams import Stream
 from gumshoe.cases.model.pack import MethodDef, Pack, RecordDef, RoleDef, SceneType
 from gumshoe.cases.packs.check.capacity import eligible_roles, hosting_scenes, usable_kind
+from gumshoe.cases.packs.check.feasibility import holder_assignments as _holder_assignments
+from gumshoe.cases.packs.check.feasibility import trace_ok as _trace_ok
 from gumshoe.cases.packs.check.matching import matchings
 
 
@@ -32,24 +33,6 @@ def _pick_name(role: RoleDef, used: set[str], stream: Stream) -> str:
 
 def _usable_kinds(role: RoleDef, scene: SceneType, records: dict[str, RecordDef]) -> list[str]:
     return [k for k in role.record_kinds if k in records and usable_kind(records[k], scene)]
-
-
-def _holder_assignments(kinds: list[str], options: list[list[str]]) -> Iterator[dict[int, str]]:
-    """Every way to give each kind its own holder: a distinct role index whose options list it."""
-    held: dict[int, str] = {}
-
-    def go() -> Iterator[dict[int, str]]:
-        if len(held) == len(kinds):
-            yield dict(held)
-            return
-        kind = kinds[len(held)]  # one kind is placed per level, so the level is len(held)
-        for role, opts in enumerate(options):
-            if role not in held and kind in opts:
-                held[role] = kind
-                yield from go()
-                del held[role]
-
-    yield from go()
 
 
 def _record_kinds_and_secrets(
@@ -80,14 +63,6 @@ def _record_kinds_and_secrets(
         for i, role in enumerate(roles)
     ]
     return subset, secrets
-
-
-def _trace_ok(method: MethodDef, scene: SceneType, places: set[str]) -> bool:
-    """Some trace of the method fits the scene's trace kinds and a non-scene chosen place."""
-    return any(
-        t.kind in scene.allowed_trace_kinds and places & set(t.location_kinds)
-        for t in method.traces
-    )
 
 
 def location_kinds(
