@@ -6,6 +6,7 @@ from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.spec import PRESETS, PresetDef
 from gumshoe.cases.packs.check import (
     capacity,
+    feasibility,
     hygiene,
     matching,
     plausibility,
@@ -34,4 +35,5 @@ def check_pack(pack: Pack, presets: Mapping[str, PresetDef] = PRESETS) -> tuple[
         found += capacity.check(pack, presets)
         found += capacity.pool_problems(pack)
         found += matching.check(pack, presets)
+        found += feasibility.check(pack, presets)
     return sorted_issues(found)

@@ -13,6 +13,7 @@ from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.packs.catalogue import PACK_CATALOGUE, make
 from gumshoe.cases.packs.check import (
     capacity,
+    feasibility,
     hygiene,
     matching,
     plausibility,
@@ -54,6 +55,7 @@ _STAGES = {
     6: capacity,
     7: matching,
     8: skin_inputs,
+    9: feasibility,  # stage 6 codes, run after the matching
 }
 
 
@@ -86,7 +88,7 @@ def test_a_stage_5_issue_stops_stages_6_and_7_but_not_3_4_and_8(monkeypatch):
 
 
 def test_stage_3_4_and_8_issues_do_not_stop_stages_6_and_7(monkeypatch):
-    assert _run_with_issues_at(monkeypatch, {3, 4, 8}) == [2, 3, 4, 8, 5, 6, 7]
+    assert _run_with_issues_at(monkeypatch, {3, 4, 8}) == [2, 3, 4, 8, 5, 6, 7, 9]
 
 
 def _castle_text() -> str:

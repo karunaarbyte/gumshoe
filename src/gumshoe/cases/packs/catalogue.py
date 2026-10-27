@@ -156,6 +156,13 @@ _ROWS = (
         "preset",
     ),
     _row(
+        "PRESET_NO_DEPTH",
+        6,
+        "no gating depth fits the {preset!r} preset on this pack"
+        " (record kinds, windows or source capacity rule out every depth)",
+        "preset",
+    ),
+    _row(
         "CAPACITY_EXCEEDS_POOL",
         6,
         "capacity allows {capacity} {what} but the pack defines only {pool}",

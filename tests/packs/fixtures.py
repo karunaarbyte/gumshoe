@@ -140,6 +140,9 @@ TEST_PRESETS = {
     "short": preset("short", 3, 3),
     "standard": preset("standard", 3, 2),
     "quad": preset("quad", 4, 3),
+    "nodepth": preset("nodepth", 3, 3).model_copy(
+        update={"limits": LIMITS.model_copy(update={"decisive_pct_max": 1})}
+    ),
 }
 
 BASE_TOML_NO_SKIN = """\

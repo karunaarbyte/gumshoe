@@ -45,6 +45,7 @@
 | CAPACITY_EXCEEDS_POOL | 6 | error | capacity allows {capacity} {what} but the pack defines only {pool} |
 | LOCATION_KINDS_TOO_FEW | 6 | error | the pack defines {count} location kinds; needs at least {needed} |
 | PRESET_NOT_MONOTONE | 6 | error | effective {size} drops from preset {previous!r} to {preset!r} |
+| PRESET_NO_DEPTH | 6 | error | no gating depth fits the {preset!r} preset on this pack (record kinds, windows or source capacity rule out every depth) |
 | PRESET_UNSUPPORTED | 6 | error | the pack cannot host this preset: {reason} |
 | MOTIVE_TOO_PREDICTABLE | 7 | error | in roster {roster} this role gets this motive {percent}% of the time; the cap is 50% |
 | NO_PERFECT_MATCHING | 7 | error | no suspect-to-motive matching exists for roster {roster} |
