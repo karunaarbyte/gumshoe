@@ -1,5 +1,6 @@
 import copy
 import time
+import tracemalloc
 
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.spec import PRESETS
@@ -28,7 +29,7 @@ def test_the_castle_walk_is_feasible_and_cheap():
     pack = load_builtin_pack("castle")
     started = time.perf_counter()
     for name, spec in hosted_specs(pack, PRESETS):
-        result = walk(pack, name, spec, ROSTER_CHECK_BUDGET)
+        result = walk(pack, spec, ROSTER_CHECK_BUDGET)
         assert result.failures == [] and not result.over_budget, (name, result.failures[:3])
         assert result.draws > 0
     assert time.perf_counter() - started < 5
@@ -39,7 +40,7 @@ def test_a_draw_is_one_scene_roles_record_kinds_and_methods():
     # holders, method subset); subset visits and placement checks count against the budget only
     pack = load_builtin_pack("castle")
     counts = {
-        name: walk(pack, name, spec, ROSTER_CHECK_BUDGET).draws
+        name: walk(pack, spec, ROSTER_CHECK_BUDGET).draws
         for name, spec in hosted_specs(pack, PRESETS)
     }
     assert counts == {"short": 5950, "standard": 2429, "long": 72}
@@ -48,7 +49,7 @@ def test_a_draw_is_one_scene_roles_record_kinds_and_methods():
 def test_a_walk_over_its_budget_stops_and_the_preset_is_unsupported(monkeypatch):
     pack = load_builtin_pack("castle")
     spec = dict(hosted_specs(pack, PRESETS))["standard"]
-    result = walk(pack, "standard", spec, 1)
+    result = walk(pack, spec, 1)
     assert result.over_budget and result.failures == []
     monkeypatch.setattr(feasibility, "ROSTER_CHECK_BUDGET", 1)
     issues = feasibility.check(pack, PRESETS)
@@ -58,7 +59,7 @@ def test_a_walk_over_its_budget_stops_and_the_preset_is_unsupported(monkeypatch)
         "meta.presets[short]",
         "meta.presets[standard]",
     ]
-    assert all("roster check too large (more than 1 draws)" in i.message for i in issues)
+    assert all("roster check too large (more than 1 work units)" in i.message for i in issues)
 
 
 def test_holder_assignments_gives_each_kind_a_distinct_role_that_lists_it():
@@ -89,7 +90,7 @@ def _narrow_trace(method, kinds):
 def test_a_method_with_no_non_scene_place_at_a_scene_is_reported():
     pack = _castle_with(_narrow_trace("dagger", ["chapel"]))
     spec = dict(hosted_specs(pack, PRESETS))["short"]
-    result = walk(pack, "short", spec, ROSTER_CHECK_BUDGET)
+    result = walk(pack, spec, ROSTER_CHECK_BUDGET)
     assert len(result.failures) == 5  # capped
     assert all(
         r.startswith("scene murder_in_chapel, roles ")
@@ -112,7 +113,7 @@ def test_roles_with_no_record_kind_set_are_reported():
 
     pack = _castle_with(suspect_gate_log)
     spec = dict(hosted_specs(pack, PRESETS))["short"]
-    result = walk(pack, "short", spec, ROSTER_CHECK_BUDGET)
+    result = walk(pack, spec, ROSTER_CHECK_BUDGET)
     assert result.failures
     assert all(
         r.endswith(": no record-kind set gives every role a kind and every kind a holder")
@@ -131,7 +132,7 @@ def test_a_record_kind_set_with_no_gating_depth_is_reported():
         update={"limits": spec.limits.model_copy(update={"decisive_pct_max": 12})}
     )
     assert feasible_depths(spec, 0) == [] and feasible_depths(spec, 1) == [2]
-    result = walk(pack, "short", spec, ROSTER_CHECK_BUDGET)
+    result = walk(pack, spec, ROSTER_CHECK_BUDGET)
     assert result.failures
     assert all(
         "record kinds chapel_register+visitor_ledger" in r
@@ -170,8 +171,34 @@ def test_rejected_record_kind_subsets_count_against_the_budget():
     hosted = dict(hosted_specs(pack, PRESETS))
     assert sorted(hosted) == ["short"]  # the matching bound rules out the larger presets
     started = time.perf_counter()
-    result = walk(pack, "short", hosted["short"], ROSTER_CHECK_BUDGET)
+    result = walk(pack, hosted["short"], ROSTER_CHECK_BUDGET)
     assert result.over_budget and result.failures == []
     issues = feasibility.check(pack, PRESETS)
     assert [(i.code, i.path) for i in issues] == [("PRESET_UNSUPPORTED", "meta.presets[short]")]
     assert time.perf_counter() - started < 4
+
+
+def _many_methods(extra: int) -> Pack:
+    """The castle with `extra` clones of one method, all allowed at every scene: the method
+    subsets of a long preset (five methods) then number in the millions."""
+    data = load_builtin_pack("castle").model_dump(mode="json")
+    dagger = next(m for m in data["method_defs"] if m["key"] == "dagger")
+    keys = [f"clone_{i:03d}" for i in range(extra)]
+    data["method_defs"] += [{**dagger, "key": key} for key in keys]
+    for scene in data["scene_types"]:
+        scene["allowed_methods"] += keys
+    return Pack.model_validate(data)
+
+
+def test_a_huge_method_pool_is_bounded_by_the_budget_not_by_memory():
+    pack = _many_methods(60)  # C(63, 5) is about 7 million method subsets per scene
+    spec = dict(hosted_specs(pack, PRESETS))["long"]
+    tracemalloc.start()
+    started = time.perf_counter()
+    result = walk(pack, spec, 50_000)
+    elapsed = time.perf_counter() - started
+    _, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    assert result.over_budget and result.failures == []
+    assert peak < 20_000_000, peak
+    assert elapsed < 2, elapsed

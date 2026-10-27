@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from gumshoe.cases.model.pack import Pack
+from gumshoe.cases.model.spec import PRESETS, SizeRange
 from gumshoe.cases.packs.catalogue import PACK_CATALOGUE, make
 from gumshoe.cases.packs.check import (
     capacity,
@@ -24,6 +25,7 @@ from gumshoe.cases.packs.check import (
 from gumshoe.cases.packs.issues import PackIssue
 from gumshoe.cases.packs.loader import load_pack
 from gumshoe.cases.packs.runner import check_pack
+from gumshoe.cases.tools.builtin import load_builtin_pack
 from tests.packs.fixtures import BASE_TOML, CAPACITY, TEST_PRESETS
 from tests.packs.mutations import MUTATIONS
 
@@ -57,6 +59,7 @@ _STAGES = {
     8: skin_inputs,
     9: feasibility,  # stage 6 codes, run after the matching
 }
+_POOL = 10  # capacity.pool_problems: stage 5's gate covers it, and a failure skips stage 9
 
 
 def _run_with_issues_at(monkeypatch: pytest.MonkeyPatch, failing: set[int]) -> list[int]:
@@ -75,6 +78,7 @@ def _run_with_issues_at(monkeypatch: pytest.MonkeyPatch, failing: set[int]) -> l
 
     for stage, module in _STAGES.items():
         monkeypatch.setattr(module, "check", fake(stage))
+    monkeypatch.setattr(capacity, "pool_problems", fake(_POOL))
     check_pack(Pack(id="e", capacity=CAPACITY), TEST_PRESETS)
     return calls
 
@@ -87,8 +91,39 @@ def test_a_stage_5_issue_stops_stages_6_and_7_but_not_3_4_and_8(monkeypatch):
     assert _run_with_issues_at(monkeypatch, {5}) == [2, 3, 4, 8, 5]
 
 
-def test_stage_3_4_and_8_issues_do_not_stop_stages_6_and_7(monkeypatch):
-    assert _run_with_issues_at(monkeypatch, {3, 4, 8}) == [2, 3, 4, 8, 5, 6, 7, 9]
+def test_stage_3_4_and_8_issues_do_not_stop_stages_6_7_and_the_feasibility_stage(monkeypatch):
+    assert _run_with_issues_at(monkeypatch, {3, 4, 8}) == [2, 3, 4, 8, 5, 6, _POOL, 7, 9]
+
+
+def test_a_clean_run_calls_the_pool_problems_after_the_capacity_stage(monkeypatch):
+    assert _run_with_issues_at(monkeypatch, set()) == [2, 3, 4, 8, 5, 6, _POOL, 7, 9]
+
+
+def test_a_stage_5_issue_skips_the_pool_problems(monkeypatch):
+    assert _POOL not in _run_with_issues_at(monkeypatch, {5})
+
+
+def test_pool_problems_skip_the_roster_walk_but_not_the_matching(monkeypatch):
+    assert _run_with_issues_at(monkeypatch, {_POOL}) == [2, 3, 4, 8, 5, 6, _POOL, 7]
+
+
+def test_a_pool_problem_is_not_followed_by_a_misleading_roster_failure():
+    # the castle claims `long`; a capacity above the pool can never be a real draw, so the walk
+    # would only add ROSTER_INFEASIBLE reasons that hide the cause
+    pack = load_builtin_pack("castle")
+    pack = pack.model_copy(
+        update={
+            "capacity": pack.capacity.model_copy(update={"max_locations": 8}),
+            "presets": ("long",),
+        }
+    )
+    presets = {
+        **PRESETS,
+        "long": PRESETS["long"].model_copy(update={"locations": SizeRange(min=8, max=8)}),
+    }
+    codes = [i.code for i in check_pack(pack, presets)]
+    assert "CAPACITY_EXCEEDS_POOL" in codes
+    assert "ROSTER_INFEASIBLE" not in codes
 
 
 def _castle_text() -> str:

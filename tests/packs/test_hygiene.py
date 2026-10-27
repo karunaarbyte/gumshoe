@@ -1,5 +1,8 @@
+import pytest
+
 from gumshoe.cases.model.pack import Entry, MethodDef, MotiveDef, Pack, TraceDef
 from gumshoe.cases.packs.check import hygiene
+from gumshoe.cases.tools.builtin import load_builtin_pack
 from tests.packs.fixtures import rich_pack
 
 
@@ -176,3 +179,81 @@ def test_names_equal_after_unicode_normalisation_and_case():
     assert hygiene.same_name("Zo\u00e9", "Zoe\u0301")
     assert hygiene.same_name("Maud", "maud")
     assert not hygiene.same_name("Maud", "Maude")
+
+
+def _first(items, **update):
+    return (items[0].model_copy(update=update), *items[1:])
+
+
+def _with_scene(**update):
+    return lambda pack: pack.model_copy(update={"scene_types": _first(pack.scene_types, **update)})
+
+
+def _with_role(**update):
+    return lambda pack: pack.model_copy(update={"roles": _first(pack.roles, **update)})
+
+
+def _with_trace(pack):
+    method = pack.method_defs[0]
+    trace = method.traces[0]
+    trace = trace.model_copy(
+        update={"location_kinds": (*trace.location_kinds, trace.location_kinds[0])}
+    )
+    method = method.model_copy(update={"traces": (trace, *method.traces[1:])})
+    return pack.model_copy(update={"method_defs": (method, *pack.method_defs[1:])})
+
+
+def _with_record(pack):
+    record = pack.record_defs[0]
+    kinds = (*record.location_kinds, record.location_kinds[0])
+    record = record.model_copy(update={"location_kinds": kinds})
+    return pack.model_copy(update={"record_defs": (record, *pack.record_defs[1:])})
+
+
+def _doubled(items):
+    return (*items, items[0])
+
+
+_SITES = {
+    "scene_types.murder_in_chapel.location_kinds": _with_scene(location_kinds=("chapel", "chapel")),
+    "scene_types.murder_in_chapel.allowed_methods": lambda pack: _with_scene(
+        allowed_methods=_doubled(pack.scene_types[0].allowed_methods)
+    )(pack),
+    "scene_types.murder_in_chapel.allowed_trace_kinds": lambda pack: _with_scene(
+        allowed_trace_kinds=_doubled(pack.scene_types[0].allowed_trace_kinds)
+    )(pack),
+    "roles.bard.record_kinds": lambda pack: _with_role(
+        record_kinds=_doubled(pack.roles[0].record_kinds)
+    )(pack),
+    "roles.bard.motive_types": lambda pack: _with_role(
+        motive_types=_doubled(pack.roles[0].motive_types)
+    )(pack),
+}
+
+
+@pytest.mark.parametrize("path", sorted(_SITES))
+def test_a_repeated_entry_is_reported_at_each_scan_site(path):
+    pack = _SITES[path](load_builtin_pack("castle"))
+    assert [(i.code, i.path) for i in hygiene.duplicate_problems(pack)] == [
+        ("DUPLICATE_ENTRY", path)
+    ]
+
+
+def test_a_repeated_entry_in_a_trace_and_in_a_record_def_is_reported():
+    castle = load_builtin_pack("castle")
+    (trace_issue,) = hygiene.duplicate_problems(_with_trace(castle))
+    assert trace_issue.code == "DUPLICATE_ENTRY"
+    method = castle.method_defs[0]
+    assert trace_issue.path == (
+        f"method_defs.{method.key}.traces[{method.traces[0].kind}].location_kinds"
+    )
+    (record_issue,) = hygiene.duplicate_problems(_with_record(castle))
+    assert record_issue.path == f"record_defs.{castle.record_defs[0].key}.location_kinds"
+
+
+def test_a_victim_named_like_a_role_is_a_duplicate_reported_once_at_the_victim():
+    castle = load_builtin_pack("castle")
+    bard = castle.roles[0].names[0]
+    victims = (bard, *castle.victims[1:])
+    issues = hygiene.name_problems(castle.model_copy(update={"victims": victims}))
+    assert [(i.code, i.path) for i in issues] == [("NAME_DUPLICATE", "victims[0]")]

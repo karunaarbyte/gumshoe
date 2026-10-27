@@ -81,7 +81,7 @@ def _stage_fails(pack: Pack, preset: str, presets: Mapping[str, PresetDef] = PRE
 
 def _walk_fails(pack: Pack, preset: str, presets: Mapping[str, PresetDef] = PRESETS) -> bool:
     spec = dict(hosted_specs(pack, presets))[preset]
-    result = walk(pack, preset, spec, ROSTER_CHECK_BUDGET)
+    result = walk(pack, spec, ROSTER_CHECK_BUDGET)
     assert not result.over_budget
     return bool(result.failures)
 

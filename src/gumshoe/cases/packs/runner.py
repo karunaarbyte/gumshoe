@@ -24,7 +24,8 @@ def sorted_issues(issues: list[PackIssue]) -> tuple[PackIssue, ...]:
 def check_pack(pack: Pack, presets: Mapping[str, PresetDef] = PRESETS) -> tuple[PackIssue, ...]:
     """Stages 2 to 8 on a pack that already passed the schema stage. Stage 2 errors stop
     everything after (they need resolved references); stages 3, 4, 5 and 8 run together; stages 6
-    and 7 run only when stage 5 found nothing."""
+    and 7 run only when stage 5 found nothing, and the roster walk (stage 7) also waits for a
+    capacity that fits the pool."""
     unresolved = refs.check(pack)
     if unresolved:
         return sorted_issues(unresolved)
@@ -33,7 +34,9 @@ def check_pack(pack: Pack, presets: Mapping[str, PresetDef] = PRESETS) -> tuple[
     found += plausibility_issues
     if not plausibility_issues:
         found += capacity.check(pack, presets)
-        found += capacity.pool_problems(pack)
+        pool = capacity.pool_problems(pack)
+        found += pool
         found += matching.check(pack, presets)
-        found += feasibility.check(pack, presets)
+        if not pool:  # a capacity above the pool is the cause; a walk would only hide it
+            found += feasibility.check(pack, presets)
     return sorted_issues(found)

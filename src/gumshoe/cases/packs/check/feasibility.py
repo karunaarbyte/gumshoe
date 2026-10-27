@@ -62,6 +62,7 @@ def reachable_location_records(pack: Pack, record_kinds: int) -> range:
 
 
 def no_depth_presets(pack: Pack, presets: Mapping[str, PresetDef]) -> set[str]:
+    """Names of the claimed presets for which no record-kind count leaves a feasible depth."""
     out: set[str] = set()
     for name, spec in hosted_specs(pack, presets):
         counts = reachable_location_records(pack, spec.record_kinds)
@@ -168,7 +169,7 @@ class _Walk:
 
     def scene(self, scene: SceneType) -> bool:
         """Walks one scene; True once the failure cap is reached."""
-        method_sets = list(combinations(sorted(set(scene.allowed_methods)), self.spec.methods))
+        scene_methods = sorted(set(scene.allowed_methods))
         for role_keys in combinations(eligible_roles(self.pack, scene), self.spec.suspects):
             usable = [
                 sorted(
@@ -185,7 +186,8 @@ class _Walk:
             for draw in draws:
                 located = len(self._located(draw.kinds))
                 depths = feasible_depths(self.spec, located)
-                for method_keys in method_sets:
+                # lazy: every subset spends before the next is made, so memory follows the budget
+                for method_keys in combinations(scene_methods, self.spec.methods):
                     self.result.draws += 1
                     self.spend()
                     if not self.placeable(scene, draw, method_keys):
@@ -206,13 +208,12 @@ class _Walk:
         return False
 
 
-def walk(pack: Pack, name: str, spec: Spec, budget: int) -> WalkResult:
-    """Every roster draw the generator could make for preset `name` (effective `spec`): the
+def walk(pack: Pack, spec: Spec, budget: int) -> WalkResult:
+    """Every roster draw the generator could make for a preset (its effective `spec`): the
     reasons the roster stage or the depth step would fail on some of them, at most
     MAX_ROSTER_FAILURES, in walk order. Stops with `over_budget` once the work passes `budget`.
     Not modelled: fewer than three locations, and a placement with no room because more
     methods than the source cap fit only one place."""
-    del name  # the reasons name the roster, the issue names the preset
     state = _Walk(pack, spec, budget)
     try:
         for scene in hosting_scenes(pack, spec):
@@ -224,6 +225,7 @@ def walk(pack: Pack, name: str, spec: Spec, budget: int) -> WalkResult:
 
 
 def check(pack: Pack, presets: Mapping[str, PresetDef]) -> list[PackIssue]:
+    """PRESET_NO_DEPTH, then ROSTER_INFEASIBLE or PRESET_UNSUPPORTED for each claimed preset."""
     no_depth = no_depth_presets(pack, presets)
     out = [
         make("PRESET_NO_DEPTH", f"meta.presets[{name}]", preset=name) for name in sorted(no_depth)
@@ -232,13 +234,12 @@ def check(pack: Pack, presets: Mapping[str, PresetDef]) -> list[PackIssue]:
         if name in no_depth:
             continue  # every draw fails at the depth step: PRESET_NO_DEPTH already says so
         path = f"meta.presets[{name}]"
-        result = walk(pack, name, spec, ROSTER_CHECK_BUDGET)
+        result = walk(pack, spec, ROSTER_CHECK_BUDGET)
         out += [
             make("ROSTER_INFEASIBLE", path, preset=name, reason=reason)
             for reason in result.failures
         ]
         if result.over_budget:
-            # "draws" loosely: the budget counts every work unit, not draws alone
-            reason = f"roster check too large (more than {ROSTER_CHECK_BUDGET} draws)"
+            reason = f"roster check too large (more than {ROSTER_CHECK_BUDGET} work units)"
             out.append(make("PRESET_UNSUPPORTED", path, reason=reason))
     return out

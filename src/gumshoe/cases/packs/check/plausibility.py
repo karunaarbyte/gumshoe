@@ -69,13 +69,10 @@ def check(pack: Pack) -> list[PackIssue]:
         if not scene.location_kinds:
             out.append(make("SCENE_NO_CRIME_LOCATION", f"{base}.location_kinds"))
             continue
-        if len(set(scene.location_kinds)) > 1:
+        crime_locations = len(set(scene.location_kinds))
+        if crime_locations > 1:
             out.append(
-                make(
-                    "SCENE_MANY_CRIME_LOCATIONS",
-                    f"{base}.location_kinds",
-                    count=len(set(scene.location_kinds)),
-                )
+                make("SCENE_MANY_CRIME_LOCATIONS", f"{base}.location_kinds", count=crime_locations)
             )
         for key in scene.allowed_methods:
             found = methods.get(key)

@@ -220,8 +220,6 @@ mutation(
 mutation("PRESET_UNSUPPORTED", replace('presets = ["tiny"]', 'presets = ["tiny", "huge"]'))
 mutation("PRESET_NOT_MONOTONE", replace('presets = ["tiny"]', 'presets = ["short", "standard"]'))
 mutation("PRESET_NO_DEPTH", replace('presets = ["tiny"]', 'presets = ["nodepth"]'))
-
-
 mutation("CAPACITY_EXCEEDS_POOL", replace("max_suspects = 3", "max_suspects = 4"))
 
 
