@@ -46,8 +46,11 @@ already take `pack`; only the API layer drops it.
 
 Each is a pack-check code in the pack catalogue (today 48 codes), reported with a key path. Each ships
 as a row in `tests/packs/mutations.py` with its full expected cascade (some rules overlap: a scene with
-no kind already fires `SCENE_NO_CRIME_LOCATION`), and the golden catalogue is updated. Each names the runner
-stage it sits in (stages 6 and 7 run only when stage 5 is clean).
+no kind already fires `SCENE_NO_CRIME_LOCATION`), and the golden catalogue is updated. Placement in `check_pack`
+(`packs/runner.py`): scene location kind and record subjects join plausibility (stage 5); names, duplicate
+entries and record kind keys join the template, hygiene and skin-input group (stages 3 and 4); pool sizes,
+preset feasibility and roster feasibility join the capacity and matching group (stages 6 and 7, which run
+only when stage 5 is clean). The plan confirms each placement against the runner.
 
 | Check | Rule |
 |---|---|
@@ -134,7 +137,7 @@ lords") stay castle-only. A new pack could otherwise introduce a culprit tell th
 
 **Size targets.** The matching budget bounds a pack: for `long` (7 suspects) target at most 10 roles and 8
 motives (castle: 8 and 8); for `standard` (5 suspects) at most 10 roles and 9 motives. A location kind appears at most once per case and `long` needs 6 location kinds, so a pack claims `long` only
-with at least 6 location kinds, `standard` with at least 5. Each pack states its `[capacity]` and the
+with at least 6 location kinds, `standard` with at least 4 (the presets draw 6 and 4 to 5; `short` draws 3). Each pack states its `[capacity]` and the
 presets it claims; it claims only what the checks prove.
 
 **Ocean liner.** Four dinner-sitting-style slots. Place kinds such as promenade deck, first-class lounge,
