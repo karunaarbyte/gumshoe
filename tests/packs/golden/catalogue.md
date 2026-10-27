@@ -21,6 +21,8 @@
 | UNKNOWN_PLACEHOLDER | 3 | error | unknown placeholder {name!r} |
 | UNRESOLVED_BRACE | 3 | error | unbalanced or unresolved brace in the text |
 | LABEL_TOKEN_LEAK | 4 | error | this text uses the token {token!r}, distinctive to candidate {candidate!r} |
+| NAME_DUPLICATE | 4 | error | the name {name!r} equals {other!r} (same text after Unicode normalisation and case) |
+| ROLE_NO_NAME | 4 | error | the role has no name to give a suspect |
 | ROLE_TOKEN_COLLISION | 4 | error | a token ({token!r}) of this role's {what} is also used by {other!r} |
 | SECRET_REUSES_LABEL | 4 | error | an owned text of {candidate!r}, a secret or a hint, reuses its own label token {token!r} |
 | TRACE_COUNT_SKEW | 4 | error | this method has {count} trace templates; the largest count is {target} |

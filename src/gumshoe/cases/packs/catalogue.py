@@ -89,6 +89,14 @@ _ROWS = (
         "token",
         "other",
     ),
+    _row("ROLE_NO_NAME", 4, "the role has no name to give a suspect"),
+    _row(
+        "NAME_DUPLICATE",
+        4,
+        "the name {name!r} equals {other!r} (same text after Unicode normalisation and case)",
+        "name",
+        "other",
+    ),
     # stage 5: plausibility
     _row("ROLE_NO_NOUN", 5, "the role has no display noun"),
     _row("ROLE_NO_RECORD_KIND", 5, "the role has no record kind"),

@@ -170,3 +170,9 @@ def test_role_name_tokens_collide_with_candidate_tokens_in_any_case_or_unicode_f
 
 def test_a_pack_with_no_roles_has_no_role_collisions():
     assert hygiene.check(Pack(id="e", capacity=rich_pack().capacity)) == []
+
+
+def test_names_equal_after_unicode_normalisation_and_case():
+    assert hygiene.same_name("Zoé", "Zoé")
+    assert hygiene.same_name("Maud", "maud")
+    assert not hygiene.same_name("Maud", "Maude")

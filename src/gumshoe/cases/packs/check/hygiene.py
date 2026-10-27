@@ -1,6 +1,7 @@
 """Stage 4: label hygiene and leak rules (spec 4.4). A candidate's distinctive label tokens
 may appear only in its own entries, and a motive's secret never reuses its own label."""
 
+import unicodedata
 from collections.abc import Iterator
 from fractions import Fraction
 
@@ -182,5 +183,34 @@ def _role_collisions(pack: Pack) -> list[PackIssue]:
     return out
 
 
+def _fold(text: str) -> str:
+    return unicodedata.normalize("NFC", text).casefold()
+
+
+def same_name(a: str, b: str) -> bool:
+    return _fold(a) == _fold(b)
+
+
+def name_problems(pack: Pack) -> list[PackIssue]:
+    out: list[PackIssue] = []
+    seen: dict[str, str] = {}
+
+    def see(path: str, text: str) -> None:
+        key = _fold(text)
+        if key in seen:
+            out.append(make("NAME_DUPLICATE", path, name=text, other=seen[key]))
+        else:
+            seen[key] = text
+
+    for role in sorted(pack.roles, key=lambda r: r.key):
+        if not role.names:
+            out.append(make("ROLE_NO_NAME", f"roles.{role.key}.names"))
+        for i, entry in enumerate(role.names):
+            see(f"roles.{role.key}.names[{i}]", entry.text)
+    for i, entry in enumerate(pack.victims):
+        see(f"victims[{i}]", entry.text)
+    return out
+
+
 def check(pack: Pack) -> list[PackIssue]:
-    return [*_leaks(pack), *_trace_skew(pack), *_role_collisions(pack)]
+    return [*_leaks(pack), *_trace_skew(pack), *_role_collisions(pack), *name_problems(pack)]

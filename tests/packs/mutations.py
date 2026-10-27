@@ -349,3 +349,13 @@ mutation(
 )
 # "wine" is a token of the poison method's alias "laced wine"
 mutation("BAD_SMALLTALK_WORD", replace('"warm", "weather",', '"warm", "wine",'))
+mutation(
+    "ROLE_NO_NAME", replace('names = [{ text = "Maud", pronoun = "she", proper = true }]\n', "")
+)
+mutation(
+    "NAME_DUPLICATE",
+    replace(
+        'names = [{ text = "Hob", pronoun = "he", proper = true }]',
+        'names = [{ text = "maud", pronoun = "he", proper = true }]',
+    ),
+)
