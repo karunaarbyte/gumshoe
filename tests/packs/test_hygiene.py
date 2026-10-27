@@ -173,6 +173,6 @@ def test_a_pack_with_no_roles_has_no_role_collisions():
 
 
 def test_names_equal_after_unicode_normalisation_and_case():
-    assert hygiene.same_name("Zoé", "Zoé")
+    assert hygiene.same_name("Zo\u00e9", "Zoe\u0301")
     assert hygiene.same_name("Maud", "maud")
     assert not hygiene.same_name("Maud", "Maude")
