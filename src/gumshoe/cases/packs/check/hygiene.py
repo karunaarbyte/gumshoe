@@ -2,6 +2,7 @@
 may appear only in its own entries, and a motive's secret never reuses its own label."""
 
 import unicodedata
+from collections import Counter
 from collections.abc import Iterator
 from fractions import Fraction
 
@@ -212,5 +213,36 @@ def name_problems(pack: Pack) -> list[PackIssue]:
     return out
 
 
+def duplicate_problems(pack: Pack) -> list[PackIssue]:
+    out: list[PackIssue] = []
+
+    def scan(path: str, values: tuple[str, ...]) -> None:
+        for value, n in sorted(Counter(values).items()):
+            if n > 1:
+                out.append(make("DUPLICATE_ENTRY", path, value=value))
+
+    for scene in pack.scene_types:
+        base = f"scene_types.{scene.key}"
+        scan(f"{base}.location_kinds", scene.location_kinds)
+        scan(f"{base}.allowed_methods", scene.allowed_methods)
+        scan(f"{base}.allowed_trace_kinds", scene.allowed_trace_kinds)
+    for role in pack.roles:
+        scan(f"roles.{role.key}.record_kinds", role.record_kinds)
+        scan(f"roles.{role.key}.motive_types", role.motive_types)
+    for method in pack.method_defs:
+        for trace in method.traces:
+            path = f"method_defs.{method.key}.traces[{trace.kind}].location_kinds"
+            scan(path, trace.location_kinds)
+    for record in pack.record_defs:
+        scan(f"record_defs.{record.key}.location_kinds", record.location_kinds)
+    return out
+
+
 def check(pack: Pack) -> list[PackIssue]:
-    return [*_leaks(pack), *_trace_skew(pack), *_role_collisions(pack), *name_problems(pack)]
+    return [
+        *_leaks(pack),
+        *_trace_skew(pack),
+        *_role_collisions(pack),
+        *name_problems(pack),
+        *duplicate_problems(pack),
+    ]

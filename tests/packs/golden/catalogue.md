@@ -20,6 +20,7 @@
 | TOO_FEW_VARIANTS | 3 | error | family has {count} variants; needs at least {needed} |
 | UNKNOWN_PLACEHOLDER | 3 | error | unknown placeholder {name!r} |
 | UNRESOLVED_BRACE | 3 | error | unbalanced or unresolved brace in the text |
+| DUPLICATE_ENTRY | 4 | error | the list names {value!r} more than once |
 | LABEL_TOKEN_LEAK | 4 | error | this text uses the token {token!r}, distinctive to candidate {candidate!r} |
 | NAME_DUPLICATE | 4 | error | the name {name!r} equals {other!r} (same text after Unicode normalisation and case) |
 | ROLE_NO_NAME | 4 | error | the role has no name to give a suspect |

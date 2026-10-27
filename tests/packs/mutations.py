@@ -359,3 +359,12 @@ mutation(
         'names = [{ text = "maud", pronoun = "he", proper = true }]',
     ),
 )
+mutation(
+    "DUPLICATE_ENTRY",
+    replace(
+        '[scene_types.study_murder]\nlocation_kinds = ["study"]\n'
+        'allowed_methods = ["dagger", "poison", "rope"]',
+        '[scene_types.study_murder]\nlocation_kinds = ["study"]\n'
+        'allowed_methods = ["dagger", "poison", "rope", "rope"]',
+    ),
+)

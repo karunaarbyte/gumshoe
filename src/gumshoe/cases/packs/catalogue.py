@@ -97,6 +97,7 @@ _ROWS = (
         "name",
         "other",
     ),
+    _row("DUPLICATE_ENTRY", 4, "the list names {value!r} more than once", "value"),
     # stage 5: plausibility
     _row("ROLE_NO_NOUN", 5, "the role has no display noun"),
     _row("ROLE_NO_RECORD_KIND", 5, "the role has no record kind"),
