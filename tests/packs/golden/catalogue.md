@@ -49,6 +49,7 @@
 | PRESET_UNSUPPORTED | 6 | error | the pack cannot host this preset: {reason} |
 | MOTIVE_TOO_PREDICTABLE | 7 | error | in roster {roster} this role gets this motive {percent}% of the time; the cap is 50% |
 | NO_PERFECT_MATCHING | 7 | error | no suspect-to-motive matching exists for roster {roster} |
+| ROSTER_INFEASIBLE | 7 | error | the {preset!r} preset can draw a roster the generator cannot build: {reason} |
 | BAD_SMALLTALK_WORD | 8 | error | the small-talk entry {word!r} is not allowed: {reason} |
 | DUPLICATE_FAMILY_KIND | 8 | error | {count} families carry the kind {kind!r}; a required kind needs exactly one |
 | ENTRY_INCOMPLETE | 8 | error | {what} |

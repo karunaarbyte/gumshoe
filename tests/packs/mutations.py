@@ -290,6 +290,39 @@ mutation(
     {"NO_PERFECT_MATCHING", "MOTIVE_TOO_PREDICTABLE"},
 )
 
+# the dagger's wound trace is split: the wound only at the study and a stain at the cellar and
+# the garden, which the study scene does not allow, so a study murder by dagger has no non-scene
+# place for a trace (the garden and cellar scenes allow the stain, so stage 5 sees no problem)
+_WOUND = (
+    'kind = "wound"\nlocation_kinds = ["cellar", "garden", "study"]\ntemplates = [\n'
+    '  "A narrow cut in the clothing {place.in} shows where the blow fell.",\n'
+    '  "Dark stains {place.in} were smeared across the floor in a long arc.",\n]\nabsent = [\n'
+    '  "A neat seam in the clothing {place.in} shows where the thread held.",\n'
+    '  "Clean boards {place.in} were swept bare across the floor in a line.",\n]'
+)
+_SPLIT = (
+    'kind = "wound"\nlocation_kinds = ["study"]\ntemplates = [\n'
+    '  "A narrow cut in the clothing {place.in} shows where the blow fell.",\n]\nabsent = [\n'
+    '  "A neat seam in the clothing {place.in} shows where the thread held.",\n]\n'
+    '[[method_defs.dagger.traces]]\nkind = "stain"\nlocation_kinds = ["cellar", "garden"]\n'
+    'templates = [\n  "Dark stains {place.in} were smeared across the floor in a long arc.",\n]\n'
+    'absent = [\n  "Clean boards {place.in} were swept bare across the floor in a line.",\n]'
+)
+_GARDEN = (
+    '[scene_types.garden_murder]\nlocation_kinds = ["garden"]\n'
+    'allowed_methods = ["dagger", "poison", "rope"]\n'
+    'allowed_trace_kinds = ["fibre", "residue", "wound"]'
+)
+_CELLAR = _GARDEN.replace("garden_murder", "cellar_murder").replace('["garden"]', '["cellar"]')
+mutation(
+    "ROSTER_INFEASIBLE",
+    chain(
+        replace(_WOUND, _SPLIT),
+        replace(_GARDEN, _GARDEN.replace('"wound"]', '"stain", "wound"]')),
+        replace(_CELLAR, _CELLAR.replace('"wound"]', '"stain", "wound"]')),
+    ),
+)
+
 # ---- stage 8: skin inputs ----------------------------------------------------------------------
 
 mutation(

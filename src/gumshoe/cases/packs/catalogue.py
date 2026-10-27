@@ -177,7 +177,7 @@ _ROWS = (
         "count",
         "needed",
     ),
-    # stage 7: motive matching
+    # stage 7: motive matching and the roster walk
     _row(
         "NO_PERFECT_MATCHING",
         7,
@@ -190,6 +190,13 @@ _ROWS = (
         "in roster {roster} this role gets this motive {percent}% of the time; the cap is 50%",
         "roster",
         "percent",
+    ),
+    _row(
+        "ROSTER_INFEASIBLE",
+        7,
+        "the {preset!r} preset can draw a roster the generator cannot build: {reason}",
+        "preset",
+        "reason",
     ),
     # stage 8: skin inputs
     _row("MISSING_FAMILY", 8, "the pack has no family of the required kind {kind!r}", "kind"),
