@@ -19,8 +19,9 @@ from gumshoe.cases.packs.check.capacity import (
 from gumshoe.cases.packs.check.depths import feasible_depths
 from gumshoe.cases.packs.issues import PackIssue
 
-# The walk's work for one preset: draws, holder assignments and location-subset checks. A
-# preset whose walk would do more is unsupported here, which keeps the load bounded.
+# The walk's work for one preset, in units: one per draw, per visited record-kind subset and
+# per location-subset check. A preset whose walk would do more is unsupported here, which
+# keeps the load bounded.
 ROSTER_CHECK_BUDGET = 1_000_000
 MAX_ROSTER_FAILURES = 5  # reported per preset
 NO_RECORD_SET = "no record-kind set gives every role a kind and every kind a holder"
@@ -71,7 +72,9 @@ def no_depth_presets(pack: Pack, presets: Mapping[str, PresetDef]) -> set[str]:
 
 @dataclass
 class WalkResult:
-    draws: int = 0  # one per (scene, roles, record kinds with holders, secret kinds, methods)
+    # one per (scene, roles, record-kind subset with holders, methods); the budget counts more
+    # (every work unit, see ROSTER_CHECK_BUDGET), so `draws` never reaches it alone
+    draws: int = 0
     failures: list[str] = field(default_factory=list)  # distinct reasons, at most the cap
     over_budget: bool = False
 
@@ -83,7 +86,7 @@ class _OverBudget(Exception):
 @dataclass(frozen=True)
 class _RecordDraw:
     kinds: tuple[str, ...]  # the chosen record kinds, sorted
-    secrets: tuple[str, ...]  # the set of the suspects' secret record kinds, sorted
+    secrets: tuple[str, ...]  # the suspects' secret record kinds: the suspect-subject ones
 
 
 class _Walk:
@@ -116,26 +119,21 @@ class _Walk:
 
     def draws_for(self, usable: list[list[str]]) -> list[_RecordDraw]:
         """The (record kinds, secret kinds) pairs `_record_kinds_and_secrets` can draw for roles
-        with these usable kinds, in sorted order. A holder keeps its kind; any other role takes
-        one of its usable kinds in the subset, so only the set of secret kinds is kept."""
+        with these usable kinds, in sorted order. `usable_kind` admits suspect-subject kinds only
+        and every chosen suspect-subject kind has a holder, so the suspects' secret kinds are
+        always exactly the subset's suspect-subject kinds: one draw per subset with holders."""
         key = tuple(tuple(opts) for opts in usable)
         if key in self.record_draws:
             return self.record_draws[key]
         found: list[_RecordDraw] = []
         for subset in combinations(self.choosable, self.spec.record_kinds):
+            self.spend()  # every visited subset, kept or not: a large pool cannot hang the walk
             chosen = set(subset)
             if any(not chosen & set(opts) for opts in usable):
                 continue
-            held = [k for k in subset if self.records[k].subject == "suspect"]
-            secret_sets: set[tuple[str, ...]] = set()
-            for holders in holder_assignments(held, usable):
-                self.spend()
-                partial: set[frozenset[str]] = {frozenset()}
-                for i, opts in enumerate(usable):
-                    picks = [holders[i]] if i in holders else sorted(chosen & set(opts))
-                    partial = {s | {k} for s in partial for k in picks}
-                secret_sets.update(tuple(sorted(s)) for s in partial)
-            found += [_RecordDraw(subset, secrets) for secrets in sorted(secret_sets)]
+            held = tuple(k for k in subset if self.records[k].subject == "suspect")
+            if next(holder_assignments(list(held), usable), None) is not None:
+                found.append(_RecordDraw(subset, held))
         self.record_draws[key] = found
         return found
 
@@ -240,6 +238,7 @@ def check(pack: Pack, presets: Mapping[str, PresetDef]) -> list[PackIssue]:
             for reason in result.failures
         ]
         if result.over_budget:
+            # "draws" loosely: the budget counts every work unit, not draws alone
             reason = f"roster check too large (more than {ROSTER_CHECK_BUDGET} draws)"
             out.append(make("PRESET_UNSUPPORTED", path, reason=reason))
     return out

@@ -1,3 +1,4 @@
+import copy
 import time
 
 from gumshoe.cases.model.pack import Pack
@@ -33,9 +34,9 @@ def test_the_castle_walk_is_feasible_and_cheap():
     assert time.perf_counter() - started < 5
 
 
-def test_a_draw_is_one_scene_roles_record_kinds_secret_kinds_and_methods():
+def test_a_draw_is_one_scene_roles_record_kinds_and_methods():
     # the unit of the count, pinned: one draw per (scene, roles, record-kind subset with
-    # holders, secret-kind set, method subset); placement checks count against the budget only
+    # holders, method subset); subset visits and placement checks count against the budget only
     pack = load_builtin_pack("castle")
     counts = {
         name: walk(pack, name, spec, ROSTER_CHECK_BUDGET).draws
@@ -144,3 +145,33 @@ def test_a_preset_with_no_depth_at_all_is_not_walked():
         update={"presets": ("nodepth",)}
     )
     assert [i.code for i in feasibility.check(pack, TEST_PRESETS)] == ["PRESET_NO_DEPTH"]
+
+
+def _many_record_kinds(extra: int) -> Pack:
+    """The castle with `extra` more suspect-subject record kinds and eight more roles, each
+    listing one of them: every roster with those roles has its own usable kinds, and almost every
+    record-kind subset is rejected."""
+    data = load_builtin_pack("castle").model_dump(mode="json")
+    register = next(r for r in data["record_defs"] if r["key"] == "chapel_register")
+    priest = next(r for r in data["roles"] if r["key"] == "priest")
+    for i in range(extra):
+        data["record_defs"].append({**register, "key": f"extra_{i:04d}"})
+    for i in range(8):
+        role = copy.deepcopy(priest)
+        role["key"] = f"extra_role_{i}"
+        role["record_kinds"] = ["chapel_register", "gate_log", f"extra_{i:04d}"]
+        role["names"] = [{**role["names"][0], "text": f"Extra{i}"}]
+        data["roles"].append(role)
+    return Pack.model_validate(data)
+
+
+def test_rejected_record_kind_subsets_count_against_the_budget():
+    pack = _many_record_kinds(200)
+    hosted = dict(hosted_specs(pack, PRESETS))
+    assert sorted(hosted) == ["short"]  # the matching bound rules out the larger presets
+    started = time.perf_counter()
+    result = walk(pack, "short", hosted["short"], ROSTER_CHECK_BUDGET)
+    assert result.over_budget and result.failures == []
+    issues = feasibility.check(pack, PRESETS)
+    assert [(i.code, i.path) for i in issues] == [("PRESET_UNSUPPORTED", "meta.presets[short]")]
+    assert time.perf_counter() - started < 4
