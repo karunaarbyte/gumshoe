@@ -41,7 +41,8 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
   // validated against what the server has now: a remembered setting may be gone
   const pack = packs.length > 0 ? pickSetting(packs, settingId) : null;
   const presets = pack?.presets ?? [];
-  // a preset picked under another setting may not be hosted by this one
+  // a preset picked under another setting may not be hosted by this one; default_preset describes the
+  // default pack, so it applies only if this pack hosts it, else presets[0]
   const shownPreset =
     preset !== null && presets.includes(preset)
       ? preset
@@ -114,6 +115,7 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
           <label className="flex flex-col text-xs uppercase">
             Setting
             <select
+              aria-describedby="setting-blurb"
               className="border border-ink bg-card-light p-1"
               value={pack?.id ?? ''}
               onChange={(e) => {
@@ -129,7 +131,7 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
               ))}
             </select>
           </label>
-          {pack !== null && <p className="max-w-xs text-xs italic">{pack.blurb}</p>}
+          {pack !== null && <p id="setting-blurb" className="max-w-xs text-xs italic">{pack.blurb}</p>}
         </div>
         <label className="flex flex-col text-xs uppercase">
           Preset
@@ -141,7 +143,7 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
             ))}
           </select>
         </label>
-        <StampButton type="submit" disabled={off || busy || meta.data === undefined}>
+        <StampButton type="submit" disabled={off || busy || pack === null}>
           New case
         </StampButton>
         {seedError !== null && <p className="text-sm text-stamp">{seedError}</p>}

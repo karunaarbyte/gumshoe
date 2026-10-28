@@ -1,9 +1,10 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test, vi } from 'vitest';
 import { ApiError } from '../api/errors';
 import { gameKey, loadBoard, saveKey, storeBoard } from '../board/storage';
-import { healthOff } from '../test/fixtures';
+import { keys } from '../data/queries';
+import { healthOff, meta } from '../test/fixtures';
 import { fakeApi } from '../test/fakeApi';
 import { renderWithApp } from '../test/render';
 import { TitleScreen, parseSeed } from './TitleScreen';
@@ -39,6 +40,28 @@ describe('TitleScreen', () => {
     await userEvent.click(screen.getByRole('button', { name: 'New case' }));
     await waitFor(() => expect(onOpen).toHaveBeenCalledWith('g1'));
     expect(client.createGame).toHaveBeenCalledWith(7, 'short', 'castle');
+  });
+
+  test('with no settings to pick, New case stays disabled', async () => {
+    const client = fakeApi();
+    client.meta.mockResolvedValue({ ...meta, packs: [] });
+    setup(client);
+    await waitFor(() => expect(client.meta).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'New case' })).toBeDisabled();
+  });
+
+  test('a picked preset the setting no longer hosts is not submitted', async () => {
+    const client = fakeApi();
+    const onOpen = vi.fn();
+    const { queryClient } = renderWithApp(<TitleScreen onOpen={onOpen} onError={vi.fn()} banner={null} />, client);
+    await screen.findByRole('option', { name: 'short' });
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Preset' }), 'short');
+    act(() => {
+      queryClient.setQueryData(keys.meta, { ...meta, packs: [{ ...meta.packs[0]!, presets: ['standard'] }, meta.packs[1]!] });
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'New case' }));
+    await waitFor(() => expect(client.createGame).toHaveBeenCalled());
+    expect(client.createGame).toHaveBeenCalledWith(expect.any(Number), 'standard', 'castle');
   });
 
   test('a bad seed is refused before any request', async () => {

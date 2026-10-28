@@ -73,6 +73,15 @@ def test_a_refused_request_charges_no_open_game_quota(store, bad):
 
 
 @pytest.mark.parametrize("bad", [{"pack": "nope"}, {"preset": "nonesuch"}])
+def test_a_bad_request_at_the_open_game_cap_is_422_not_429(store, bad):
+    with client_for(store, caps=Caps(games_per_session=1)) as client:
+        assert client.post("/api/games", json={"seed": 1}).status_code == 200
+        # validation runs before admission: the cap does not hide the real error
+        assert client.post("/api/games", json={"seed": 2, **bad}).status_code == 422
+        assert client.post("/api/games", json={"seed": 3}).status_code == 429
+
+
+@pytest.mark.parametrize("bad", [{"pack": "nope"}, {"preset": "nonesuch"}])
 def test_a_refused_request_charges_no_creation_rate(store, bad):
     quotas = Quotas(Settings(_env_file=None, session_games_per_hour=2))
     with client_for(store, quotas=quotas) as client:
