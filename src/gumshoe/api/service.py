@@ -41,7 +41,7 @@ from gumshoe.api.errors import BAD_SAVE_MESSAGE, UNKNOWN_GAME, ApiError
 from gumshoe.api.ratelimit import Busy, Quotas, Ticket, TurnGate
 from gumshoe.api.redact import PlayerBrief
 from gumshoe.api.saveowners import SaveOwners
-from gumshoe.cases import NotebookView, PlayerCaseView, RevealView
+from gumshoe.cases import DEFAULT_PACK, NotebookView, PlayerCaseView, RevealView, pack_info
 from gumshoe.config import Settings
 from gumshoe.decider import client_key, describe_failure
 
@@ -106,7 +106,7 @@ class PendingView(BaseModel):
 class GameState(BaseModel):
     """Everything a UI needs to draw a game after a reload (the chat comes from `turns`). No
     seed: a seed is the whole case, so whoever holds it can replay the game and give up to read
-    the answer. The preset is known only for games made here (a load does not say)."""
+    the answer. The pack and preset come from the game itself, also after a load."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -164,7 +164,8 @@ class _Slot:
     gone: bool = False
     busy: bool = False  # a turn is running or waiting for the lock: the next one is refused
     turns: "deque[TurnRecord]" = field(default_factory=_transcript)
-    preset: str | None = None  # None for a loaded game
+    preset: str | None = None
+    pack: str = DEFAULT_PACK
     ip: str = ""  # the network that opened it, for the per-IP open-game cap
     last_active: float = 0.0  # clock time of registration or of the last turn's end
 
@@ -274,8 +275,8 @@ class AgentService:
             raise ToolFailure("unknown_game", UNKNOWN_GAME)
         return slot
 
-    def _register(self, view: NewGameView, preset: str | None, owner: str, ip: str) -> NewGameView:
-        slot = _Slot(TurnContext(game=view.game), owner, preset=preset, ip=ip)
+    def _register(self, view: NewGameView, owner: str, ip: str) -> NewGameView:
+        slot = _Slot(TurnContext(game=view.game), owner, preset=view.preset, pack=view.pack, ip=ip)
         slot.last_active = self._clock()
         self._slots[view.game] = slot
         return view
@@ -305,12 +306,27 @@ class AgentService:
         return release
 
     async def new_game(
-        self, seed: int, preset: str = "standard", *, owner: str, ip: str = ""
+        self,
+        seed: int,
+        preset: str = "standard",
+        pack: str = DEFAULT_PACK,
+        *,
+        owner: str,
+        ip: str = "",
     ) -> NewGameView:
+        # checked before admission, so a refused request charges no quota; the message never
+        # echoes the pack id, which the client chose
+        info = pack_info(pack)
+        if info is None:
+            raise ToolFailure("bad_argument", "unknown setting")
+        if preset not in info.presets:
+            raise ToolFailure(
+                "bad_argument", f"this setting hosts these presets: {', '.join(info.presets)}"
+            )
         release = self._admit_game(owner, ip)
         try:
-            view = await self._deps.client.new_game(seed, preset)
-            return self._register(view, preset, owner, ip)
+            view = await self._deps.client.new_game(seed, preset, pack)
+            return self._register(view, owner, ip)
         finally:
             release()
 
@@ -320,7 +336,7 @@ class AgentService:
         release = self._admit_game(owner, ip)
         try:
             view = await self._deps.client.load_game(name)
-            return self._register(view, None, owner, ip)
+            return self._register(view, owner, ip)
         finally:
             release()
 

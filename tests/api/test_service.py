@@ -457,13 +457,13 @@ async def test_a_given_up_game_reads_gave_up_with_its_reveal():
     assert state.reveal is not None and state.reveal.culprit and state.pending is None
 
 
-async def test_a_loaded_game_has_no_preset(tmp_path):
+async def test_a_loaded_game_keeps_its_preset(tmp_path):
     async with serving(Script(), saves_dir=tmp_path) as s:
         new = await s.service.new_game(1, "long", owner=OWNER)
         saved = await s.service.save_game(new.game, owner=OWNER)
         loaded = await s.service.load_game(saved.name, owner=OWNER)
         state = await s.service.state(loaded.game, owner=OWNER)
-    assert state.preset is None
+    assert state.preset == "long"
 
 
 async def test_the_games_list_says_when_a_turn_is_running():

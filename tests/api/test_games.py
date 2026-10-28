@@ -34,7 +34,7 @@ def new_game(client, seed=1):
 def test_create_a_game_returns_its_id_and_brief(store):
     with client_for(store, Script()) as client:
         body = new_game(client)
-    assert set(body) == {"game", "brief", "preset"} and body["brief"]["status"] == "playing"
+    assert set(body) == {"game", "brief", "pack", "preset"} and body["brief"]["status"] == "playing"
     assert body["preset"] == "standard" and "seed" not in body
     assert body["brief"]["locations"] and "truth" not in str(body)
 
@@ -112,7 +112,7 @@ def test_save_then_load_makes_a_new_game(store, tmp_path):
         assert saved.status_code == 200
         loaded = client.post("/api/games/load", json={"name": saved.json()["name"]})
         assert loaded.status_code == 200 and loaded.json()["game"] != game
-        assert loaded.json()["preset"] is None  # a save does not say
+        assert loaded.json()["preset"] == "standard" and loaded.json()["pack"] == "castle"
 
 
 def test_loading_a_missing_save_is_422(store, tmp_path):

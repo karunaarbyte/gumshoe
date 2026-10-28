@@ -29,8 +29,8 @@ from gumshoe.api.info import (
     ClientUsage,
     Health,
     Meta,
+    PackMeta,
     PersonaModels,
-    presets,
 )
 from gumshoe.api.limits import BodyLimit
 from gumshoe.api.probe import PersonaProbe
@@ -43,6 +43,7 @@ from gumshoe.api.session import Owner, Sessions
 from gumshoe.api.shield import OriginCheck
 from gumshoe.api.static import mount_ui
 from gumshoe.api.wiring import default_service
+from gumshoe.cases import DEFAULT_PACK, bundled_packs, pack_info
 from gumshoe.config import Settings, get_settings
 from gumshoe.decider import DeciderConfigError, describe_failure
 from gumshoe.stats import (
@@ -272,8 +273,11 @@ def create_app(
 
     @app.get("/api/meta")
     def meta() -> Meta:
+        default = pack_info(DEFAULT_PACK)
+        assert default is not None  # the registry refuses to load without it
         return Meta(
-            presets=presets(),
+            packs=tuple(PackMeta(**p.model_dump()) for p in bundled_packs()),
+            presets=default.presets,
             default_preset="standard",
             max_attempts=MAX_ATTEMPTS,
             max_turn_chars=MAX_TURN_CHARS,

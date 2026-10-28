@@ -187,6 +187,8 @@ def test_health_says_why_the_game_is_off(store):
 def test_meta_gives_the_numbers_a_ui_would_otherwise_hard_code(store):
     with TestClient(app_for(store)) as client:
         body = client.get("/api/meta").json()
+    packs = body.pop("packs")
+    assert [p["id"] for p in packs] == ["castle"] and packs[0]["presets"] == body["presets"]
     assert body == {
         "presets": ["short", "standard", "long"],
         "default_preset": "standard",

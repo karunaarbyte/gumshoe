@@ -13,6 +13,7 @@ from fastapi import FastAPI
 
 from gumshoe.api.app import create_app
 from gumshoe.api.startup import startup_warnings
+from gumshoe.cases import BuiltinPackError, bundled_packs
 from gumshoe.config import Settings, get_settings
 from gumshoe.stats import SqliteStatsStore
 
@@ -38,6 +39,10 @@ def build_parser(settings: Settings) -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> None:
     settings = get_settings()
     args = build_parser(settings).parse_args(argv)
+    try:
+        bundled_packs()  # a broken bundled pack stops the API here, naming the pack
+    except BuiltinPackError as exc:
+        raise SystemExit(f"error: {exc}") from exc
     for message in startup_warnings(settings, args.host):
         logging.getLogger("gumshoe.api").warning(message)
     uvicorn.run(

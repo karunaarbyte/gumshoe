@@ -16,6 +16,7 @@ from gumshoe.api.ratelimit import request_ip
 from gumshoe.api.redact import PlayerBrief
 from gumshoe.api.service import AgentService, GameState, GameSummary, SaveSummary, TurnRecord
 from gumshoe.api.session import NewOwner, Owner, optional_owner
+from gumshoe.cases import DEFAULT_PACK
 
 router = APIRouter(prefix="/api/games")
 saves_router = APIRouter(prefix="/api/saves")
@@ -30,6 +31,7 @@ class NewGameBody(BaseModel):
 
     seed: StrictInt
     preset: str = Field("standard", max_length=32)
+    pack: str = Field(DEFAULT_PACK, pattern=r"^[a-z][a-z0-9_]{0,31}$")
 
 
 class LoadBody(BaseModel):
@@ -39,13 +41,14 @@ class LoadBody(BaseModel):
 
 
 class GameCreated(BaseModel):
-    """A new or loaded game. No seed (see GameState); the preset only for a new game."""
+    """A new or loaded game. No seed (see GameState). Pack and preset come from the game."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     game: str
     brief: PlayerBrief  # locked names blanked
-    preset: str | None
+    pack: str
+    preset: str
 
 
 class TurnBody(BaseModel):
@@ -83,8 +86,10 @@ def sse(event: TurnEvent) -> bytes:
 async def create(
     body: NewGameBody, request: Request, service: Service, owner: NewOwner
 ) -> GameCreated:
-    view = await service.new_game(body.seed, body.preset, owner=owner, ip=request_ip(request))
-    return GameCreated(game=view.game, brief=view.brief, preset=body.preset)
+    view = await service.new_game(
+        body.seed, body.preset, body.pack, owner=owner, ip=request_ip(request)
+    )
+    return GameCreated(game=view.game, brief=view.brief, pack=view.pack, preset=view.preset)
 
 
 @router.get("")
@@ -99,7 +104,7 @@ async def open_games(
 @router.post("/load")
 async def load(body: LoadBody, request: Request, service: Service, owner: NewOwner) -> GameCreated:
     view = await service.load_game(body.name, owner=owner, ip=request_ip(request))
-    return GameCreated(game=view.game, brief=view.brief, preset=None)
+    return GameCreated(game=view.game, brief=view.brief, pack=view.pack, preset=view.preset)
 
 
 @router.get("/{game}")
