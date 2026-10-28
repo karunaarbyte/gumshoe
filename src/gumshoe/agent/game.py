@@ -13,6 +13,7 @@ from mcp.client import Client
 from pydantic import BaseModel, ConfigDict
 
 from gumshoe.cases import (
+    DEFAULT_PACK,
     AccusationPlan,
     AccusationQuestions,
     AccusationResult,
@@ -53,6 +54,8 @@ class NewGameView(BaseModel):
 
     game: str
     brief: PlayerCaseView
+    pack: str
+    preset: str
 
 
 class SaveView(BaseModel):
@@ -79,7 +82,7 @@ class GameClient:
         return data
 
     async def new_game(
-        self, seed: int, preset: str = "standard", pack: str = "castle"
+        self, seed: int, preset: str = "standard", pack: str = DEFAULT_PACK
     ) -> NewGameView:
         data = await self._call("new_game", {"seed": seed, "preset": preset, "pack": pack})
         return NewGameView.model_validate(data)

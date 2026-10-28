@@ -7,6 +7,7 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
+from gumshoe.cases import BuiltinPackError, bundled_packs
 from gumshoe.mcp_server.host import GameHost
 from gumshoe.mcp_server.tools import build_server
 
@@ -21,6 +22,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         "directory)",
     )
     args = parser.parse_args(argv)
+    try:
+        bundled_packs()  # a broken bundled pack stops startup; stderr only, stdout is the protocol
+    except BuiltinPackError as exc:
+        raise SystemExit(f"error: {exc}") from exc
     build_server(GameHost(saves_dir=args.saves)).run("stdio")
 
 

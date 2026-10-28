@@ -13,6 +13,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from gumshoe.cases import (
+    DEFAULT_PACK,
     AccusationPlan,
     AccusationQuestions,
     AccusationResult,
@@ -53,7 +54,7 @@ def build_server(host: GameHost) -> MCPServer:
         return server.tool()(fn)
 
     @tool
-    def new_game(seed: int, preset: str = "standard", pack: str = "castle") -> NewGame:
+    def new_game(seed: int, preset: str = "standard", pack: str = DEFAULT_PACK) -> NewGame:
         """Start a game on the case for this seed (preset: short, standard or long).
         Returns the game id and the opening brief (places, suspects, record kinds)."""
         return _guarded(lambda: host.new_game(seed, preset, pack))

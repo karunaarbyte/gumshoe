@@ -18,12 +18,12 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from gumshoe.cases import (
+    DEFAULT_PACK,
     AccusationPlan,
     AccusationQuestions,
     AccusationResult,
     AxisOptions,
     BadAnswers,
-    BuiltinPackError,
     Case,
     CaseGenerationError,
     GameNotOver,
@@ -45,11 +45,12 @@ from gumshoe.cases import (
     UnsupportedPreset,
     VersionMismatch,
     View,
+    bundled_pack,
     dump_case,
     generate_case,
-    load_builtin_pack,
     load_case,
     load_session,
+    pack_info,
     regenerate_case,
 )
 from gumshoe.mcp_server.errors import GameError
@@ -88,6 +89,8 @@ class RandomIds:
 class NewGame(View):
     game: str
     brief: PlayerCaseView
+    pack: str
+    preset: str
 
 
 class CloseRef(View):
@@ -179,15 +182,14 @@ class GameHost:
         self._saves_dir = saves_dir
         self._lock = threading.RLock()
         self._games: dict[str, _Game] = {}
-        self._packs: dict[str, Pack] = {}
 
     def _pack(self, name: str) -> Pack:
-        if name not in self._packs:
-            try:
-                self._packs[name] = load_builtin_pack(name)
-            except BuiltinPackError as exc:
-                raise GameError("bad_argument", f"no pack named {name!r}") from exc
-        return self._packs[name]
+        # the registry holds the checked packs; the host never reads files after startup.
+        # The message is fixed: the id came from a request or a save and is not echoed.
+        found = bundled_pack(name)
+        if found is None:
+            raise GameError("bad_argument", "unknown setting")
+        return found
 
     def _open(self, case_bytes: bytes, pack: Pack, state_json: str | None = None) -> GameSession:
         """A session under a fresh salt (a rare handle collision draws the next salt)."""
@@ -229,7 +231,7 @@ class GameHost:
             raise GameError("unknown_game", "no such game")
         return found
 
-    def new_game(self, seed: int, preset: str = "standard", pack: str = "castle") -> NewGame:
+    def new_game(self, seed: int, preset: str = "standard", pack: str = DEFAULT_PACK) -> NewGame:
         if type(seed) is not int or not 0 <= seed <= MAX_SEED:
             raise GameError("bad_argument", f"seed must be an int from 0 to {MAX_SEED}")
         _need_str("preset", preset)
@@ -237,6 +239,12 @@ class GameHost:
         with self._lock:
             self._check_capacity()  # before the generation work, not after it
             the_pack = self._pack(pack)
+            info = pack_info(pack)
+            if info is not None and preset not in info.presets:
+                hosted = ", ".join(info.presets)
+                raise GameError(
+                    "bad_argument", f"the {pack} ({info.title}) setting hosts: {hosted}"
+                )
             try:
                 case = generate_case(seed, preset, the_pack)
             except UnsupportedPreset as exc:
@@ -247,7 +255,7 @@ class GameHost:
             session = self._open(case_bytes, the_pack)
             game_id = self._fresh_game_id()
             self._games[game_id] = _Game(session, case_bytes, pack)
-            return NewGame(game=game_id, brief=session.brief())
+            return NewGame(game=game_id, brief=session.brief(), pack=pack, preset=case.spec.preset)
 
     def close_game(self, game: str) -> CloseRef:
         """Forget a game (its saves stay). The id and its handles stop working."""
@@ -407,4 +415,6 @@ class GameHost:
                 raise
             game_id = self._fresh_game_id()
             self._games[game_id] = _Game(session, case_bytes, save.pack)
-            return NewGame(game=game_id, brief=session.brief())
+            return NewGame(
+                game=game_id, brief=session.brief(), pack=save.pack, preset=case.spec.preset
+            )

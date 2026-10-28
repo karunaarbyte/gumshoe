@@ -21,6 +21,7 @@ from gumshoe.cases.tools.dev import simulate_lines
 from gumshoe.cases.tools.gen_dev import smoke
 from gumshoe.cases.tools.pack_cli import run_pack_check
 from gumshoe.cases.tools.play_cli import run_play
+from gumshoe.cases.tools.registry import DEFAULT_PACK, bundled_packs
 from gumshoe.cases.validate.catalogue import CATALOGUE
 from gumshoe.cases.validate.report import Profile, Report, Severity
 from gumshoe.cases.validate.runner import validate
@@ -51,13 +52,13 @@ def build_parser() -> argparse.ArgumentParser:
     gen = sub.add_parser("generate", help="developer: generate a case (it names the truth)")
     gen.add_argument("seed", type=int)
     gen.add_argument("--preset", choices=PRESET_ORDER, default="standard")
-    gen.add_argument("--pack", default="castle", help="name of a bundled pack")
+    gen.add_argument("--pack", default=DEFAULT_PACK, help="name of a bundled pack")
     gen.add_argument("-o", "--output", type=Path, help="write the case here instead of stdout")
     gen.add_argument("--text", action="store_true", help="print the case as readable text")
     gen.set_defaults(handler=_generate)
     smoke_cmd = sub.add_parser("smoke", help="developer: attempts and failures over a run of seeds")
     smoke_cmd.add_argument("--preset", choices=PRESET_ORDER, default="standard")
-    smoke_cmd.add_argument("--pack", default="castle", help="name of a bundled pack")
+    smoke_cmd.add_argument("--pack", default=DEFAULT_PACK, help="name of a bundled pack")
     smoke_cmd.add_argument("--seeds", type=int, default=200, help="seeds 0 up to this number")
     smoke_cmd.set_defaults(handler=_smoke)
     packs = sub.add_parser("packs", help="work with theme packs")
@@ -164,6 +165,7 @@ def _simulate(args: argparse.Namespace) -> int:
 
 def _generate(args: argparse.Namespace) -> int:
     try:
+        bundled_packs()
         pack = load_builtin_pack(args.pack)
         case = generate(args.seed, args.preset, pack)
     except (BuiltinPackError, UnsupportedPreset, CaseGenerationError) as exc:
@@ -186,6 +188,7 @@ def _generate(args: argparse.Namespace) -> int:
 
 def _smoke(args: argparse.Namespace) -> int:
     try:
+        bundled_packs()
         report = smoke(load_builtin_pack(args.pack), args.preset, range(args.seeds))
     except (BuiltinPackError, UnsupportedPreset) as exc:
         print(f"error: {exc}", file=sys.stderr)
