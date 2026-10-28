@@ -4,7 +4,15 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from gumshoe.cases import pack_info
+
 MAX_ATTEMPTS = 3  # the engine's (gumshoe.cases.play.state.MAX_ATTEMPTS; a test keeps them equal)
+
+
+def setting_title(pack_id: str) -> str:
+    """The pack's title, or the id itself when the server no longer has the pack (an old save)."""
+    info = pack_info(pack_id)
+    return info.title if info else pack_id
 
 
 class PersonaModels(BaseModel):

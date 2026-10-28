@@ -195,6 +195,24 @@ def test_the_save_index_lists_saves_newest_first_and_never_their_case(tmp_path):
     assert "truth" not in dumped and "case" not in dumped
 
 
+def test_a_save_of_a_pack_the_server_lacks_lists_by_its_id(tmp_path):
+    host = GameHost(ids=SeqIds(), saves_dir=tmp_path)
+    name = host.save_game(host.new_game(1).game).name
+    path = tmp_path / f"{name}.json"
+    data = json.loads(path.read_text())
+    data["pack"] = "gone"
+    path.write_text(json.dumps(data))
+    (listed,) = save_index(tmp_path, lambda n: True)
+    assert (listed.pack, listed.setting) == ("gone", "gone")
+
+
+def test_a_save_of_a_bundled_pack_lists_the_setting_title(tmp_path):
+    host = GameHost(ids=SeqIds(), saves_dir=tmp_path)
+    host.save_game(host.new_game(1).game)
+    (listed,) = save_index(tmp_path, lambda n: True)
+    assert (listed.pack, listed.setting) == ("castle", "Castle")
+
+
 def test_the_save_index_of_a_missing_folder_is_empty(tmp_path):
     assert save_index(tmp_path / "nowhere", lambda name: True) == []
 

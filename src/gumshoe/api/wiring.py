@@ -13,6 +13,7 @@ from pathlib import Path
 from mcp.client import Client
 
 from gumshoe.agent import AgentConfig, Deps, GameClient, OllamaLlm
+from gumshoe.api.info import setting_title
 from gumshoe.api.ratelimit import Quotas, TurnGate
 from gumshoe.api.saveowners import SaveOwners
 from gumshoe.api.service import AgentService, Caps, SaveSummary
@@ -63,6 +64,7 @@ def save_index(folder: Path, owns: Callable[[str], bool]) -> list[SaveSummary]:
                     name=path.stem,
                     created_at=made.isoformat(timespec="seconds"),
                     pack=save.pack,
+                    setting=setting_title(save.pack),
                     status=json.loads(save.state)["status"],
                 )
             )

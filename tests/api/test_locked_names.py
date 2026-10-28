@@ -1,18 +1,64 @@
 """The names of locked suspects and places never reach the browser, until they unlock."""
 
+from functools import cache
+
 import pytest
 
 from gumshoe.api import create_app
-from gumshoe.cases import LocationView, SuspectView
+from gumshoe.cases import LocationView, SuspectView, bundled_packs
 from gumshoe.mcp_server import GameHost
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script
 from tests.api.client import TestClient
 from tests.api.helpers import fake_factory
 
-SEED = 5  # standard: every suspect starts locked, every place is open
+SEED = 5  # castle, standard: every suspect starts locked, every place is open
 CHAPEL = "Chapel of Saint Anne"  # searching it unlocks Thomas, and only him
 THOMAS = "Thomas the bard"
+PACKS = [p.id for p in bundled_packs()]
+
+
+def opened_by(pack, seed, place):
+    """The suspect names that searching `place` unlocks in a fresh standard case."""
+    host = GameHost(max_games=100)
+    game = host.new_game(seed, "standard", pack)
+    session = host._games[game.game].session
+    session.search(next(p.handle for p in game.brief.locations if p.name == place))
+    return frozenset(s.name for s in session.brief().suspects if not s.locked)
+
+
+@cache
+def find_case(pack):
+    """(seed, place name, names it unlocks) for the first standard case of `pack` where every
+    suspect starts locked, every place is open, and searching one place unlocks some of the
+    suspects but not all. Found by playing, so a new pack needs no hand-picked seed."""
+    for seed in range(200):
+        brief = GameHost().new_game(seed, "standard", pack).brief
+        if not all(s.locked for s in brief.suspects) or any(p.locked for p in brief.locations):
+            continue
+        for place in brief.locations:
+            opened = opened_by(pack, seed, place.name)
+            if 0 < len(opened) < len(brief.suspects):
+                return seed, place.name, opened
+    raise AssertionError(f"no seed of {pack} has a search that unlocks some suspects only")
+
+
+def test_the_scan_agrees_with_the_castle_case_this_file_was_written_for():
+    """Castle stays pinned to seed 5 / Chapel / Thomas; the scan must land on the same seed and
+    the pinned search must still open Thomas alone."""
+    assert find_case("castle")[0] == SEED
+    assert opened_by("castle", SEED, CHAPEL) == {THOMAS}
+
+
+def case_for(pack):
+    return (
+        (pack, SEED, CHAPEL, frozenset({THOMAS})) if pack == "castle" else (pack, *find_case(pack))
+    )
+
+
+@pytest.fixture(params=PACKS)
+def case(request):
+    return case_for(request.param)
 
 
 @pytest.fixture
@@ -20,10 +66,11 @@ def store(tmp_path):
     return SqliteStatsStore(tmp_path / "decisions.db")
 
 
-@pytest.fixture(scope="module")
-def truth():
+@pytest.fixture
+def truth(case):
     """The real brief of the case (the engine's own view, names and all)."""
-    return GameHost().new_game(SEED).brief
+    pack, seed, _, _ = case
+    return GameHost().new_game(seed, "standard", pack).brief
 
 
 def entries(brief):
@@ -81,7 +128,7 @@ def test_a_revealed_suspect_keeps_the_name_but_not_the_description():
 
     brief = (
         GameHost()
-        .new_game(SEED)
+        .new_game(SEED, "standard", "castle")
         .brief.model_copy(update={"suspects": (sus(1, True), sus(2, False))})
     )
     shown = player_brief(brief).suspects
@@ -89,13 +136,14 @@ def test_a_revealed_suspect_keeps_the_name_but_not_the_description():
     assert (shown[1].name, shown[1].description) == ("", "")
 
 
-def test_locked_names_never_reach_the_browser_until_they_unlock(store, tmp_path, truth):
+def test_locked_names_never_reach_the_browser_until_they_unlock(store, tmp_path, truth, case):
+    pack, seed, place, opened = case
     locked = {s.name for s in truth.suspects}
     assert all(s.locked for s in truth.suspects) and not any(p.locked for p in truth.locations)
     script = Script()
     app = create_app(store, make_service=fake_factory(script, saves_dir=tmp_path / "saves"))
     with TestClient(app) as client:
-        created = client.post("/api/games", json={"seed": SEED})
+        created = client.post("/api/games", json={"seed": seed, "pack": pack})
         assert created.status_code == 200
         assert_redacted(created.json()["brief"], truth, locked)
         assert_absent(created.text, secrets_of(truth, locked))
@@ -104,19 +152,20 @@ def test_locked_names_never_reach_the_browser_until_they_unlock(store, tmp_path,
         assert_redacted(state.json()["brief"], truth, locked)
         assert_absent(state.text, secrets_of(truth, locked))
 
-        chapel = next(p for p in created.json()["brief"]["locations"] if p["name"] == CHAPEL)
+        chapel = next(p for p in created.json()["brief"]["locations"] if p["name"] == place)
         script.understand(intent="search", target=f"place_{chapel['number']}")
         with client.stream("POST", f"/api/games/{game}/turn", json={"text": "search"}) as r:
             events = "".join(r.iter_text())
-        still = locked - {THOMAS}
-        assert THOMAS in events  # what the search opened is named: the case opened up
+        still = locked - opened
+        assert all(name in events for name in opened)  # what the search opened is named
+        assert still  # the guard needs something left to hide
         assert_absent(events, secrets_of(truth, still))
         turns = client.get(f"/api/games/{game}/turns")
         assert_absent(turns.text, secrets_of(truth, still))
 
         state = client.get(f"/api/games/{game}")
         assert_redacted(state.json()["brief"], truth, still)
-        assert THOMAS in names_of(state.json()["brief"])
+        assert opened <= names_of(state.json()["brief"])
         assert_absent(state.text, secrets_of(truth, still))
 
         saved = client.post(f"/api/games/{game}/save")
@@ -133,7 +182,7 @@ def play_until_revealed(seed):
 
     rng = random.Random(seed * 1000)
     host = GameHost(max_games=10)
-    session = host._games[host.new_game(seed, "standard").game].session
+    session = host._games[host.new_game(seed, "standard", "castle").game].session
     for _ in range(400):
         brief = session.brief()
         if any(s.revealed for s in brief.suspects):
@@ -176,7 +225,7 @@ def test_numbers_are_stable_across_an_unlock_and_a_load(store, tmp_path):
     script = Script()
     app = create_app(store, make_service=fake_factory(script, saves_dir=tmp_path / "saves"))
     with TestClient(app) as client:
-        before = client.post("/api/games", json={"seed": SEED}).json()
+        before = client.post("/api/games", json={"seed": SEED, "pack": "castle"}).json()
         game = before["game"]
         numbers = {e["handle"]: e["number"] for e in entries(before["brief"])}
         chapel = next(p for p in before["brief"]["locations"] if p["name"] == CHAPEL)

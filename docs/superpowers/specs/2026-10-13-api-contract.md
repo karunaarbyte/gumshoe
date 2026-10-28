@@ -80,7 +80,8 @@ the server-sent event streams are described here only.
 
 ### `GET /api/meta` -> `Meta`
 
-`{presets: string[], default_preset: string, max_attempts: int, max_turn_chars: int}`.
+`{packs: [{id, title, blurb, presets[]}], presets: string[], default_preset: string, max_attempts: int, max_turn_chars: int}`.
+`packs` lists the bundled settings; each `presets` is what that pack claims to host. `presets` and `default_preset` describe the default pack (`castle`).
 `default_preset` is `"standard"`, `max_attempts` is 3, `max_turn_chars` is 1000.
 
 ## 3. Games
@@ -90,12 +91,12 @@ ones to keep). No route ever returns a seed.
 
 ### `POST /api/games`
 
-Body `{seed: int, preset?: string}` (`preset` default `"standard"`, at most 32 chars; `seed` is a strict
+Body `{seed: int, preset?: string, pack?: string}` (`preset` default `"standard"`, at most 32 chars; `pack` default `"castle"`, matching `^[a-z][a-z0-9_]{0,31}$` or 422 `bad_request`; a pack the server does not bundle is 422 `bad_argument` "unknown setting", never echoing the input and checked before any quota is charged; a preset the chosen pack does not host is 422 `bad_argument` naming the pack's presets; `seed` is a strict
 integer: a string, float or boolean fails validation with 422 `bad_request`; an integer outside 0 to 2^63-1 is 422
 `bad_argument`; a preset the pack cannot host is 422 `bad_argument` too). Answer 200 `GameCreated`:
 
 ```json
-{"game": "<id>", "brief": PlayerCaseView, "preset": "standard"}
+{"game": "<id>", "brief": PlayerCaseView, "pack": "castle", "preset": "standard"}
 ```
 
 `PlayerCaseView`: `{intro, locations[], suspects[], record_kinds[], attempts_left, status}`.
@@ -107,7 +108,7 @@ save and load; `handle` changes on a load. `record_kinds[]` items: `{key, label}
 
 ### `GET /api/games` -> `GameSummary[]`
 
-The open games of your session, oldest first (`[]` without a session): `{game, preset | null, outcome, attempts_left, turn_running}`.
+The open games of your session, oldest first (`[]` without a session): `{game, pack, setting, preset, outcome, attempts_left, turn_running}`. `setting` is the pack's title (the pack id itself when the server no longer has the pack).
 `outcome` is `playing | won | lost | gave_up`. `turn_running` is true while a turn runs (section 6).
 
 ### `GET /api/games/{game}` -> `GameState`
@@ -118,14 +119,14 @@ Everything needed to redraw a game after a reload:
 {"brief": PlayerCaseView, "notebook": NotebookView, "outcome": "playing",
  "pending": {"pending_id": "...", "kind": "accuse", "text": "...", "warnings": ["..."]} | null,
  "reveal": {"culprit", "method", "motive", "secret"} | null,
- "preset": "standard" | null}
+ "preset": "standard"}
 ```
 
 - `notebook`: `{sections[{source, facts[{handle, text, speaker|null, relates_to[], contradicted}]}],
   contradictions[{lie, exposer, text}]}`.
 - `pending` is the confirmation waiting for an answer (`kind` is `accuse` or `give_up`), or null.
 - `reveal` is present only once the game is over (outcome not `playing`).
-- `preset` is null for a loaded game (a load does not say).
+- `preset` is always a real preset, also for a loaded game (the save records it).
 - `gave_up` stays `gave_up` (the engine alone would say `lost`), except after a load: a game that was given up
   before being saved reads `lost`, because the save does not record it.
 
@@ -187,7 +188,7 @@ to 500, so a client cannot tell a full folder from a failed write.
 ### `POST /api/games/load`
 
 Body `{name: string (1-64)}`. Answer 200 `GameCreated` with a NEW game id and new handles, and
-`preset: null`. Errors:
+its real `pack` and `preset`. Errors:
 
 - 422 `bad_argument`: the name is not 16 lowercase hex characters.
 - 422 `bad_save`: the save is missing or unreadable (also one that holds no sound case, is from another
@@ -205,7 +206,7 @@ game alive. The 410 note is remembered for a limited time only; after that the i
 
 ### `GET /api/saves` -> `SaveSummary[]`
 
-Only your own saves, newest first (`[]` without a session): `{name, created_at (UTC ISO 8601), pack, status: playing | won | lost}`. Never the case.
+Only your own saves, newest first (`[]` without a session): `{name, created_at (UTC ISO 8601), pack, setting, status: playing | won | lost}` (`setting` as in `GameSummary`: the id when the server lacks the pack). Never the case.
 An empty list when the server has no saves folder wired. Saves older than `SAVE_RETENTION_DAYS`
 (default 30; 0 = keep forever) are deleted by the server.
 

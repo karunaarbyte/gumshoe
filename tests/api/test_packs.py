@@ -109,3 +109,22 @@ def test_a_broken_bundled_pack_stops_startup(monkeypatch, tmp_path):
     monkeypatch.setattr(entry, "bundled_packs", broken)
     with pytest.raises(SystemExit, match="bundled pack 'castle' has no title"):
         entry.main([])
+
+
+def test_open_games_name_their_setting_and_real_preset(store, tmp_path):
+    with client_for(store, saves_dir=tmp_path / "saves") as client:
+        client.post("/api/games", json={"seed": 1, "preset": "short"})
+        (row,) = client.get("/api/games").json()
+    assert (row["pack"], row["setting"], row["preset"]) == ("castle", "Castle", "short")
+
+
+def test_a_loaded_game_keeps_its_real_preset(store, tmp_path):
+    with client_for(store, saves_dir=tmp_path / "saves") as client:
+        game = client.post("/api/games", json={"seed": 1, "preset": "short"}).json()["game"]
+        saved = client.post(f"/api/games/{game}/save").json()["name"]
+        loaded = client.post("/api/games/load", json={"name": saved}).json()
+        assert (loaded["pack"], loaded["preset"]) == ("castle", "short")
+        state = client.get(f"/api/games/{loaded['game']}").json()
+        rows = client.get("/api/games").json()
+    assert state["preset"] == "short"
+    assert {r["preset"] for r in rows} == {"short"}

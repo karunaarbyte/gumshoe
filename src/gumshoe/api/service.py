@@ -38,6 +38,7 @@ from gumshoe.agent import (
 )
 from gumshoe.agent.events import Clarify, Done, Queued
 from gumshoe.api.errors import BAD_SAVE_MESSAGE, UNKNOWN_GAME, ApiError
+from gumshoe.api.info import setting_title
 from gumshoe.api.ratelimit import Busy, Quotas, Ticket, TurnGate
 from gumshoe.api.redact import PlayerBrief
 from gumshoe.api.saveowners import SaveOwners
@@ -115,14 +116,16 @@ class GameState(BaseModel):
     outcome: Outcome
     pending: PendingView | None
     reveal: RevealView | None  # only once the game is over
-    preset: str | None
+    preset: str
 
 
 class GameSummary(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     game: str
-    preset: str | None
+    pack: str
+    setting: str  # the pack's title, or its id when the server no longer has it
+    preset: str
     outcome: Outcome
     attempts_left: int
     turn_running: bool
@@ -136,6 +139,7 @@ class SaveSummary(BaseModel):
     name: str
     created_at: str  # UTC, ISO 8601
     pack: str
+    setting: str
     status: Literal["playing", "won", "lost"]
 
 
@@ -160,12 +164,12 @@ def _transcript() -> "deque[TurnRecord]":
 class _Slot:
     ctx: TurnContext
     owner: str
+    preset: str
+    pack: str
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     gone: bool = False
     busy: bool = False  # a turn is running or waiting for the lock: the next one is refused
     turns: "deque[TurnRecord]" = field(default_factory=_transcript)
-    preset: str | None = None
-    pack: str = DEFAULT_PACK
     ip: str = ""  # the network that opened it, for the per-IP open-game cap
     last_active: float = 0.0  # clock time of registration or of the last turn's end
 
@@ -389,6 +393,8 @@ class AgentService:
             found.append(
                 GameSummary(
                     game=game,
+                    pack=slot.pack,
+                    setting=setting_title(slot.pack),
                     preset=slot.preset,
                     outcome=self._outcome(slot, brief),
                     attempts_left=brief.attempts_left,
