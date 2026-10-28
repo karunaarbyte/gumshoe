@@ -23,7 +23,9 @@ from gumshoe.cases.packs.suggest import did_you_mean
 KEYED = ("location_defs", "record_defs", "method_defs", "motive_defs", "roles", "scene_types")
 LISTS = ("slot_defs", "families", "victims")
 SECTIONS = frozenset({"meta", "capacity", *KEYED, *LISTS})
-META_FIELDS = frozenset({"id", "skeleton_rev", "skin_rev", "slots", "presets", "smalltalk_allow"})
+META_FIELDS = frozenset(
+    {"id", "title", "blurb", "skeleton_rev", "skin_rev", "slots", "presets", "smalltalk_allow"}
+)
 
 
 @dataclass(frozen=True)

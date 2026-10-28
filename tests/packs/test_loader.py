@@ -132,7 +132,10 @@ def test_an_unknown_meta_key_is_reported_under_meta_and_is_not_flattened():
         result = load(text)
         assert result.pack is None, extra
         assert [(i.code, i.path) for i in result.issues] == [("UNKNOWN_KEY", f"meta.{key}")]
-        assert "known: id, presets, skeleton_rev, skin_rev, slots" in result.issues[0].suggestion
+        assert (
+            "known: blurb, id, presets, skeleton_rev, skin_rev, slots, smalltalk_allow, title"
+            in result.issues[0].suggestion
+        )
 
 
 def test_an_unknown_meta_key_gets_a_did_you_mean():
@@ -161,3 +164,13 @@ def test_a_keyed_section_of_the_wrong_shape_is_a_wrong_type_not_a_crash(value):
     result = load(text)
     assert result.pack is None
     assert [(i.code, i.path) for i in result.issues] == [("WRONG_TYPE", "roles")]
+
+
+def test_title_and_blurb_load_and_are_optional():
+    text = replace('id = "tiny"\n', 'id = "tiny"\ntitle = "X"\nblurb = "Y"\n')(BASE_TOML)
+    pack = load(text).pack
+    assert pack is not None
+    assert (pack.title, pack.blurb) == ("X", "Y")
+    plain = load(BASE_TOML).pack
+    assert plain is not None
+    assert (plain.title, plain.blurb) == (None, None)

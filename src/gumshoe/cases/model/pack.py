@@ -123,6 +123,8 @@ class RoleDef(Frozen):
 
 class Pack(Frozen):
     id: str
+    title: str | None = None  # shown to the player; the registry requires it
+    blurb: str | None = None  # shown to the player; the registry requires it
     skeleton_rev: int = Field(default=1, ge=1)
     skin_rev: int = Field(default=1, ge=1)
     slots: int = Field(default=4, ge=1)

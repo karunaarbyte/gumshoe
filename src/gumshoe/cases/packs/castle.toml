@@ -1,5 +1,7 @@
 [meta]
 id = "castle"
+title = "Castle"
+blurb = "A lord is found dead in his medieval castle, and one of his household did it."
 skeleton_rev = 1
 skin_rev = 3
 slots = 4

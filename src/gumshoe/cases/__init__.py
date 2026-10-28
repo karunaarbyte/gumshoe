@@ -41,12 +41,20 @@ from gumshoe.cases.play import (
     load_session,
 )
 from gumshoe.cases.tools.builtin import BuiltinPackError, load_builtin_pack
+from gumshoe.cases.tools.registry import (
+    DEFAULT_PACK,
+    PackInfo,
+    bundled_pack,
+    bundled_packs,
+    pack_info,
+)
 from gumshoe.cases.validate.catalogue import CATALOGUE
 from gumshoe.cases.validate.report import Issue, Profile, Report, Severity
 from gumshoe.cases.validate.runner import validate as validate_case
 
 __all__ = [
     "CATALOGUE",
+    "DEFAULT_PACK",
     "AccusationPlan",
     "AccusationQuestions",
     "AccusationResult",
@@ -66,6 +74,7 @@ __all__ = [
     "NotebookFact",
     "NotebookView",
     "Pack",
+    "PackInfo",
     "ParsedAccusation",
     "PersonaBrief",
     "PlayerCaseView",
@@ -82,11 +91,14 @@ __all__ = [
     "UnsupportedPreset",
     "VersionMismatch",
     "View",
+    "bundled_pack",
+    "bundled_packs",
     "dump_case",
     "generate_case",
     "load_builtin_pack",
     "load_case",
     "load_session",
+    "pack_info",
     "regenerate_case",
     "skeleton_digest",
     "skin_hash",

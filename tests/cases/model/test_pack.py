@@ -102,3 +102,9 @@ def test_the_castle_skeleton_hash_is_pinned():
     assert castle().skeleton_hash() == (
         "b4bc72f6e36be40c4baa3cb59bd3d29ac22cfbb1dfafb80c10a6f9b160408e4a"
     )
+
+
+def test_title_and_blurb_never_change_the_skeleton_hash():
+    base = make_pack().skeleton_hash()
+    assert make_pack(title="A", blurb="B").skeleton_hash() == base
+    assert make_pack(title="C").skeleton_hash() == base
