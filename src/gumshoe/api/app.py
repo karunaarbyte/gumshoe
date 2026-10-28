@@ -274,9 +274,13 @@ def create_app(
     @app.get("/api/meta")
     def meta() -> Meta:
         default = pack_info(DEFAULT_PACK)
-        assert default is not None  # the registry refuses to load without it
+        if default is None:  # the registry refuses to load without it
+            raise ApiError(500, "internal", "the default setting is missing")
         return Meta(
-            packs=tuple(PackMeta(**p.model_dump()) for p in bundled_packs()),
+            packs=tuple(
+                PackMeta(id=p.id, title=p.title, blurb=p.blurb, presets=p.presets)
+                for p in bundled_packs()
+            ),
             presets=default.presets,
             default_preset="standard",
             max_attempts=MAX_ATTEMPTS,

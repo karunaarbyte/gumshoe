@@ -29,6 +29,8 @@ def test_meta_lists_the_packs(store):
     castle = next(p for p in body["packs"] if p["id"] == "castle")
     assert set(castle) == {"id", "title", "blurb", "presets"}
     assert "standard" in castle["presets"]
+    expected = [p.model_dump() | {"presets": list(p.presets)} for p in bundled_packs()]
+    assert body["packs"] == expected
     assert body["default_preset"] == "standard" and body["presets"] == castle["presets"]
 
 
@@ -60,18 +62,26 @@ def test_a_malformed_pack_fails_the_pattern(store, pack):
     assert response.status_code == 422 and response.json()["code"] == "bad_request"
 
 
-def test_a_bad_pack_charges_no_open_game_quota(store):
-    with client_for(store, caps=Caps(games_per_session=1)) as client:
+@pytest.mark.parametrize("bad", [{"pack": "nope"}, {"preset": "nonesuch"}])
+def test_a_refused_request_charges_no_open_game_quota(store, bad):
+    with client_for(store, caps=Caps(games_per_session=2)) as client:
         assert client.post("/api/games", json={"seed": 1}).status_code == 200
-        bad = client.post("/api/games", json={"seed": 2, "pack": "nope"})
-    assert bad.status_code == 422
+        assert client.post("/api/games", json={"seed": 2, **bad}).status_code == 422
+        # had the refusal been charged (or held a slot), this second game would hit the cap
+        assert client.post("/api/games", json={"seed": 3}).status_code == 200
+        assert client.post("/api/games", json={"seed": 4}).status_code == 429
 
 
-def test_a_bad_pack_charges_no_creation_rate(store):
-    quotas = Quotas(Settings(_env_file=None, session_games_per_hour=1))
+@pytest.mark.parametrize("bad", [{"pack": "nope"}, {"preset": "nonesuch"}])
+def test_a_refused_request_charges_no_creation_rate(store, bad):
+    quotas = Quotas(Settings(_env_file=None, session_games_per_hour=2))
     with client_for(store, quotas=quotas) as client:
-        assert client.post("/api/games", json={"seed": 1, "pack": "nope"}).status_code == 422
+        # one session throughout: a valid game, the refusal, a valid game. Charged, the refusal
+        # would use the second slot and the last request would be rate limited.
         assert client.post("/api/games", json={"seed": 1}).status_code == 200
+        assert client.post("/api/games", json={"seed": 2, **bad}).status_code == 422
+        assert client.post("/api/games", json={"seed": 3}).status_code == 200
+        assert client.post("/api/games", json={"seed": 4}).status_code == 429
 
 
 def test_an_unhosted_preset_is_refused_naming_the_hosted_ones(store):
