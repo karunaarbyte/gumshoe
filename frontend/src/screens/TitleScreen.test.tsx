@@ -45,8 +45,8 @@ describe('TitleScreen', () => {
   test('with no settings to pick, New case stays disabled', async () => {
     const client = fakeApi();
     client.meta.mockResolvedValue({ ...meta, packs: [] });
-    setup(client);
-    await waitFor(() => expect(client.meta).toHaveBeenCalled());
+    const { queryClient } = renderWithApp(<TitleScreen onOpen={vi.fn()} onError={vi.fn()} banner={null} />, client);
+    await waitFor(() => expect(queryClient.getQueryData(keys.meta)).toBeDefined());
     expect(screen.getByRole('button', { name: 'New case' })).toBeDisabled();
   });
 
