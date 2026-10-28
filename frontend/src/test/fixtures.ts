@@ -1,6 +1,10 @@
 import type { ConfirmEvent, DecisionView, GameState, Health, Meta, PlayerCaseView, Reveal, TurnEvent, TurnRecord } from '../api/types';
 
 export const meta: Meta = {
+  packs: [
+    { id: 'castle', title: 'The Castle', blurb: 'A murder at a country house.', presets: ['short', 'standard'] },
+    { id: 'liner', title: 'The Liner', blurb: 'A death on an ocean liner.', presets: ['standard'] },
+  ],
   presets: ['short', 'standard'],
   default_preset: 'standard',
   max_attempts: 3,

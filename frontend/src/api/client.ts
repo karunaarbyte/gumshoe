@@ -71,7 +71,9 @@ export const api = {
   meta: () => getJson<Meta>('/api/meta'),
   games: () => getJson<GameSummary[]>('/api/games'),
   saves: () => getJson<SaveSummary[]>('/api/saves'),
-  createGame: (seed: number, preset?: string) => postJson<GameCreated>('/api/games', preset === undefined ? { seed } : { seed, preset }),
+  // pack is left out when absent so the server's default applies
+  createGame: (seed: number, preset?: string, pack?: string) =>
+    postJson<GameCreated>('/api/games', { seed, ...(preset === undefined ? {} : { preset }), ...(pack === undefined ? {} : { pack }) }),
   loadGame: (name: string) => postJson<GameCreated>('/api/games/load', { name }),
   state: (game: string) => getJson<GameState>(g(game)),
   turns: (game: string) => getJson<TurnRecord[]>(`${g(game)}/turns`),

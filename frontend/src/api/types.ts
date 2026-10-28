@@ -16,8 +16,16 @@ export interface Health {
   personas: 'up' | 'down'; // down: the dialogue model does not answer, suspects give stock lines
 }
 
+export interface PackMeta {
+  id: string;
+  title: string;
+  blurb: string;
+  presets: string[]; // only what this pack hosts
+}
+
 export interface Meta {
-  presets: string[];
+  packs: PackMeta[];
+  presets: string[]; // the default pack's presets
   default_preset: string;
   max_attempts: number;
   max_turn_chars: number;
@@ -94,18 +102,21 @@ export interface GameState {
   outcome: Outcome;
   pending: PendingView | null;
   reveal: Reveal | null;
-  preset: string | null;
+  preset: string;
 }
 
 export interface GameCreated {
   game: string;
   brief: PlayerCaseView;
-  preset: string | null;
+  pack: string;
+  preset: string;
 }
 
 export interface GameSummary {
   game: string;
-  preset: string | null;
+  pack: string;
+  setting: string; // the pack's title, or its id when the server no longer has the pack
+  preset: string;
   outcome: Outcome;
   attempts_left: number;
   turn_running: boolean;
@@ -115,6 +126,7 @@ export interface SaveSummary {
   name: string;
   created_at: string;
   pack: string;
+  setting: string;
   status: GameStatus;
 }
 

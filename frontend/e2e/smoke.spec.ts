@@ -99,3 +99,20 @@ test('a save can be deleted from the title screen', async ({ page, request }) =>
   await expect(saves.getByText('No saves yet.')).toBeVisible();
   expect(await (await request.get('http://127.0.0.1:8765/api/saves')).json()).toEqual([]);
 });
+
+test('each setting can be picked in turn, opens its room, and is named in the open games', async ({ page }) => {
+  for (const [id, title, blurb] of [
+    ['castle', 'The Castle', 'A murder at a country house.'],
+    ['liner', 'The Liner', 'A death on an ocean liner.'],
+  ] as const) {
+    await page.goto('/');
+    await page.getByRole('combobox', { name: 'Setting' }).selectOption(id);
+    await expect(page.getByText(blurb)).toBeVisible();
+    await page.getByRole('button', { name: 'New case' }).click();
+    await expect(page.getByRole('navigation', { name: 'Notebook' })).toBeVisible();
+    await page.goto('/');
+    // the choice is remembered, and the server was told which pack to open
+    await expect(page.getByRole('combobox', { name: 'Setting' })).toHaveValue(id);
+    await expect(page.getByRole('region', { name: 'Open games' })).toContainText(title);
+  }
+});

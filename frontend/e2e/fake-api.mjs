@@ -24,6 +24,12 @@ const reveal = { culprit: 'Mr Grey the butler', method: 'poisoned port', motive:
 const confirmText = 'Accuse Mr Grey the butler, by poisoned port, for an unpaid inheritance?';
 
 let game = null; // { pending, outcome, facts, turns }
+const PACKS = [
+  { id: 'castle', title: 'The Castle', blurb: 'A murder at a country house.', presets: ['short', 'standard'] },
+  { id: 'liner', title: 'The Liner', blurb: 'A death on an ocean liner.', presets: ['standard'] },
+];
+let chosenPack = 'castle'; // the pack of the last POST /api/games
+const settingOf = (id) => PACKS.find((p) => p.id === id)?.title ?? id;
 let saves = []; // SaveSummary rows, newest first: a save adds one, DELETE /api/saves/{name} drops it
 let requests = []; // bodies of POST /turn and /confirm, for the test to inspect via GET /__requests
 // the admin routes answer a plain 404 unless this (fake) token is sent, like the real server
@@ -181,7 +187,13 @@ createServer(async (req, res) => {
         personas: 'up',
       });
     if (method === 'GET' && path === '/api/meta')
-      return json(res, 200, { presets: ['short', 'standard'], default_preset: 'standard', max_attempts: 3, max_turn_chars: 1000 });
+      return json(res, 200, {
+        packs: PACKS,
+        presets: ['short', 'standard'],
+        default_preset: 'standard',
+        max_attempts: 3,
+        max_turn_chars: 1000,
+      });
     if (method === 'GET' && path === '/api/saves') return json(res, 200, saves);
     const saveMatch = /^\/api\/saves\/([^/]+)$/.exec(path);
     if (method === 'DELETE' && saveMatch) {
@@ -192,12 +204,29 @@ createServer(async (req, res) => {
       return res.end();
     }
     if (method === 'GET' && path === '/api/games')
-      return json(res, 200, game === null ? [] : [{ game: GAME, preset: 'standard', outcome: game.outcome, attempts_left: 3, turn_running: false }]);
+      return json(
+        res,
+        200,
+        game === null
+          ? []
+          : [
+              {
+                game: GAME,
+                pack: chosenPack,
+                setting: settingOf(chosenPack),
+                preset: 'standard',
+                outcome: game.outcome,
+                attempts_left: 3,
+                turn_running: false,
+              },
+            ],
+      );
     if (method === 'POST' && path === '/api/games') {
-      await body(req);
+      const made = await body(req);
+      chosenPack = made?.pack ?? 'castle';
       game = fresh();
       requests = [];
-      return json(res, 200, { game: GAME, brief, preset: 'standard' });
+      return json(res, 200, { game: GAME, brief, pack: chosenPack, preset: 'standard' });
     }
     if (method === 'GET' && path === '/__requests') return json(res, 200, requests);
     if (method === 'GET' && path === '/api/stats/decisions') return json(res, 200, fixture('stats-fixture.json'));
@@ -230,7 +259,10 @@ createServer(async (req, res) => {
     }
     if (method === 'POST' && sub === '/save') {
       const name = '0123456789abcdef';
-      saves = [{ name, created_at: new Date().toISOString(), pack: 'castle', status: game.outcome }, ...saves.filter((s) => s.name !== name)];
+      saves = [
+        { name, created_at: new Date().toISOString(), pack: chosenPack, setting: settingOf(chosenPack), status: game.outcome },
+        ...saves.filter((s) => s.name !== name),
+      ];
       return json(res, 200, { name });
     }
     return error(res, 405, 'method_not_allowed', 'method not allowed');

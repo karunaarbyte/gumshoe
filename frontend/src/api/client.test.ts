@@ -23,6 +23,7 @@ describe('api client', () => {
   test('reads JSON from a GET', async () => {
     stubFetch(
       jsonResponse({
+        packs: [],
         presets: ['standard'],
         default_preset: 'standard',
         max_attempts: 3,
@@ -94,7 +95,7 @@ describe('api client', () => {
   });
 
   test('creates a game with a seed and an optional preset', async () => {
-    const fetchMock = stubFetch(jsonResponse({ game: 'g1', brief: {}, preset: 'short' }));
+    const fetchMock = stubFetch(jsonResponse({ game: 'g1', brief: {}, pack: 'castle', preset: 'short' }));
     await api.createGame(7, 'short');
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/games',
@@ -103,6 +104,14 @@ describe('api client', () => {
         body: '{"seed":7,"preset":"short"}',
       }),
     );
+  });
+
+  test('createGame sends the pack when given and no pack key otherwise', async () => {
+    const fetchMock = stubFetch(jsonResponse({ game: 'g1', brief: {}, pack: 'liner', preset: 'standard' }), jsonResponse({ game: 'g1', brief: {}, pack: 'castle', preset: 'standard' }));
+    await api.createGame(1, 'standard', 'liner');
+    expect(fetchMock.mock.calls[0]![1]?.body).toBe('{"seed":1,"preset":"standard","pack":"liner"}');
+    await api.createGame(1, 'standard');
+    expect(JSON.parse(fetchMock.mock.calls[1]![1]?.body as string)).toEqual({ seed: 1, preset: 'standard' });
   });
 
   test('a turn posts its body and streams events', async () => {

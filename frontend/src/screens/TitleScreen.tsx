@@ -6,6 +6,7 @@ import { copyBoard, gameKey, removeBoard, saveKey } from '../board/storage';
 import { useApi } from '../data/ApiContext';
 import { keys, useGames, useHealth, useMeta, useSaves } from '../data/queries';
 import { InkButton, StampButton } from '../ui/Button';
+import { pickSetting, readSetting, writeSetting } from './setting';
 
 interface Props {
   onOpen: (game: string) => void;
@@ -33,15 +34,27 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
   const saves = useSaves();
   const games = useGames();
   const [seed, setSeed] = useState('');
+  const [settingId, setSettingId] = useState<string | null>(readSetting);
   const [preset, setPreset] = useState<string | null>(null);
   const [seedError, setSeedError] = useState<string | null>(null);
+  const packs = meta.data?.packs ?? [];
+  // validated against what the server has now: a remembered setting may be gone
+  const pack = packs.length > 0 ? pickSetting(packs, settingId) : null;
+  const presets = pack?.presets ?? [];
+  // a preset picked under another setting may not be hosted by this one
+  const shownPreset =
+    preset !== null && presets.includes(preset)
+      ? preset
+      : presets.includes(meta.data?.default_preset ?? '')
+        ? (meta.data?.default_preset ?? '')
+        : (presets[0] ?? '');
   const off = health.data?.game === 'off';
   const fail = (e: unknown) => {
     if (isApiError(e)) onError(e);
   };
 
   const create = useMutation({
-    mutationFn: ({ s, p }: { s: number; p: string }) => client.createGame(s, p),
+    mutationFn: ({ s, p, k }: { s: number; p: string; k: string }) => client.createGame(s, p, k),
     onSuccess: (made: GameCreated) => onOpen(made.game),
     onError: fail,
   });
@@ -74,7 +87,8 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
       return;
     }
     setSeedError(null);
-    create.mutate({ s, p: preset ?? meta.data?.default_preset ?? 'standard' });
+    if (pack === null) return;
+    create.mutate({ s, p: shownPreset, k: pack.id });
   };
 
   return (
@@ -96,10 +110,31 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
           Seed (optional)
           <input className="border border-ink bg-card-light p-1" inputMode="numeric" value={seed} onChange={(e) => setSeed(e.target.value)} />
         </label>
+        <div className="flex flex-col gap-1">
+          <label className="flex flex-col text-xs uppercase">
+            Setting
+            <select
+              className="border border-ink bg-card-light p-1"
+              value={pack?.id ?? ''}
+              onChange={(e) => {
+                setSettingId(e.target.value);
+                writeSetting(e.target.value);
+                setPreset(null); // the new setting may not host the old preset
+              }}
+            >
+              {packs.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          {pack !== null && <p className="max-w-xs text-xs italic">{pack.blurb}</p>}
+        </div>
         <label className="flex flex-col text-xs uppercase">
           Preset
-          <select className="border border-ink bg-card-light p-1" value={preset ?? meta.data?.default_preset ?? ''} onChange={(e) => setPreset(e.target.value)}>
-            {(meta.data?.presets ?? []).map((p) => (
+          <select className="border border-ink bg-card-light p-1" value={shownPreset} onChange={(e) => setPreset(e.target.value)}>
+            {presets.map((p) => (
               <option key={p} value={p}>
                 {p}
               </option>
@@ -124,6 +159,7 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
             <li key={s.name} className="flex items-center gap-3 py-1">
               <span className="font-bold">{s.name}</span>
               <span className="text-xs">{new Date(s.created_at).toLocaleString()}</span>
+              <span className="text-xs">{s.setting}</span>
               <span className="text-xs uppercase">{s.status}</span>
               <InkButton disabled={off || busy} onClick={() => load.mutate(s.name)}>
                 Load
@@ -146,7 +182,8 @@ export function TitleScreen({ onOpen, onError, banner }: Props) {
         <ul>
           {(games.data ?? []).map((g) => (
             <li key={g.game} className="flex items-center gap-3 py-1">
-              <span className="font-bold">{g.preset ?? 'loaded'}</span>
+              <span className="font-bold">{g.setting}</span>
+              <span className="text-xs">{g.preset}</span>
               <span className="text-xs uppercase">{g.outcome}</span>
               <span className="text-xs">attempts left {g.attempts_left}</span>
               {g.turn_running && <span className="text-xs text-stamp">turn running</span>}
