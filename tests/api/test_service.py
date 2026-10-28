@@ -483,7 +483,7 @@ async def test_the_games_list_says_when_a_turn_is_running():
 async def test_saves_come_from_the_injected_lister():
     summary = SaveSummary(
         name="0123456789abcdef", created_at="2026-10-13T10:00:00+00:00", pack="castle",
-        status="playing",
+        setting="Castle", status="playing",
     )  # fmt: skip
     async with serving(Script()) as s:
         assert await s.service.saves(owner=OWNER) == []  # none injected
