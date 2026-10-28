@@ -1,7 +1,9 @@
 """The bundled packs a player can choose, checked once. A pack that fails stops startup."""
 
+from collections.abc import Mapping
 from functools import cache
 from importlib.resources import files
+from types import MappingProxyType
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict
@@ -45,23 +47,25 @@ def _info_for(stem: str, pack: Pack) -> PackInfo:
     return PackInfo(id=stem, title=pack.title, blurb=pack.blurb, presets=presets)
 
 
-_PACKS: dict[str, Pack] = {}  # filled by `bundled_packs`, so the host never reads a file again
-
-
-@cache
-def bundled_packs() -> tuple[PackInfo, ...]:
-    loaded = {stem: load_builtin_pack(stem) for stem in _stems()}
+def _build() -> tuple[tuple[PackInfo, ...], Mapping[str, Pack]]:
+    """Load and check every bundled pack. Uncached, so tests can patch its inputs."""
+    loaded = {stem: load_builtin_pack(stem) for stem in sorted(_stems())}
     infos = tuple(_info_for(stem, pack) for stem, pack in loaded.items())
     if DEFAULT_PACK not in loaded:
         raise BuiltinPackError(f"the default pack {DEFAULT_PACK!r} is not bundled")
-    _PACKS.clear()
-    _PACKS.update(loaded)
-    return infos
+    return infos, MappingProxyType(loaded)
+
+
+# one cached result holding both views, so no reader can see one without the other
+_load = cache(_build)
+
+
+def bundled_packs() -> tuple[PackInfo, ...]:
+    return _load()[0]
 
 
 def bundled_pack(pack_id: str) -> Pack | None:
-    bundled_packs()
-    return _PACKS.get(pack_id)
+    return _load()[1].get(pack_id)
 
 
 def pack_info(pack_id: str) -> PackInfo | None:
