@@ -2,6 +2,8 @@ import copy
 import time
 import tracemalloc
 
+import pytest
+
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.model.spec import PRESETS
 from gumshoe.cases.packs.check import feasibility
@@ -15,6 +17,7 @@ from gumshoe.cases.packs.check.feasibility import (
 )
 from gumshoe.cases.packs.loader import load_pack
 from gumshoe.cases.tools.builtin import load_builtin_pack
+from gumshoe.cases.tools.registry import bundled_packs
 from tests.packs.fixtures import BASE_TOML, TEST_PRESETS
 
 
@@ -25,8 +28,9 @@ def test_reachable_location_records_for_the_base_pack():
     assert list(reachable_location_records(pack, 2)) == [1]
 
 
-def test_the_castle_walk_is_feasible_and_cheap():
-    pack = load_builtin_pack("castle")
+@pytest.mark.parametrize("pack_id", [pytest.param(info.id, id=info.id) for info in bundled_packs()])
+def test_every_bundled_pack_walk_is_feasible_and_cheap(pack_id):
+    pack = load_builtin_pack(pack_id)
     started = time.perf_counter()
     for name, spec in hosted_specs(pack, PRESETS):
         result = walk(pack, spec, ROSTER_CHECK_BUDGET)

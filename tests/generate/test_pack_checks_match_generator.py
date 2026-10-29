@@ -17,7 +17,7 @@ from gumshoe.cases.model.spec import PRESETS, PresetDef, SizeRange
 from gumshoe.cases.packs.check.capacity import hosted_specs
 from gumshoe.cases.packs.check.depths import feasible_depths
 from gumshoe.cases.packs.check.feasibility import ROSTER_CHECK_BUDGET, walk
-from tests.generate.helpers import PRESET_NAMES, castle, castle_with, roster_of
+from tests.generate.helpers import PACKS, PRESET_NAMES, castle, castle_with, pack_of, roster_of
 
 CROSS_SEEDS = range(300)
 Change = Callable[[dict[str, Any]], None]
@@ -86,8 +86,9 @@ def _walk_fails(pack: Pack, preset: str, presets: Mapping[str, PresetDef] = PRES
     return bool(result.failures)
 
 
-def test_the_castle_has_no_failing_seed_and_no_walk_failure():
-    pack = castle()
+@pytest.mark.parametrize("pack_id", PACKS)
+def test_every_bundled_pack_has_no_failing_seed_and_no_walk_failure(pack_id):
+    pack = pack_of(pack_id)
     for preset in PRESET_NAMES:
         assert not _stage_fails(pack, preset), preset
         assert not _walk_fails(pack, preset), preset

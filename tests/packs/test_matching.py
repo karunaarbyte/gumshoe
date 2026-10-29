@@ -9,6 +9,7 @@ from gumshoe.cases.model.spec import PRESETS
 from gumshoe.cases.packs.check import capacity, matching
 from gumshoe.cases.packs.loader import load_pack
 from gumshoe.cases.packs.runner import check_pack
+from gumshoe.cases.tools.registry import bundled_packs
 from tests.packs.fixtures import BASE_TOML, CAPACITY, TEST_PRESETS, preset, rich_pack, scenes
 from tests.packs.mutations import MUTATIONS
 
@@ -134,10 +135,11 @@ def test_a_matching_check_over_the_budget_is_an_unsupported_preset_and_is_fast()
     assert elapsed < 2, elapsed
 
 
-def test_the_budget_is_five_million_and_the_castle_is_well_inside_it():
+@pytest.mark.parametrize("pack_id", [pytest.param(info.id, id=info.id) for info in bundled_packs()])
+def test_the_budget_is_five_million_and_every_bundled_pack_is_well_inside_it(pack_id):
     assert capacity.MATCHING_BUDGET == 5_000_000
-    castle = files("gumshoe.cases.packs").joinpath("castle.toml").read_bytes()
-    pack = load_pack(castle).pack
+    raw = files("gumshoe.cases.packs").joinpath(f"{pack_id}.toml").read_bytes()
+    pack = load_pack(raw).pack
     assert pack is not None
     bounds = [
         capacity.matching_bound(pack, spec.suspects)

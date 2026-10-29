@@ -8,7 +8,7 @@ from gumshoe.cases.generate.facts import feasible_depths
 from gumshoe.cases.generate.gen_context import GenContext
 from gumshoe.cases.generate.outputs import FactsOut, PlacementOut, TruthOut
 from gumshoe.cases.model.pack import Pack
-from tests.generate.helpers import PRESET_NAMES, SEEDS, castle, placement_of
+from tests.generate.helpers import PACKS, PRESET_NAMES, SEEDS, castle, pack_of, placement_of
 
 
 def check_placement(
@@ -40,18 +40,20 @@ def check_placement(
         assert kind_of[r.subject] in records[r.kind].location_kinds
 
 
+@pytest.mark.parametrize("pack_id", PACKS)
 @pytest.mark.parametrize("preset", PRESET_NAMES)
-def test_placement_follows_the_rules_for_every_seed(preset):
-    pack = castle()
+def test_placement_follows_the_rules_for_every_seed(preset, pack_id):
+    pack = pack_of(pack_id)
     for seed in SEEDS:
         ctx = GenContext.of(pack, seed, preset)
         truth, _, facts, placed = placement_of(ctx)
         check_placement(pack, ctx, truth, facts, placed)
 
 
+@pytest.mark.parametrize("pack_id", PACKS)
 @pytest.mark.parametrize("preset", PRESET_NAMES)
-def test_placement_follows_the_rules_at_every_feasible_depth(preset):
-    pack = castle()
+def test_placement_follows_the_rules_at_every_feasible_depth(preset, pack_id):
+    pack = pack_of(pack_id)
     for seed in range(60):
         ctx = GenContext.of(pack, seed, preset)
         truth, _, drawn, _ = placement_of(ctx)

@@ -4,7 +4,7 @@ from gumshoe.cases.generate.gen_context import GenContext
 from gumshoe.cases.validate.report import Profile
 from gumshoe.cases.validate.runner import validate
 from tests.cases.helpers import replace_in
-from tests.generate.helpers import PRESET_NAMES, SEEDS, castle, stages
+from tests.generate.helpers import PACKS, PRESET_NAMES, SEEDS, castle, pack_of, stages
 from tests.generate.probe import probe_case
 
 LATER_STAGES = {
@@ -15,9 +15,10 @@ LATER_STAGES = {
 }
 
 
+@pytest.mark.parametrize("pack_id", PACKS)
 @pytest.mark.parametrize("preset", PRESET_NAMES)
-def test_the_structural_probe_passes_for_every_seed(preset):
-    pack = castle()
+def test_the_structural_probe_passes_for_every_seed(preset, pack_id):
+    pack = pack_of(pack_id)
     for seed in SEEDS:
         ctx = GenContext.of(pack, seed, preset)
         _, truth, timeline = stages(ctx)

@@ -23,11 +23,13 @@ from gumshoe.cases.validate.report import Profile
 from gumshoe.cases.validate.runner import validate
 from tests.cases.helpers import replace_fact, replace_record_source
 from tests.generate.helpers import (
+    PACKS,
     PRESET_NAMES,
     SEEDS,
     case_of,
     castle,
     facts_of,
+    pack_of,
     solution_shape,
 )
 
@@ -91,9 +93,10 @@ def test_the_closed_form_is_exactly_the_set_of_depths_that_validate(monkeypatch)
         assert depths_for(GenContext.of(pack, 0, preset)) == CLOSED_FORM[preset]
 
 
+@pytest.mark.parametrize("pack_id", PACKS)
 @pytest.mark.parametrize("preset", PRESET_NAMES)
-def test_the_simulator_agrees(preset):
-    pack = castle()
+def test_the_simulator_agrees(preset, pack_id):
+    pack = pack_of(pack_id)
     for seed in range(10):
         verdict = judge(case_of(GenContext.of(pack, seed, preset)))
         assert set(verdict.decidable_axes) == set(Axis), (preset, seed)

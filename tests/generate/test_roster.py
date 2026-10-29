@@ -6,7 +6,15 @@ from gumshoe.cases.generate.gen_context import GenContext
 from gumshoe.cases.generate.outputs import RosterOut
 from gumshoe.cases.model.pack import Pack, TraceDef
 from gumshoe.cases.packs.check.capacity import eligible_roles, hosting_scenes, usable_kind
-from tests.generate.helpers import PRESET_NAMES, SEEDS, castle, castle_with, roster_of
+from tests.generate.helpers import (
+    PACKS,
+    PRESET_NAMES,
+    SEEDS,
+    castle,
+    castle_with,
+    pack_of,
+    roster_of,
+)
 
 
 def draw(pack: Pack, seed: int, preset: str) -> tuple[GenContext, RosterOut]:
@@ -55,9 +63,10 @@ def test_the_roster_meets_the_sizes_and_the_pack_pools(preset):
         assert not any(loc.decorative for loc in r.locations)
 
 
+@pytest.mark.parametrize("pack_id", PACKS)
 @pytest.mark.parametrize("preset", PRESET_NAMES)
-def test_contracts_a_b_c_and_g_prime_hold_for_every_seed(preset):
-    pack = castle()
+def test_contracts_a_b_c_and_g_prime_hold_for_every_seed(preset, pack_id):
+    pack = pack_of(pack_id)
     records = {d.key: d for d in pack.record_defs}
     methods = {m.key: m for m in pack.method_defs}
     for seed in SEEDS:
@@ -103,12 +112,15 @@ def test_the_stage_is_deterministic_and_reads_only_its_stream():
     assert a.digest() != draw(pack, 12, "long")[1].digest()
 
 
-def test_the_location_enumeration_is_never_empty_on_the_castle_for_any_reachable_draw():
+@pytest.mark.parametrize("pack_id", PACKS)
+def test_the_location_enumeration_is_never_empty_on_a_bundled_pack_for_any_reachable_draw(
+    pack_id,
+):
     """Exhaustive: every hosting scene x record-kind set x set of kinds the suspects use x
     method subset has a feasible set of non-scene locations, so the stage never raises."""
     from itertools import combinations
 
-    pack = castle()
+    pack = pack_of(pack_id)
     records = {d.key: d for d in pack.record_defs}
     methods = {m.key: m for m in pack.method_defs}
     for preset in PRESET_NAMES:
