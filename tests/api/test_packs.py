@@ -6,7 +6,7 @@ import gumshoe.api.__main__ as entry
 from gumshoe.api import create_app
 from gumshoe.api.ratelimit import Quotas
 from gumshoe.api.service import Caps
-from gumshoe.cases import BuiltinPackError, bundled_packs
+from gumshoe.cases import BuiltinPackError, bundled_pack, bundled_packs
 from gumshoe.config import Settings
 from gumshoe.stats import SqliteStatsStore
 from tests.agent.fakes import Script
@@ -40,11 +40,30 @@ def test_a_new_game_says_its_pack_and_preset(store):
     assert (body["pack"], body["preset"]) == ("castle", "standard")
 
 
+def test_meta_lists_the_castle_and_the_liner(store):
+    with client_for(store) as client:
+        ids = [p["id"] for p in client.get("/api/meta").json()["packs"]]
+    assert {"castle", "liner"} <= set(ids)
+
+
 @pytest.mark.parametrize("pack_id", [p.id for p in bundled_packs()])
 def test_every_bundled_pack_makes_a_real_game(store, pack_id):
+    pack = bundled_pack(pack_id)
+    assert pack is not None
+    places = {e.text for d in pack.location_defs for e in d.names}
     with client_for(store) as client:
-        response = client.post("/api/games", json={"seed": 1, "pack": pack_id})
-    assert response.status_code == 200 and response.json()["pack"] == pack_id
+        response = client.post(
+            "/api/games", json={"seed": 1, "pack": pack_id, "preset": "standard"}
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert (body["pack"], body["preset"]) == (pack_id, "standard")
+        state = client.get(f"/api/games/{body['game']}").json()
+        (row,) = client.get("/api/games").json()
+    # the first state is this setting's case: its places come from the pack, its row names it
+    shown = {loc["name"] for loc in state["brief"]["locations"]}
+    assert shown and shown <= places
+    assert (row["pack"], row["setting"]) == (pack_id, pack.title)
 
 
 def test_an_unknown_pack_is_refused_without_echoing_it(store):
