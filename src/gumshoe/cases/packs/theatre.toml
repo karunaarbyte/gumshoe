@@ -347,7 +347,7 @@ label = "struck with a sandbag"
 aliases = ["counterweight", "sandbag"]
 clues = [
   "A split sack {place.in} had spilled a trail of fine grit.",
-  "A flyman said a heavy sack had gone from its peg {place.in}.",
+  "A cleaner said a heavy sack had been dragged across the floor {place.in}.",
   "A scatter of sand had been swept into a corner {place.in}.",
 ]
 
@@ -368,7 +368,7 @@ label = "poisoned in a toast"
 aliases = ["poison", "tainted champagne"]
 clues = [
   "A small stoppered bottle lay {place.in}, rinsed and set on its side.",
-  "A dresser said a tray of glasses had been carried {place.in} before the bell.",
+  "A dresser said a tray of glasses had stood {place.in} before the bell.",
   "A damp handkerchief {place.in} smelled sharp and bitter.",
 ]
 
@@ -411,7 +411,7 @@ aliases = ["cord", "garrotte"]
 clues = [
   "A length of spare line had been cut from a coil {place.in}.",
   "A tight knot of tarred twine lay {place.in}, tied by a practised hand.",
-  "A flyman said a coil of line had gone from its hook {place.in}.",
+  "A fireman said a coil of line had been left {place.in} by someone in a hurry.",
 ]
 
 [[method_defs.rigging_cord.traces]]
@@ -454,8 +454,8 @@ label = "pushed from a height"
 aliases = ["fall", "shove", "thrown down"]
 clues = [
   "A loose bolt had been set back in a bracket {place.in}, its thread still bright.",
-  "A carpenter said the fittings {place.in} had been loose since the last change of scenery.",
-  "A single glove lay caught on a splinter {place.in}.",
+  "A carpenter said the fittings {place.in} had been loose for a week.",
+  "A tuft of torn cloth hung caught on a splinter {place.in}.",
 ]
 
 [[method_defs.fall_from_height.traces]]
@@ -463,11 +463,11 @@ kind = "scuff"
 location_kinds = ["fly_gallery", "orchestra_pit", "stage", "wings"]
 templates = [
   "Pale scrapes marked a high rail {place.in}, with loose grit on the boards below.",
-  "A ladder hung broken over a drop {place.in}, one rung snapped clean off.",
+  "A tall ladder hung broken from its hooks {place.in}, one rung snapped clean off.",
 ]
 absent = [
   "A high rail looked grey and even {place.in}, with the boards below swept smooth.",
-  "A ladder stood firm over a drop {place.in}, its rungs straight and sound.",
+  "A tall ladder hung firm upon its hooks {place.in}, its rungs straight and sound.",
 ]
 
 [scene_types.murder_on_stage]
