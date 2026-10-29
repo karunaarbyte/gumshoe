@@ -4,6 +4,8 @@ from collections.abc import Callable, Mapping
 from math import sqrt
 from typing import Any
 
+import pytest
+
 from gumshoe.cases.generate import facts, gating, placement, roster, timeline, truth
 from gumshoe.cases.generate.assemble import build_case
 from gumshoe.cases.generate.gen_context import GenContext
@@ -19,6 +21,7 @@ from gumshoe.cases.model.case import Case
 from gumshoe.cases.model.index import CaseIndex
 from gumshoe.cases.model.pack import Pack
 from gumshoe.cases.tools.builtin import load_builtin_pack
+from gumshoe.cases.tools.registry import bundled_packs
 from gumshoe.cases.validate.graph import build_graph
 from gumshoe.cases.validate.reach import compute_reach
 from gumshoe.cases.validate.routes import best_solution
@@ -29,8 +32,16 @@ GOLDEN_SEEDS = (0, 1, 2, 3, 4)
 Z_BONFERRONI = 3.29  # one-sided p = 0.0005 per test, about 0.005 over the ten statistical tests
 
 
+def pack_of(pack_id: str) -> Pack:
+    return load_builtin_pack(pack_id)
+
+
 def castle() -> Pack:
-    return load_builtin_pack("castle")
+    return pack_of("castle")
+
+
+PACK_IDS = tuple(info.id for info in bundled_packs())
+PACKS = [pytest.param(pack_id, id=pack_id) for pack_id in PACK_IDS]
 
 
 def roster_of(ctx: GenContext) -> RosterOut:

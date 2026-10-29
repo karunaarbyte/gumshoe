@@ -14,7 +14,7 @@ import pytest
 
 from gumshoe.cases.generate.gen_context import GenContext
 from gumshoe.cases.generate.outputs import FactsOut, PlacementOut, TruthOut
-from tests.generate.helpers import castle, placement_of
+from tests.generate.helpers import PACKS, pack_of, placement_of
 
 SEEDS = range(1500)
 DEPTH_FOR = {"short": 1, "standard": 2, "long": 2}  # the deepest feasible depth: keys at 2
@@ -25,10 +25,15 @@ def within_chance(hits: int, trials: int, chance: float) -> bool:
     return hits / trials <= chance + 3 * sigma
 
 
+@pytest.fixture(params=PACKS)
+def pack_id(request) -> str:
+    return request.param
+
+
 @cache
-def cases(preset: str) -> list[tuple[TruthOut, FactsOut, PlacementOut]]:
+def cases(pack_id: str, preset: str) -> list[tuple[TruthOut, FactsOut, PlacementOut]]:
     """Placement for every seed at the preset's deepest depth, computed once per preset."""
-    pack = castle()
+    pack = pack_of(pack_id)
     found = []
     for seed in SEEDS:
         ctx = GenContext.of(pack, seed, preset)
@@ -37,13 +42,13 @@ def cases(preset: str) -> list[tuple[TruthOut, FactsOut, PlacementOut]]:
     return found
 
 
-def run(preset: str, pick):
+def run(pack_id: str, preset: str, pick):
     """The hit rate of `pick(truth, facts, placed, rng)` and the average chance of a random pick.
 
     `pick` returns the position it chose, the true position and how many options there were."""
     hits = 0
     chances = 0.0
-    for seed, (truth, facts, placed) in zip(SEEDS, cases(preset), strict=True):
+    for seed, (truth, facts, placed) in zip(SEEDS, cases(pack_id, preset), strict=True):
         chosen, truth_pos, options = pick(truth, facts, placed, random.Random(seed))
         hits += chosen == truth_pos
         chances += 1 / options
@@ -95,8 +100,8 @@ def pick_method_whose_clue_is_at_the_scene(truth, facts, placed, rng):
 @pytest.mark.parametrize(
     "pick", [pick_suspect_with_the_emptiest_key_location, pick_suspect_whose_key_shares_a_location]
 )
-def test_the_culprit_is_not_betrayed_by_where_the_keys_are(preset, pick):
-    hits, chance = run(preset, pick)
+def test_the_culprit_is_not_betrayed_by_where_the_keys_are(pack_id, preset, pick):
+    hits, chance = run(pack_id, preset, pick)
     assert within_chance(hits, len(SEEDS), chance), (
         preset,
         pick.__name__,
@@ -114,8 +119,8 @@ def test_the_culprit_is_not_betrayed_by_where_the_keys_are(preset, pick):
         pick_method_whose_clue_is_at_the_scene,
     ],
 )
-def test_the_true_method_is_not_betrayed_by_where_its_facts_are(preset, pick):
-    hits, chance = run(preset, pick)
+def test_the_true_method_is_not_betrayed_by_where_its_facts_are(pack_id, preset, pick):
+    hits, chance = run(pack_id, preset, pick)
     assert within_chance(hits, len(SEEDS), chance), (
         preset,
         pick.__name__,
