@@ -236,7 +236,7 @@ LINER_WITNESS_NOUNS = (
 
 LINER_AUDIENCES = ("the crew", "the passengers", "a fellow passenger", "the officers")
 
-LINER_PHYSICAL_NOUNS = ("coat", "shoes", "gloves", "sleeve", "cuffs", "apron", "cap", "hat")
+LINER_PHYSICAL_NOUNS = ("coat", "shoes", "gloves", "sleeve", "cuffs", "collar", "cap", "hat")
 
 LINER_HARD_CODED_RECORD_NAMES = (
     "manifest",

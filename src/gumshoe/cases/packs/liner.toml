@@ -243,7 +243,7 @@ motive_types = ["ambition", "fear", "inheritance", "jealousy", "revenge"]
 label = "out of ambition"
 aliases = ["ambition", "hunger for rank"]
 secrets = [
-  "{^who} had written to the line's owners asking for the captain's post.",
+  "{^who} carried a letter of introduction to the line's chairman, ready to present.",
   "{^who} had quietly courted every passenger of wealth and title.",
 ]
 hints = [
@@ -269,11 +269,11 @@ hints = [
 label = "to cover a gambling debt"
 aliases = ["debt", "money owed"]
 secrets = [
-  "{^who} had pawned a gold watch in port and could not buy it back.",
-  "{^who} had lost a whole year's wages at the baccarat tables.",
+  "{^who} had pawned a gold watch in port to pay a heavy loss at cards.",
+  "{^who} had lost a great sum at the baccarat tables on the first night out.",
 ]
 hints = [
-  "{^who} avoided the bureau window whenever accounts were settled.",
+  "{^who} counted the coins in {who.poss} purse again and again.",
   "{^who} sold small things from {who.poss} cabin one by one.",
   "{^who} looked away whenever the baccarat tables were mentioned at dinner.",
 ]
@@ -288,7 +288,7 @@ secrets = [
 hints = [
   "{^who} left a small lamp burning in {who.poss} cabin until daybreak.",
   "{^who} was unwilling to walk the open deck once the lights were lowered.",
-  "{^who} always chose a seat that faced the entrance of the saloon.",
+  "{^who} always chose a seat with {who.poss} back against the wall.",
 ]
 
 [motive_defs.inheritance]
@@ -314,7 +314,7 @@ secrets = [
 hints = [
   "{^who} fell silent whenever a certain beauty aboard was praised.",
   "{^who} sat close to a certain couple at meals and watched each gesture.",
-  "{^who} found fault with the gowns of a certain young lady.",
+  "{^who} spoke sharply of a certain young lady whenever her name came up.",
 ]
 
 [motive_defs.revenge]
@@ -340,7 +340,7 @@ secrets = [
 hints = [
   "{^who} lingered near the strongroom door more than any errand required.",
   "{^who} studied the necklaces of the ladies at dinner with care.",
-  "{^who} kept a jeweller's loupe in a waistcoat pocket.",
+  "{^who} kept a jeweller's loupe hidden in a coat pocket.",
 ]
 
 [method_defs.wrench]
@@ -356,12 +356,12 @@ clues = [
 kind = "bruise"
 location_kinds = ["bridge", "cabin_corridor", "cargo_hold", "engine_room", "galley", "promenade_deck"]
 templates = [
-  "A heavy steel handle lay dropped {place.in}, its jaws bent and greasy.",
+  "A heavy steel tool lay dropped {place.in}, its jaws bent and greasy.",
   "A dented steel plate hung loose {place.in}, fresh grease smeared round the dent.",
 ]
 absent = [
   "A steel plate rested flush {place.in}, its rivets gleaming and its paint smooth.",
-  "A heavy steel handle rested in its rack {place.in}, clean and straight.",
+  "A heavy steel tool rested in its rack {place.in}, clean and straight.",
 ]
 
 [method_defs.poison_soup]
@@ -369,7 +369,7 @@ label = "poisoned in the soup"
 aliases = ["poison", "tainted broth"]
 clues = [
   "A small stoppered bottle lay {place.in}, rinsed and set on its side.",
-  "A waiter said the bowls {place.in} had been laid out a full hour early.",
+  "A waiter said a lidded dish had been left {place.in} well before the gong.",
   "A damp napkin {place.in} smelled sharp and bitter.",
 ]
 
@@ -377,12 +377,12 @@ clues = [
 kind = "residue"
 location_kinds = ["bridge", "cabin_corridor", "engine_room", "galley", "lounge", "promenade_deck"]
 templates = [
-  "A bowl lay tipped over {place.in}, with a bitter white crust inside.",
-  "A tureen {place.in} held a grey film and gave off a sour smell.",
+  "A cup lay tipped over {place.in}, with a bitter white crust inside.",
+  "A tin mug {place.in} held a grey film and gave off a sour smell.",
 ]
 absent = [
-  "A bowl sat upright {place.in}, with a rim smooth and spotless inside.",
-  "A tureen {place.in} sat clean and dry and gave off a mild smell.",
+  "A cup sat upright {place.in}, with a clean and shiny glaze inside.",
+  "A tin mug {place.in} sat clean and dry and gave off a mild smell.",
 ]
 
 [method_defs.carving_knife]
@@ -391,7 +391,7 @@ aliases = ["blade", "knife"]
 clues = [
   "A whetstone {place.in} was still wet, with fresh grey streaks across its face.",
   "A strip of oiled cloth {place.in} smelled of steel and lay flat on a shelf.",
-  "A cook said a hook on the rack {place.in} hung empty.",
+  "A cook said a long bundle wrapped in a tea towel had been seen {place.in}.",
 ]
 
 [[method_defs.carving_knife.traces]]
@@ -402,7 +402,7 @@ templates = [
   "A slim steel point had snapped off and lay glinting {place.in}.",
 ]
 absent = [
-  "A leather scabbard, slim and polished, hung at rest {place.in}.",
+  "A leather sheath, slim and polished, hung up neatly {place.in}.",
   "A steel point sat keen and whole within its sheath {place.in}.",
 ]
 
@@ -423,8 +423,8 @@ templates = [
   "A shiny worn groove ran round a stanchion {place.in}, and frayed strands lay beneath.",
 ]
 absent = [
-  "Pale smooth paint showed on an unmarked post {place.in}, firm and tight.",
-  "A bare dry stanchion stood beside a post {place.in}, and sturdy planking lay beneath.",
+  "Pale fresh paint coated a tall wooden post {place.in}, smooth and whole.",
+  "A smooth painted band ran round a stanchion {place.in}, and swept boards lay beneath.",
 ]
 
 [method_defs.flare_pistol]
@@ -432,7 +432,7 @@ label = "shot with a flare pistol"
 aliases = ["flare gun", "pistol"]
 clues = [
   "An officer said a red cartridge had gone from the locker {place.in}.",
-  "A faint smell of burnt powder hung in the air {place.in}.",
+  "A faint smell of burnt powder lingered {place.in}.",
   "A scrap of red paper wadding lay curled {place.in}.",
 ]
 
@@ -452,9 +452,9 @@ absent = [
 label = "pushed from a height"
 aliases = ["fall", "shove", "thrown down"]
 clues = [
-  "A loose bolt had been set back in a stanchion {place.in}, its thread still bright.",
-  "A bosun said the rail {place.in} had been loose since the last refit.",
-  "A single glove lay wedged in a gap on a ladder {place.in}.",
+  "A loose bolt had been set back in a bracket {place.in}, its thread still bright.",
+  "A bosun said the fittings {place.in} had been loose since the last refit.",
+  "A single glove lay caught on a splinter {place.in}.",
 ]
 
 [[method_defs.fall_from_height.traces]]
@@ -684,8 +684,8 @@ variants = [
   "{^record} listed the gloves of {who} as smeared and creased across the palms.",
   "A bellboy reading {record} said the left sleeve of {who} was ripped, with loose threads hanging.",
   "{^record} recorded that the cuffs of {who} were grimy and a stud was bent.",
-  "A waiter reading from {record} said the apron of {who} was spattered and hung crooked.",
-  "{^record} mentioned the cap of {who}, crushed with a bent peak.",
+  "A waiter reading from {record} said the collar of {who} was spattered and sat crooked.",
+  "{^record} mentioned the hat of {who}, crushed with a bent brim.",
 ]
 
 [[families]]
@@ -698,8 +698,8 @@ variants = [
   "{^record} listed the gloves of {who} as smooth and supple across the palms.",
   "A bellboy reading {record} said the left sleeve of {who} was whole, pressed and freshly ironed.",
   "{^record} recorded that the cuffs of {who} were clean and a stud was bright.",
-  "A waiter reading from {record} said the apron of {who} was spotless and hung straight.",
-  "{^record} mentioned the cap of {who}, neat with a straight peak.",
+  "A waiter reading from {record} said the collar of {who} was spotless and sat straight.",
+  "{^record} mentioned the hat of {who}, neat with a straight brim.",
 ]
 
 [[families]]
@@ -709,9 +709,9 @@ claim_slots = ["who"]
 variants = [
   "A scrap of paper with the name of {who} on it was found tucked into a book.",
   "{^who} was named in a note that had been left on a table.",
-  "A bellboy remembered that {who} had sent a note up to a first-class cabin.",
-  "The name of {who} was chalked on a slate by the pantry door.",
-  "A fellow passenger mentioned that {who} had sent many wireless messages of late.",
+  "A torn envelope bearing the name of {who} had been dropped near the door.",
+  "The name of {who} was chalked on a small slate left on a chair.",
+  "A crumpled wireless form signed by {who} lay in a corner.",
   "A message addressed to {who} was waiting sealed on a shelf.",
   "A small tag marked with the initial of {who} hung from a hook by the door.",
 ]
@@ -740,7 +740,7 @@ variants = [
   "{^victim} died {place.in} {time.during}, and the whole ship was shaken.",
   "Word spread that {victim} had been murdered {place.in} {time.during}.",
   "A cabin boy raised the cry that {victim} lay dead {place.in}, killed {time.during}.",
-  "{^victim} was killed {place.in} {time.during}, and every gangway was closed at once.",
+  "{^victim} was killed {place.in} {time.during}, and every deck was searched at once.",
   "Someone had ended the life of {victim} {place.in} {time.during}, and the ship held its breath.",
 ]
 
