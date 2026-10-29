@@ -76,7 +76,7 @@ CERTAINTY_WORDS = (
     "flustered",
 )
 
-WITNESS_NOUNS = (
+CASTLE_WITNESS_NOUNS = (
     "pilgrim",
     "porter",
     "page",
@@ -91,7 +91,7 @@ WITNESS_NOUNS = (
     "man-at-arms",
 )
 
-HARD_CODED_RECORD_NAMES = (
+CASTLE_HARD_CODED_RECORD_NAMES = (
     "household books",
     "day book",
     "watch book",
@@ -101,7 +101,7 @@ HARD_CODED_RECORD_NAMES = (
     "gate log",
 )
 
-AUDIENCES = (
+CASTLE_AUDIENCES = (
     "the household",
     "a visitor",
     "a guest",
@@ -217,7 +217,30 @@ NEW_FAMILIES = {
     "intro": {"victim", "place.in", "time.during"},
 }
 
-PHYSICAL_NOUNS = ("cloak", "boots", "gloves", "sleeve", "belt", "apron", "cap", "hat")
+CASTLE_PHYSICAL_NOUNS = ("cloak", "boots", "gloves", "sleeve", "belt", "apron", "cap", "hat")
+
+
+# Hand lists for the parity and leak rules, per pack id. A pack with no entry gets an empty list,
+# and the non-vacuity guard below then fails it loudly: a new setting must list its own words.
+WORDS_BY_PACK: dict[str, dict[str, tuple[str, ...]]] = {
+    "castle": {
+        "witness": CASTLE_WITNESS_NOUNS,
+        "audience": CASTLE_AUDIENCES,
+        "physical": CASTLE_PHYSICAL_NOUNS,
+        "record": CASTLE_HARD_CODED_RECORD_NAMES,
+    },
+}
+MIN_HITS = 2  # each parity list must appear in at least this many words of the pack's own texts
+
+
+def _words_for(pack: Pack, kind: str) -> tuple[str, ...]:
+    return WORDS_BY_PACK.get(pack.id, {}).get(kind, ())
+
+
+def _record_names(pack: Pack) -> tuple[str, ...]:
+    """The hand list plus every record display name and its last word, derived from the pack."""
+    names = [e.text.lower() for d in pack.record_defs for e in d.names]
+    return (*_words_for(pack, "record"), *names, *(n.split()[-1] for n in names))
 
 
 def _family_of_kind(pack: Pack, kind: str) -> FamilyDef:
@@ -330,8 +353,8 @@ def test_the_whole_word_match_does_not_flag_a_longer_word():
 @pytest.mark.parametrize("truth, lie", [("alibi", "lie_alibi"), ("presence_record", "lie_record")])
 def test_truth_and_lie_families_use_the_same_nouns_records_audiences_and_shape(pack, truth, lie):
     a, b = _family(pack, truth).variants, _family(pack, lie).variants
-    assert _union(a, WITNESS_NOUNS) == _union(b, WITNESS_NOUNS)
-    assert _union(a, AUDIENCES) == _union(b, AUDIENCES)
+    assert _union(a, _words_for(pack, "witness")) == _union(b, _words_for(pack, "witness"))
+    assert _union(a, _words_for(pack, "audience")) == _union(b, _words_for(pack, "audience"))
     assert _self_reports(a) == _self_reports(b)
     assert abs(_mean_length(a) - _mean_length(b)) <= 0.15 * max(_mean_length(a), _mean_length(b))
 
@@ -412,7 +435,7 @@ def test_every_scene_leaves_at_least_seven_eligible_roles(pack):
 
 
 def test_no_hard_coded_record_name_is_left_in_the_families_or_the_presence_lines(pack):
-    assert _found(_all_texts(pack), HARD_CODED_RECORD_NAMES) == []
+    assert _found(_all_texts(pack), _record_names(pack)) == []
 
 
 def test_the_two_record_families_use_the_record_placeholder_in_the_same_variants(pack):
@@ -442,12 +465,20 @@ def test_the_five_new_families_exist_once_with_their_ids_kinds_and_slots(pack):
 def test_the_two_physical_families_pair_up_variant_by_variant(pack):
     proof, clear = _family_of_kind(pack, "physical_proof"), _family_of_kind(pack, "physical_clear")
     assert len(proof.variants) == len(clear.variants)
-    assert _union(proof.variants, PHYSICAL_NOUNS) == _union(clear.variants, PHYSICAL_NOUNS)
-    assert _union(proof.variants, WITNESS_NOUNS) == _union(clear.variants, WITNESS_NOUNS)
-    assert _union(proof.variants, AUDIENCES) == _union(clear.variants, AUDIENCES)
+    assert _union(proof.variants, _words_for(pack, "physical")) == _union(
+        clear.variants, _words_for(pack, "physical")
+    )
+    assert _union(proof.variants, _words_for(pack, "witness")) == _union(
+        clear.variants, _words_for(pack, "witness")
+    )
+    assert _union(proof.variants, _words_for(pack, "audience")) == _union(
+        clear.variants, _words_for(pack, "audience")
+    )
     for a, b in zip(proof.variants, clear.variants, strict=True):
         assert _slots(a) == _slots(b) == {"who", "record"}, (a, b)
-        assert _union([a], PHYSICAL_NOUNS) == _union([b], PHYSICAL_NOUNS), (a, b)
+        assert _union([a], _words_for(pack, "physical")) == _union(
+            [b], _words_for(pack, "physical")
+        ), (a, b)
     mean_proof = sum(len(render(t, SAMPLES[0])) for t in proof.variants) / len(proof.variants)
     mean_clear = sum(len(render(t, SAMPLES[0])) for t in clear.variants) / len(clear.variants)
     assert abs(mean_proof - mean_clear) <= 0.1 * max(mean_proof, mean_clear)
@@ -459,7 +490,7 @@ def test_the_physical_and_contradiction_texts_name_their_record_by_placeholder(p
         for k in ("physical_proof", "physical_clear", "contradiction")
         for t in _family_of_kind(pack, k).variants
     ]
-    assert _found(texts, HARD_CODED_RECORD_NAMES) == []
+    assert _found(texts, _record_names(pack)) == []
     assert all("record" in _slots(t) for t in texts)
 
 
@@ -580,3 +611,24 @@ def test_a_pack_claims_only_known_presets_and_fits_its_capacity_in_its_pools(pac
     assert cap.max_methods <= len(pack.method_defs)
     assert cap.max_record_kinds <= len(pack.record_defs)
     assert cap.max_suspects <= len(pack.roles) and cap.max_suspects <= len(pack.motive_defs)
+
+
+def _family_variants(pack: Pack, *ids: str) -> list[str]:
+    return [v for f in pack.families if f.id in ids for v in f.variants]
+
+
+@pytest.mark.parametrize(
+    ("kind", "ids"),
+    [
+        ("witness", ("alibi", "lie_alibi", "presence_record", "lie_record")),
+        ("audience", ("alibi", "lie_alibi", "presence_record", "lie_record")),
+        ("physical", ("physical_proof", "physical_clear")),
+    ],
+)
+def test_the_parity_word_lists_are_not_vacuous_on_a_pack(pack, kind, ids):
+    texts = _family_variants(pack, *ids)
+    hit = _union(texts, _words_for(pack, kind))
+    assert len(hit) >= MIN_HITS, (
+        f"the {kind} list matches only {sorted(hit)} in {pack.id}; "
+        f"add this pack's words to WORDS_BY_PACK"
+    )

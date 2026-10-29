@@ -6,8 +6,8 @@ from gumshoe.cases.generate.skin_lint import lint
 from gumshoe.cases.model.enums import FactKind
 from gumshoe.cases.packs.check.hygiene import candidate_tokens
 from gumshoe.cases.packs.check.lint import phrase
-from tests.generate.helpers import PACKS, PRESET_NAMES
-from tests.generate.skin_helpers import made, pack_for
+from tests.generate.helpers import PACKS, PRESET_NAMES, pack_of
+from tests.generate.skin_helpers import made
 
 CASES = [(seed, preset) for preset in PRESET_NAMES for seed in range(12)]
 
@@ -18,7 +18,7 @@ def pack_id(request) -> str:
 
 
 def codes(case, pack_id) -> set[str]:
-    return {i.code for i in lint(case, pack_for(pack_id))}
+    return {i.code for i in lint(case, pack_of(pack_id))}
 
 
 def edit_fact(case, fact_id, **changes):
@@ -36,7 +36,7 @@ def first(case, kind, **match):
 
 @pytest.mark.parametrize(("seed", "preset"), CASES)
 def test_a_generated_case_is_clean(pack_id, seed, preset):
-    assert lint(made(seed, preset, pack_id), pack_for(pack_id)) == ()
+    assert lint(made(seed, preset, pack_id), pack_of(pack_id)) == ()
 
 
 def test_a_blank_text_is_reported_and_nothing_else(pack_id):
@@ -69,18 +69,18 @@ def test_a_suspect_without_traits_is_a_blank_text(pack_id):
 )
 def test_a_badly_rendered_text_is_reported(pack_id, change, problem):
     case = made(1, "standard", pack_id)
-    issues = lint(case.model_copy(update={"intro": change(case.intro)}), pack_for(pack_id))
+    issues = lint(case.model_copy(update={"intro": change(case.intro)}), pack_of(pack_id))
     assert {i.code for i in issues} == {"BAD_RENDER"} and problem in issues[0].message
 
 
 def test_two_facts_with_the_same_sentence_are_reported_once(pack_id):
     case = made(1, "standard", pack_id)
-    issues = lint(case.model_copy(update={"intro": case.facts[0].text}), pack_for(pack_id))
+    issues = lint(case.model_copy(update={"intro": case.facts[0].text}), pack_of(pack_id))
     assert [i.code for i in issues] == ["DUPLICATE_SENTENCE"] and issues[0].path == "intro"
 
 
 def test_a_text_that_names_another_suspect_than_the_actor_fails_fidelity(pack_id):
-    pack, case = pack_for(pack_id), made(1, "standard", pack_id)
+    pack, case = pack_of(pack_id), made(1, "standard", pack_id)
     lie = first(case, FactKind.LIE)
     actor = next(s for s in case.suspects if s.id == lie.claim.actor)
     other = next(s for s in case.suspects if s.id != actor.id)
@@ -92,7 +92,7 @@ def test_a_text_that_names_another_suspect_than_the_actor_fails_fidelity(pack_id
 
 
 def test_fidelity_follows_the_actor_of_a_lie_not_its_speaker(pack_id):
-    pack, case = pack_for(pack_id), made(1, "standard", pack_id)
+    pack, case = pack_of(pack_id), made(1, "standard", pack_id)
     lie = first(case, FactKind.LIE)
     other = next(s for s in case.suspects if s.id != lie.claim.actor)
     assert lint(edit_fact(case, lie.id, speaker=other.id), pack) == ()
@@ -100,7 +100,7 @@ def test_fidelity_follows_the_actor_of_a_lie_not_its_speaker(pack_id):
 
 @pytest.mark.parametrize("what", ["place", "time"])
 def test_a_text_that_loses_its_place_or_time_fails_fidelity(pack_id, what):
-    pack, case = pack_for(pack_id), made(1, "standard", pack_id)
+    pack, case = pack_of(pack_id), made(1, "standard", pack_id)
     fact = first(case, FactKind.PRESENCE)
     assert fact.claim is not None
     place = next(x for x in case.locations if x.id == fact.claim.place)
@@ -115,7 +115,7 @@ def test_a_text_that_loses_its_place_or_time_fails_fidelity(pack_id, what):
 
 
 def test_a_value_must_stand_in_the_text_as_whole_words(pack_id):
-    pack, case = pack_for(pack_id), made(1, "standard", pack_id)
+    pack, case = pack_of(pack_id), made(1, "standard", pack_id)
     fact = first(case, FactKind.PRESENCE)
     place = next(x for x in case.locations if x.id == fact.claim.place)
     value = phrase(slots.place_entry(pack, place))
@@ -150,7 +150,7 @@ def distinctive_word(case, pack, method):
 
 
 def test_a_method_token_in_a_fact_that_does_not_touch_it_is_a_leak(pack_id):
-    pack, case = pack_for(pack_id), made(1, "standard", pack_id)
+    pack, case = pack_of(pack_id), made(1, "standard", pack_id)
     method = next(m for m in case.methods if m.id != case.truth.how)
     word = distinctive_word(case, pack, method)
     assert codes(case.model_copy(update={"intro": f"{case.intro} {word}"}), pack_id) == {
@@ -161,7 +161,7 @@ def test_a_method_token_in_a_fact_that_does_not_touch_it_is_a_leak(pack_id):
 
 
 def test_a_method_token_in_a_fact_that_touches_the_method_is_allowed(pack_id):
-    pack, case = pack_for(pack_id), made(1, "standard", pack_id)
+    pack, case = pack_of(pack_id), made(1, "standard", pack_id)
     method = next(m for m in case.methods if m.id != case.truth.how)
     word = distinctive_word(case, pack, method)
     own = next(

@@ -13,6 +13,7 @@ from gumshoe.cases.model.spec import PRESETS, derive_spec
 from gumshoe.cases.packs import LoadResult, load_pack
 from gumshoe.cases.packs.check.capacity import hosting_scenes
 from gumshoe.cases.tools.builtin import load_builtin_pack
+from gumshoe.cases.tools.registry import bundled_pack
 
 
 def _castle_bytes() -> bytes:
@@ -78,7 +79,8 @@ def test_the_victims_are_lords_with_a_title_and_a_pronoun(pack):
 
 
 def test_the_castle_hosting_scenes_per_preset_do_not_fall():
-    pack = load_builtin_pack("castle")
+    pack = bundled_pack("castle")
+    assert pack is not None
     expected_minimum = {"short": 7, "standard": 7, "long": 4}  # measured: 7, 7, 4
     for name in pack.presets:
         spec = derive_spec(name, pack, PRESETS)

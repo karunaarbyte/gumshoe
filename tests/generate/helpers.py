@@ -20,8 +20,7 @@ from gumshoe.cases.generate.outputs import (
 from gumshoe.cases.model.case import Case
 from gumshoe.cases.model.index import CaseIndex
 from gumshoe.cases.model.pack import Pack
-from gumshoe.cases.tools.builtin import load_builtin_pack
-from gumshoe.cases.tools.registry import bundled_packs
+from gumshoe.cases.tools.registry import bundled_pack, bundled_packs
 from gumshoe.cases.validate.graph import build_graph
 from gumshoe.cases.validate.reach import compute_reach
 from gumshoe.cases.validate.routes import best_solution
@@ -29,11 +28,16 @@ from gumshoe.cases.validate.routes import best_solution
 PRESET_NAMES = ("short", "standard", "long")
 SEEDS = range(200)
 GOLDEN_SEEDS = (0, 1, 2, 3, 4)
-Z_BONFERRONI = 3.29  # one-sided p = 0.0005 per test, about 0.005 over the ten statistical tests
+# One-sided p = 0.0005 per test, about 0.005 over the ten statistical tests of one pack. The
+# statistical tests now run once per bundled pack, so the family-wise rate grows with the number
+# of packs (about 0.005 x packs); the per-test level is kept so a real tell still fails.
+Z_BONFERRONI = 3.29
 
 
 def pack_of(pack_id: str) -> Pack:
-    return load_builtin_pack(pack_id)
+    found = bundled_pack(pack_id)
+    assert found is not None, pack_id
+    return found
 
 
 def castle() -> Pack:

@@ -20,8 +20,8 @@ from gumshoe.cases.model.entities import Fact
 from gumshoe.cases.model.enums import Axis, EffectKind, FactKind, SourceKind
 from gumshoe.cases.packs.check.hygiene import candidate_tokens
 from gumshoe.cases.packs.check.lint import phrase
-from tests.generate.helpers import PACKS, Z_BONFERRONI, chi2_critical, chi2_statistic
-from tests.generate.skin_helpers import made, pack_for, rendered, welch_z
+from tests.generate.helpers import PACKS, Z_BONFERRONI, chi2_critical, chi2_statistic, pack_of
+from tests.generate.skin_helpers import made, rendered, welch_z
 
 SEEDS = range(150)
 PRESETS = ("short", "standard", "long")
@@ -34,7 +34,7 @@ def pack_id(request) -> str:
 
 @cache
 def owned(pack_id: str) -> dict[str, frozenset[str]]:
-    return candidate_tokens(pack_for(pack_id))
+    return candidate_tokens(pack_of(pack_id))
 
 
 @cache
@@ -75,7 +75,7 @@ def bare(pack_id: str, case: Case, fact: Fact) -> str:
     if fact.source.kind is not SourceKind.SEARCH:
         return fact.text
     location = next(x for x in case.locations if x.id == fact.source.target)
-    where = phrase(slots.place_entry(pack_for(pack_id), location))
+    where = phrase(slots.place_entry(pack_of(pack_id), location))
     return fact.text.replace(f"in {where}", "").replace(where, "")
 
 
@@ -86,7 +86,7 @@ def method_names(pack_id: str, case: Case, fact: Fact) -> int:
 
 def place_position(pack_id: str, case: Case, fact: Fact) -> float:
     location = next(x for x in case.locations if x.id == fact.source.target)
-    return fact.text.find(phrase(slots.place_entry(pack_for(pack_id), location))) / len(fact.text)
+    return fact.text.find(phrase(slots.place_entry(pack_of(pack_id), location))) / len(fact.text)
 
 
 FEATURES: dict[str, Callable[[str, Case, Fact], float]] = {
@@ -195,7 +195,7 @@ def test_the_variant_a_fact_gets_does_not_depend_on_whether_it_is_the_true_one(p
     cells = 0
     for case in corpus(pack_id):
         fact = (physical if which == "physical proof" else decisive)(case)[0]
-        texts = rendered(case, pack_for(pack_id), fact)
+        texts = rendered(case, pack_of(pack_id), fact)
         cells = len(texts)
         counts[texts.index(fact.text)] += 1
     total = sum(counts.values())

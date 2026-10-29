@@ -27,13 +27,8 @@ def skinned(pack: Pack, seed: int, preset: str) -> Case:
 
 
 @cache
-def pack_for(pack_id: str) -> Pack:
-    return pack_of(pack_id)
-
-
-@cache
 def made(seed: int, preset: str, pack_id: str = "castle") -> Case:
-    return skinned(pack_for(pack_id), seed, preset)
+    return skinned(pack_of(pack_id), seed, preset)
 
 
 def _family(pack: Pack, *kinds: str) -> list[str]:
