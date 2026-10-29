@@ -48,9 +48,9 @@ at = "at the rehearsal"
 during = "during the rehearsal"
 
 [[slot_defs]]
-key = "first_act"
-at = "in the first act"
-during = "during the first act"
+key = "half_hour"
+at = "at the half-hour call"
+during = "during the half-hour call"
 
 [[slot_defs]]
 key = "interval"
@@ -58,9 +58,9 @@ at = "at the interval"
 during = "during the interval"
 
 [[slot_defs]]
-key = "second_act"
-at = "in the second act"
-during = "during the second act"
+key = "house_emptied"
+at = "after the house emptied"
+during = "as the house emptied"
 
 [location_defs.stage]
 names = [{ text = "Stage", article = "the", prep = "on" }]
@@ -307,12 +307,12 @@ hints = [
 label = "out of jealousy"
 aliases = ["envy", "jealousy"]
 secrets = [
-  "{^who} stared at a certain pair of sweethearts in the wings with narrowed eyes.",
+  "{^who} stared at a certain pair of sweethearts across the stalls with narrowed eyes.",
   "{^who} was heard muttering that a rival had lured away a sweetheart.",
 ]
 hints = [
   "{^who} fell silent whenever a certain beauty in the company was praised.",
-  "{^who} stood close to a certain couple at rehearsal and watched each gesture.",
+  "{^who} stood close to a certain couple on the stairs and watched each gesture.",
   "{^who} spoke sharply of a certain young lady whenever her name came up.",
 ]
 
@@ -462,11 +462,11 @@ clues = [
 kind = "scuff"
 location_kinds = ["fly_gallery", "orchestra_pit", "stage", "wings"]
 templates = [
-  "Pale scrapes marked a high rail {place.in}, with loose grit on the boards below.",
+  "Pale scrapes marked a high wall {place.in}, with loose grit on the boards below.",
   "A tall ladder hung broken from its hooks {place.in}, one rung snapped clean off.",
 ]
 absent = [
-  "A high rail looked grey and even {place.in}, with the boards below swept smooth.",
+  "A high wall looked grey and even {place.in}, with the boards below swept smooth.",
   "A tall ladder hung firm upon its hooks {place.in}, its rungs straight and sound.",
 ]
 
@@ -614,7 +614,7 @@ variants = [
   "A hidden packet addressed to {who} was found under a cushion.",
   "A worn pouch was found beneath a loose board, and everyone knew {who} owned it.",
   "A private note written by {who} was found tucked behind a mirror.",
-  "{^who} had wrapped a bundle in muslin inside a costume hamper, and it was found there.",
+  "{^who} had wrapped a bundle in brown paper inside a costume hamper, and it was found there.",
   "{^who} had stowed a little case inside a hatbox, and someone found it.",
 ]
 
@@ -741,7 +741,7 @@ variants = [
   "{^victim} died {place.in} {time.during}, and the whole theatre was shaken.",
   "Word spread that {victim} had been murdered {place.in} {time.during}.",
   "A callboy raised the cry that {victim} lay dead {place.in}, killed {time.during}.",
-  "{^victim} was killed {place.in} {time.during}, and every corridor was searched at once.",
+  "{^victim} was killed {place.in} {time.during}, and the stage door was barred at once.",
   "Someone had ended the life of {victim} {place.in} {time.during}, and the house fell silent.",
 ]
 
