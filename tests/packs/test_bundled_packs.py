@@ -250,6 +250,33 @@ LINER_HARD_CODED_RECORD_NAMES = (
 )
 
 
+THEATRE_WITNESS_NOUNS = (
+    "callboy",
+    "dresser",
+    "fireman",
+    "chorus girl",
+    "electrician",
+    "cleaner",
+    "carpenter",
+    "scene painter",
+)
+
+THEATRE_AUDIENCES = ("the company", "the cast", "a fellow player")
+
+THEATRE_PHYSICAL_NOUNS = ("coat", "shoes", "gloves", "sleeve", "cuffs", "collar", "scarf")
+
+THEATRE_HARD_CODED_RECORD_NAMES = (
+    "programme",
+    "prompt book",
+    "call board",
+    "logbook",
+    "log",
+    "ledger",
+    "register",
+    "day book",
+)
+
+
 # Hand lists for the parity and leak rules, per pack id. A pack with no entry gets an empty list,
 # and the non-vacuity guard below then fails it loudly: a new setting must list its own words.
 WORDS_BY_PACK: dict[str, dict[str, tuple[str, ...]]] = {
@@ -264,6 +291,12 @@ WORDS_BY_PACK: dict[str, dict[str, tuple[str, ...]]] = {
         "audience": LINER_AUDIENCES,
         "physical": LINER_PHYSICAL_NOUNS,
         "record": LINER_HARD_CODED_RECORD_NAMES,
+    },
+    "theatre": {
+        "witness": THEATRE_WITNESS_NOUNS,
+        "audience": THEATRE_AUDIENCES,
+        "physical": THEATRE_PHYSICAL_NOUNS,
+        "record": THEATRE_HARD_CODED_RECORD_NAMES,
     },
 }
 MIN_HITS = 2  # each parity list must appear in at least this many words of the pack's own texts

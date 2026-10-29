@@ -40,10 +40,10 @@ def test_a_new_game_says_its_pack_and_preset(store):
     assert (body["pack"], body["preset"]) == ("castle", "standard")
 
 
-def test_meta_lists_the_castle_and_the_liner(store):
+def test_meta_lists_the_castle_the_liner_and_the_theatre(store):
     with client_for(store) as client:
         ids = [p["id"] for p in client.get("/api/meta").json()["packs"]]
-    assert {"castle", "liner"} <= set(ids)
+    assert {"castle", "liner", "theatre"} <= set(ids)
 
 
 @pytest.mark.parametrize("pack_id", [p.id for p in bundled_packs()])
