@@ -188,7 +188,8 @@ def test_meta_gives_the_numbers_a_ui_would_otherwise_hard_code(store):
     with TestClient(app_for(store)) as client:
         body = client.get("/api/meta").json()
     packs = body.pop("packs")
-    assert [p["id"] for p in packs] == ["castle"] and packs[0]["presets"] == body["presets"]
+    assert [p["id"] for p in packs] == ["castle", "liner"]
+    assert all(p["presets"] == body["presets"] for p in packs)
     assert body == {
         "presets": ["short", "standard", "long"],
         "default_preset": "standard",

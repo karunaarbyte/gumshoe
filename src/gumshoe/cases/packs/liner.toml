@@ -1,0 +1,780 @@
+[meta]
+id = "liner"
+title = "Ocean Liner"
+blurb = "A passenger is found dead aboard a great ocean liner, and someone on board did it."
+skeleton_rev = 1
+skin_rev = 1
+slots = 4
+presets = ["long", "short", "standard"]
+smalltalk_allow = [
+  "breakfast",
+  "cheers",
+  "cold",
+  "dinner",
+  "evening",
+  "fog",
+  "goodbye",
+  "hello",
+  "indeed",
+  "morning",
+  "music",
+  "pardon",
+  "please",
+  "rain",
+  "sea",
+  "ship",
+  "sunshine",
+  "tea",
+  "thanks",
+  "today",
+  "tomorrow",
+  "voyage",
+  "warm",
+  "waves",
+  "weather",
+  "welcome",
+  "wind",
+  "yesterday",
+]
+
+[capacity]
+max_suspects = 8
+max_locations = 7
+max_methods = 6
+max_record_kinds = 3
+
+[[slot_defs]]
+key = "first_sitting"
+at = "at the first sitting"
+during = "during the first sitting"
+
+[[slot_defs]]
+key = "second_sitting"
+at = "at the second sitting"
+during = "during the second sitting"
+
+[[slot_defs]]
+key = "midnight_supper"
+at = "at the midnight supper"
+during = "during the midnight supper"
+
+[[slot_defs]]
+key = "dawn_watch"
+at = "at the dawn watch"
+during = "during the dawn watch"
+
+[location_defs.promenade_deck]
+names = [{ text = "Promenade Deck", article = "the", prep = "on" }]
+descriptions = [
+  "{^place} runs the length of the ship beneath a row of lifeboats.",
+  "{^place} is lined with deck chairs and smells of salt.",
+]
+
+[location_defs.lounge]
+names = [{ text = "First-Class Lounge", article = "the" }]
+descriptions = [
+  "{^place} glitters with chandeliers and polished walnut.",
+  "{^place} hums with a string trio and the clink of glasses.",
+]
+
+[location_defs.cabin_corridor]
+names = [{ text = "Cabin Corridor", article = "the" }]
+descriptions = [
+  "{^place} is long and narrow, lined with numbered doors.",
+  "{^place} is carpeted in red, and every footstep is muffled.",
+]
+
+[location_defs.bridge]
+names = [{ text = "Bridge", article = "the", prep = "on" }]
+descriptions = [
+  "{^place} is high and bright, with brass instruments and a great wheel.",
+  "{^place} looks over the bow through tall square windows.",
+]
+
+[location_defs.galley]
+names = [{ text = "Galley", article = "the" }]
+descriptions = [
+  "{^place} is hot and loud with the clang of pans and ladles.",
+  "{^place} smells of onions, steam and coal smoke.",
+]
+
+[location_defs.engine_room]
+names = [{ text = "Engine Room", article = "the" }]
+descriptions = [
+  "{^place} roars with the thump of great pistons.",
+  "{^place} is hot and dim, and every rail is slick with oil.",
+]
+
+[location_defs.cargo_hold]
+names = [{ text = "Cargo Hold", article = "the" }]
+descriptions = [
+  "{^place} is dark, stacked high with crates and steamer trunks.",
+  "{^place} creaks and groans with every roll of the sea.",
+]
+
+[record_defs.rounds_ledger]
+subject = "suspect"
+medium = "written"
+names = [{ text = "rounds ledger", article = "the" }]
+location_kinds = [
+  "bridge", "cabin_corridor", "cargo_hold", "engine_room", "galley", "promenade_deck",
+]
+presence = [
+  "{^record} listed {who} {place.in} {time.at}.",
+  "According to {record}, {who} was {place.in} {time.at}.",
+]
+
+[record_defs.wheelhouse_log]
+subject = "location"
+medium = "written"
+names = [{ text = "wheelhouse log", article = "the" }]
+location_kinds = ["bridge"]
+presence = [
+  "{^record} showed {who} {place.in} {time.at}.",
+  "By {record}, {who} was {place.in} {time.at}.",
+]
+entries = [
+  "{^record} lay open on a chart table, its pages soft with handling.",
+  "{^record} was kept in a canvas binding and ruled in neat columns.",
+  "Several hands had written in {record}, some bold and some cramped.",
+]
+
+[record_defs.deck_register]
+subject = "suspect"
+medium = "written"
+names = [{ text = "deck register", article = "the" }]
+location_kinds = [
+  "bridge", "cabin_corridor", "cargo_hold", "engine_room", "galley", "lounge", "promenade_deck",
+]
+presence = [
+  "{^record} named {who} {place.in} {time.at}.",
+  "An entry in {record} placed {who} {place.in} {time.at}.",
+]
+
+[roles.card_sharp]
+names = [
+  { text = "Vincent", pronoun = "he", proper = true },
+  { text = "Lola", pronoun = "she", proper = true },
+]
+noun = "card sharp"
+style = "charming and slippery; turns every question into a jest"
+traits = ["sleek and smiling", "with a gold ring on each hand"]
+record_kinds = ["rounds_ledger", "deck_register"]
+motive_types = ["blackmail", "debt", "fear", "revenge", "theft"]
+
+[roles.novelist]
+names = [
+  { text = "Clement", pronoun = "he", proper = true },
+  { text = "Dorothy", pronoun = "she", proper = true },
+]
+noun = "novelist"
+style = "dreamy and wordy; describes everything like a scene in a book"
+traits = ["ink on the fingers and a far-off gaze", "forever scribbling in a notebook"]
+record_kinds = ["deck_register"]
+motive_types = ["ambition", "debt", "inheritance", "jealousy", "theft"]
+
+[roles.purser]
+names = [
+  { text = "Herbert", pronoun = "he", proper = true },
+  { text = "Cyril", pronoun = "he", proper = true },
+]
+noun = "purser"
+style = "dry and exact; speaks in figures and times"
+traits = ["neat and bespectacled", "in a pressed blue jacket with brass buttons"]
+record_kinds = ["rounds_ledger", "deck_register", "wheelhouse_log"]
+motive_types = ["ambition", "blackmail", "debt", "inheritance", "theft"]
+
+[roles.radio_operator]
+names = [
+  { text = "Harold", pronoun = "he", proper = true },
+  { text = "Stanley", pronoun = "he", proper = true },
+]
+noun = "radio operator"
+style = "quick and nervy; talks in clipped phrases like a telegram"
+traits = ["young and pale from long shifts", "with headphones slung round the neck"]
+record_kinds = ["deck_register", "wheelhouse_log"]
+motive_types = ["ambition", "blackmail", "fear", "jealousy", "revenge"]
+
+[roles.steward]
+names = [
+  { text = "Albert", pronoun = "he", proper = true },
+  { text = "Percy", pronoun = "he", proper = true },
+]
+noun = "steward"
+style = "smooth and attentive; answers as if serving at table"
+traits = ["trim and soft-footed", "in a short white jacket"]
+record_kinds = ["rounds_ledger", "deck_register"]
+motive_types = ["ambition", "blackmail", "debt", "revenge", "theft"]
+
+[roles.stewardess]
+names = [
+  { text = "Violet", pronoun = "she", proper = true },
+  { text = "Edith", pronoun = "she", proper = true },
+]
+noun = "stewardess"
+style = "brisk and kindly; passes on what the passengers say"
+traits = ["plump and quick on her feet", "with a starched cap and a ring of cabin keys"]
+record_kinds = ["rounds_ledger", "deck_register"]
+motive_types = ["blackmail", "fear", "inheritance", "jealousy", "theft"]
+
+[roles.stoker]
+names = [
+  { text = "Patrick", pronoun = "he", proper = true },
+  { text = "Seamus", pronoun = "he", proper = true },
+]
+noun = "stoker"
+style = "gruff and plain; gives short answers in a heavy brogue"
+traits = ["broad and black with coal dust", "with scarred, powerful forearms"]
+record_kinds = ["deck_register", "wheelhouse_log"]
+motive_types = ["debt", "fear", "inheritance", "jealousy", "revenge"]
+
+[roles.widow]
+names = [
+  { text = "Agatha", pronoun = "she", proper = true },
+  { text = "Beatrice", pronoun = "she", proper = true },
+]
+noun = "widow"
+style = "grand and cool; speaks as if granting an audience"
+traits = ["dressed in black silk and pearls", "upright, with a silver-topped cane"]
+record_kinds = ["rounds_ledger", "deck_register"]
+motive_types = ["ambition", "fear", "inheritance", "jealousy", "revenge"]
+
+[motive_defs.ambition]
+label = "out of ambition"
+aliases = ["ambition", "hunger for rank"]
+secrets = [
+  "{^who} had written to the line's owners asking for the captain's post.",
+  "{^who} had quietly courted every passenger of wealth and title.",
+]
+hints = [
+  "{^who} watched the captain's table at meals with a long, quiet look.",
+  "{^who} kept a set of fine clothes ready for a grander station.",
+  "{^who} asked many questions about who sat nearest the captain.",
+]
+
+[motive_defs.blackmail]
+label = "to escape blackmail"
+aliases = ["blackmail", "extortion"]
+secrets = [
+  "{^who} had been paying someone in secret to keep an old letter hidden.",
+  "{^who} had received a note demanding payment to keep an old shame quiet.",
+]
+hints = [
+  "{^who} started whenever a bellboy came by with the post.",
+  "{^who} burned each scrap of paper in the nearest ashtray.",
+  "{^who} kept a sealed letter stitched into the lining of a coat.",
+]
+
+[motive_defs.debt]
+label = "to cover a gambling debt"
+aliases = ["debt", "money owed"]
+secrets = [
+  "{^who} had pawned a gold watch in port and could not buy it back.",
+  "{^who} had lost a whole year's wages at the baccarat tables.",
+]
+hints = [
+  "{^who} avoided the bureau window whenever accounts were settled.",
+  "{^who} sold small things from {who.poss} cabin one by one.",
+  "{^who} looked away whenever the baccarat tables were mentioned at dinner.",
+]
+
+[motive_defs.fear]
+label = "out of fear"
+aliases = ["fear", "dread"]
+secrets = [
+  "{^who} flinched at every footstep in the passage.",
+  "{^who} slept with a chair wedged against the cabin door.",
+]
+hints = [
+  "{^who} left a small lamp burning in {who.poss} cabin until daybreak.",
+  "{^who} was unwilling to walk the open deck once the lights were lowered.",
+  "{^who} always chose a seat that faced the entrance of the saloon.",
+]
+
+[motive_defs.inheritance]
+label = "to claim an inheritance"
+aliases = ["inheritance", "legacy"]
+secrets = [
+  "{^who} was the last living kin of a rich old shipping family.",
+  "{^who} had kept a copy of a will with one line underlined.",
+]
+hints = [
+  "{^who} knew the names in a certain family tree by heart.",
+  "{^who} asked often after a certain passenger's health with a thoughtful frown.",
+  "{^who} kept a close count of a certain passenger's years.",
+]
+
+[motive_defs.jealousy]
+label = "out of jealousy"
+aliases = ["jealousy", "envy"]
+secrets = [
+  "{^who} stared at a certain couple on the dance floor with narrowed eyes.",
+  "{^who} was heard muttering that a rival had lured away a sweetheart.",
+]
+hints = [
+  "{^who} fell silent whenever a certain beauty aboard was praised.",
+  "{^who} sat close to a certain couple at meals and watched each gesture.",
+  "{^who} found fault with the gowns of a certain young lady.",
+]
+
+[motive_defs.revenge]
+label = "to take revenge"
+aliases = ["revenge", "vengeance"]
+secrets = [
+  "{^who} still nursed a grudge over an old wrong done to a brother at sea.",
+  "{^who} was heard swearing that someone would answer for it one day.",
+]
+hints = [
+  "{^who} kept an old newspaper cutting and looked at it often.",
+  "{^who} recited a list of old wrongs under {who.poss} breath.",
+  "{^who} marked each slight in a small black notebook.",
+]
+
+[motive_defs.theft]
+label = "to hide a jewel theft"
+aliases = ["theft", "stolen jewels"]
+secrets = [
+  "{^who} had a pearl necklace sewn into the hem of a travelling cloak.",
+  "{^who} had pried the setting from a brooch that was reported missing.",
+]
+hints = [
+  "{^who} lingered near the strongroom door more than any errand required.",
+  "{^who} studied the necklaces of the ladies at dinner with care.",
+  "{^who} kept a jeweller's loupe in a waistcoat pocket.",
+]
+
+[method_defs.wrench]
+label = "bludgeoned with a wrench"
+aliases = ["monkey wrench", "spanner"]
+clues = [
+  "A greasy rag {place.in} had been used to wipe something heavy.",
+  "An engineer said a tool chest {place.in} had been opened and left ajar.",
+  "A smear of black grease ran along a handrail {place.in}.",
+]
+
+[[method_defs.wrench.traces]]
+kind = "bruise"
+location_kinds = ["bridge", "cabin_corridor", "cargo_hold", "engine_room", "galley", "promenade_deck"]
+templates = [
+  "A heavy steel handle lay dropped {place.in}, its jaws bent and greasy.",
+  "A dented steel plate hung loose {place.in}, fresh grease smeared round the dent.",
+]
+absent = [
+  "A steel plate rested flush {place.in}, its rivets gleaming and its paint smooth.",
+  "A heavy steel handle rested in its rack {place.in}, clean and straight.",
+]
+
+[method_defs.poison_soup]
+label = "poisoned in the soup"
+aliases = ["poison", "tainted broth"]
+clues = [
+  "A small stoppered bottle lay {place.in}, rinsed and set on its side.",
+  "A waiter said the bowls {place.in} had been laid out a full hour early.",
+  "A damp napkin {place.in} smelled sharp and bitter.",
+]
+
+[[method_defs.poison_soup.traces]]
+kind = "residue"
+location_kinds = ["bridge", "cabin_corridor", "engine_room", "galley", "lounge", "promenade_deck"]
+templates = [
+  "A bowl lay tipped over {place.in}, with a bitter white crust inside.",
+  "A tureen {place.in} held a grey film and gave off a sour smell.",
+]
+absent = [
+  "A bowl sat upright {place.in}, with a rim smooth and spotless inside.",
+  "A tureen {place.in} sat clean and dry and gave off a mild smell.",
+]
+
+[method_defs.carving_knife]
+label = "stabbed with a carving knife"
+aliases = ["blade", "knife"]
+clues = [
+  "A whetstone {place.in} was still wet, with fresh grey streaks across its face.",
+  "A strip of oiled cloth {place.in} smelled of steel and lay flat on a shelf.",
+  "A cook said a hook on the rack {place.in} hung empty.",
+]
+
+[[method_defs.carving_knife.traces]]
+kind = "wound"
+location_kinds = ["cabin_corridor", "cargo_hold", "engine_room", "galley", "lounge", "promenade_deck"]
+templates = [
+  "An empty leather sheath, slim and short, lay dropped {place.in}.",
+  "A slim steel point had snapped off and lay glinting {place.in}.",
+]
+absent = [
+  "A leather scabbard, slim and polished, hung at rest {place.in}.",
+  "A steel point sat keen and whole within its sheath {place.in}.",
+]
+
+[method_defs.signal_cord]
+label = "strangled with signal cord"
+aliases = ["cord", "garrotte"]
+clues = [
+  "A length of spare line had been cut from a coil {place.in}.",
+  "A tight knot of tarred twine lay {place.in}, tied by a practised hand.",
+  "A deckhand said a coil of line had gone from its hook {place.in}.",
+]
+
+[[method_defs.signal_cord.traces]]
+kind = "fibre"
+location_kinds = ["bridge", "cargo_hold", "engine_room", "galley", "lounge", "promenade_deck"]
+templates = [
+  "Coarse waxed fibres clung to a rough post {place.in}, snagged and loose.",
+  "A shiny worn groove ran round a stanchion {place.in}, and frayed strands lay beneath.",
+]
+absent = [
+  "Pale smooth paint showed on an unmarked post {place.in}, firm and tight.",
+  "A bare dry stanchion stood beside a post {place.in}, and sturdy planking lay beneath.",
+]
+
+[method_defs.flare_pistol]
+label = "shot with a flare pistol"
+aliases = ["flare gun", "pistol"]
+clues = [
+  "An officer said a red cartridge had gone from the locker {place.in}.",
+  "A faint smell of burnt powder hung in the air {place.in}.",
+  "A scrap of red paper wadding lay curled {place.in}.",
+]
+
+[[method_defs.flare_pistol.traces]]
+kind = "burn"
+location_kinds = ["bridge", "cabin_corridor", "cargo_hold", "lounge", "promenade_deck"]
+templates = [
+  "A black scorch mark ran across a door {place.in}, with a smell of sulphur.",
+  "A spent red cartridge lay {place.in}, its brass end blackened.",
+]
+absent = [
+  "A white door stood clean and pale {place.in}, with a smell of wet varnish.",
+  "A red cartridge lay boxed {place.in}, its brass end gleaming.",
+]
+
+[method_defs.fall_from_height]
+label = "pushed from a height"
+aliases = ["fall", "shove", "thrown down"]
+clues = [
+  "A loose bolt had been set back in a stanchion {place.in}, its thread still bright.",
+  "A bosun said the rail {place.in} had been loose since the last refit.",
+  "A single glove lay wedged in a gap on a ladder {place.in}.",
+]
+
+[[method_defs.fall_from_height.traces]]
+kind = "scuff"
+location_kinds = ["bridge", "cargo_hold", "engine_room", "promenade_deck"]
+templates = [
+  "Pale scrapes marked a high rail {place.in}, with loose grit on the boards below.",
+  "A rail hung broken over a drop {place.in}, its upright snapped clean off.",
+]
+absent = [
+  "A high rail looked grey and even {place.in}, with the boards below swept smooth.",
+  "A rail stood firm over a drop {place.in}, its uprights straight and sound.",
+]
+
+[scene_types.murder_on_promenade_deck]
+location_kinds = ["promenade_deck"]
+allowed_methods = ["wrench", "poison_soup", "carving_knife", "signal_cord", "flare_pistol", "fall_from_height"]
+allowed_trace_kinds = ["bruise", "residue", "wound", "fibre", "burn", "scuff"]
+
+[scene_types.murder_in_lounge]
+location_kinds = ["lounge"]
+allowed_methods = ["poison_soup", "carving_knife", "signal_cord", "flare_pistol"]
+allowed_trace_kinds = ["residue", "wound", "fibre", "burn"]
+
+[scene_types.murder_in_cabin_corridor]
+location_kinds = ["cabin_corridor"]
+allowed_methods = ["wrench", "poison_soup", "carving_knife", "flare_pistol"]
+allowed_trace_kinds = ["bruise", "residue", "wound", "burn"]
+
+[scene_types.murder_on_bridge]
+location_kinds = ["bridge"]
+allowed_methods = ["wrench", "poison_soup", "signal_cord", "flare_pistol", "fall_from_height"]
+allowed_trace_kinds = ["bruise", "residue", "fibre", "burn", "scuff"]
+
+[scene_types.murder_in_galley]
+location_kinds = ["galley"]
+allowed_methods = ["wrench", "poison_soup", "carving_knife", "signal_cord"]
+allowed_trace_kinds = ["bruise", "residue", "wound", "fibre"]
+
+[scene_types.murder_in_engine_room]
+location_kinds = ["engine_room"]
+allowed_methods = ["wrench", "poison_soup", "carving_knife", "signal_cord", "fall_from_height"]
+allowed_trace_kinds = ["bruise", "residue", "wound", "fibre", "scuff"]
+
+[scene_types.murder_in_cargo_hold]
+location_kinds = ["cargo_hold"]
+allowed_methods = ["wrench", "carving_knife", "signal_cord", "flare_pistol", "fall_from_height"]
+allowed_trace_kinds = ["bruise", "wound", "fibre", "burn", "scuff"]
+
+
+[[families]]
+id = "alibi"
+kind = "alibi"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "{^who} said that {who.subj} had been {place.in} {time.at}.",
+  "{^who} told the crew that {who.subj} had spent the time {place.in} {time.at}.",
+  "{^who} remembered that {who.subj} had stayed {place.in} {time.at}.",
+  "{^who} mentioned to a fellow passenger that {who.subj} had been {place.in} {time.at}.",
+  "A deckhand with a mop said {who} was {place.in} {time.at}.",
+  "Word among the passengers was that {who} had been {place.in} {time.at}.",
+  "Talk among the crew had it that {who} remained {place.in} {time.at}.",
+]
+
+[[families]]
+id = "lie_alibi"
+kind = "lie"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "{^who} stated that {who.subj} was {place.in} {time.at}.",
+  "{^who} told the crew that {who.subj} had stayed {place.in} {time.at}.",
+  "{^who} recalled being {place.in} {time.at}.",
+  "{^who} mentioned to a fellow passenger that {who.subj} had remained {place.in} {time.at}.",
+  "A deckhand carrying a bucket recalled that {who} had spent the time {place.in} {time.at}.",
+  "Gossip among the passengers had it that {who} was {place.in} {time.at}.",
+  "A story went round the crew that {who} had been {place.in} {time.at}.",
+]
+
+[[families]]
+id = "witness_sighting"
+kind = "witness"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "A deckhand on an errand saw {who} {place.in} {time.at}.",
+  "{^who} was glimpsed {place.in} {time.at} by a quartermaster on his rounds.",
+  "A bellboy carrying a tray noticed {who} {place.in} {time.at}.",
+  "A passenger with a camera remembered seeing {who} {place.in} {time.at}.",
+  "A lookout coming off duty said {who} was {place.in} {time.at}.",
+  "A nursemaid with a pram glimpsed {who} {place.in} {time.at}.",
+  "{^who} was seen {place.in} {time.at} by a waiter with a pot of tea.",
+]
+
+[[families]]
+id = "witness_hearing"
+kind = "witness"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "A dinner guest carrying a wrap heard {who} talking {place.in} {time.at}.",
+  "{^who} was heard {place.in} {time.at} by a cabin boy fetching water.",
+  "A bosun coiling a line nearby heard {who} {place.in} {time.at}.",
+  "A carpenter on a ladder heard {who} laughing {place.in} {time.at}.",
+  "A bellboy on an errand remembered hearing {who} {place.in} {time.at}.",
+  "A passenger resting nearby heard {who} muttering {place.in} {time.at}.",
+  "An officer on watch said {who} could be heard {place.in} {time.at}.",
+]
+
+[[families]]
+id = "presence_record"
+kind = "record"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "{^record} listed {who} {place.in} {time.at}.",
+  "{^record} showed {who} {place.in} {time.at}.",
+  "An entry in {record} put {who} {place.in} {time.at}.",
+  "A bellboy recalled that {record} had {who} {place.in} {time.at}.",
+  "A waiter mentioned that {record} put {who} {place.in} {time.at}.",
+  "{^who} mentioned an entry that said {who.subj} was {place.in} {time.at}.",
+  "{^who} said {record} would show that {who.subj} was {place.in} {time.at}.",
+]
+
+[[families]]
+id = "lie_record"
+kind = "lie"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "{^record} recorded {who} {place.in} {time.at}.",
+  "{^record} held an entry for {who} {place.in} {time.at}.",
+  "An entry in {record} named {who} {place.in} {time.at}.",
+  "A waiter recalled that {record} had {who} {place.in} {time.at}.",
+  "A bellboy mentioned that {record} listed {who} {place.in} {time.at}.",
+  "{^who} pointed out an entry which said {who.subj} was {place.in} {time.at}.",
+  "{^who} said that {record} would show {who.subj} was {place.in} {time.at}.",
+]
+
+[[families]]
+id = "lie_accusation"
+kind = "lie"
+claim_slots = ["who", "place.in", "time.at"]
+variants = [
+  "A quartermaster on his rounds said {who} had been {place.in} {time.at}.",
+  "A dinner guest carrying a wrap recalled seeing {who} {place.in} {time.at}.",
+  "{^who} was glimpsed {place.in} {time.at} by a carpenter carrying planks.",
+  "A nursemaid with a pram mentioned that {who} was {place.in} {time.at}.",
+  "A lookout told the crew that {who} had stayed {place.in} {time.at}.",
+  "Word went round the passengers that {who} had been {place.in} {time.at}.",
+  "A story went round that {who} had spent the time {place.in} {time.at}.",
+]
+
+[[families]]
+id = "secret_discovery"
+kind = "secret"
+claim_slots = ["who"]
+variants = [
+  "A folded paper belonging to {who} was found tucked inside a shoe.",
+  "A small tin box that belonged to {who} was found behind a loose panel.",
+  "A hidden packet addressed to {who} was found under a pillow.",
+  "A worn pouch was found beneath a loose board, and everyone knew {who} owned it.",
+  "A private note written by {who} was found tucked behind a mirror.",
+  "{^who} had wrapped a bundle in oilcloth under a bunk, and it was found there.",
+  "{^who} had stowed a little case inside a lifebelt locker, and someone found it.",
+]
+
+[[families]]
+id = "trace_inspection"
+kind = "trace"
+claim_slots = ["place.in"]
+variants = [
+  "Everything {place.in} looked scuffed and smeared.",
+  "Things {place.in} lay scattered and askew.",
+  "Most things {place.in} were streaked and grimy.",
+  "Things {place.in} had been moved from where they were left.",
+  "Anyone looking {place.in} would have found things shifted and crooked.",
+  "Marks of recent traffic were plain to see {place.in}.",
+  "There was a trampled, restless look about everything {place.in}.",
+]
+
+[[families]]
+id = "absent_trace"
+kind = "absent_trace"
+claim_slots = ["place.in"]
+variants = [
+  "Everything {place.in} looked scrubbed and tidy.",
+  "Things {place.in} lay straight and in their places.",
+  "Most things {place.in} were polished and clean.",
+  "Things {place.in} stood where they had been left.",
+  "Anyone looking {place.in} would have found things neat and orderly.",
+  "Signs of recent scrubbing were plain to see {place.in}.",
+  "There was a calm, settled look about everything {place.in}.",
+]
+
+[[families]]
+id = "motive_clue"
+kind = "motive_clue"
+claim_slots = ["who"]
+variants = [
+  "{^who} was unusually cheerful and handed out gifts to the crew.",
+  "{^who} grew secretive, and {who.poss} cabin door stayed shut.",
+  "{^who} was busier than usual, and {who.poss} hands kept moving.",
+  "{^who} was restless and paced the deck long after dark.",
+  "{^who} was quiet, and {who.poss} gaze drifted to the porthole.",
+  "{^who} was tense, and {who.poss} mood had darkened.",
+  "{^who} whistled a merry tune and hardly slept.",
+  "{^who} sat apart at meals and snapped at anyone who spoke.",
+]
+
+[[families]]
+id = "small_clue"
+kind = "small_clue"
+claim_slots = ["place.in"]
+variants = [
+  "A dropped glove lay {place.in}.",
+  "A tarnished button was found {place.in}.",
+  "A scrap of ribbon had been left lying {place.in}.",
+  "A bent teaspoon lay forgotten {place.in}.",
+  "A child's tin whistle was discovered {place.in}.",
+  "A broken comb was picked up {place.in} by a bellboy.",
+  "A snapped shoelace lay {place.in}.",
+]
+
+[[families]]
+id = "physical_proof"
+kind = "physical_proof"
+claim_slots = ["who", "record"]
+variants = [
+  "{^record} noted the coat of {who}, damp and torn at the hem.",
+  "An entry in {record} described the shoes of {who}: caked with salt along the soles.",
+  "{^record} listed the gloves of {who} as smeared and creased across the palms.",
+  "A bellboy reading {record} said the left sleeve of {who} was ripped, with loose threads hanging.",
+  "{^record} recorded that the cuffs of {who} were grimy and a stud was bent.",
+  "A waiter reading from {record} said the apron of {who} was spattered and hung crooked.",
+  "{^record} mentioned the cap of {who}, crushed with a bent peak.",
+]
+
+[[families]]
+id = "physical_clear"
+kind = "physical_clear"
+claim_slots = ["who", "record"]
+variants = [
+  "{^record} noted the coat of {who}, dry and whole at the hem.",
+  "An entry in {record} described the shoes of {who}: clean and polished along the soles.",
+  "{^record} listed the gloves of {who} as smooth and supple across the palms.",
+  "A bellboy reading {record} said the left sleeve of {who} was whole, pressed and freshly ironed.",
+  "{^record} recorded that the cuffs of {who} were clean and a stud was bright.",
+  "A waiter reading from {record} said the apron of {who} was spotless and hung straight.",
+  "{^record} mentioned the cap of {who}, neat with a straight peak.",
+]
+
+[[families]]
+id = "key"
+kind = "key"
+claim_slots = ["who"]
+variants = [
+  "A scrap of paper with the name of {who} on it was found tucked into a book.",
+  "{^who} was named in a note that had been left on a table.",
+  "A bellboy remembered that {who} had sent a note up to a first-class cabin.",
+  "The name of {who} was chalked on a slate by the pantry door.",
+  "A fellow passenger mentioned that {who} had sent many wireless messages of late.",
+  "A message addressed to {who} was waiting sealed on a shelf.",
+  "A small tag marked with the initial of {who} hung from a hook by the door.",
+]
+
+[[families]]
+id = "contradiction"
+kind = "contradiction"
+claim_slots = ["who", "place.in", "time.at", "record"]
+variants = [
+  "But {record} put {who} {place.in} {time.at}.",
+  "Yet an entry in {record} placed {who} {place.in} {time.at}.",
+  "However, {record} listed {who} {place.in} {time.at}.",
+  "Against that, {record} showed {who} {place.in} {time.at}.",
+  "Still, {record} named {who} {place.in} {time.at}.",
+  "But a line in {record} had {who} {place.in} {time.at}.",
+  "Even so, {record} held {who} {place.in} {time.at}.",
+]
+
+[[families]]
+id = "intro"
+kind = "intro"
+claim_slots = ["victim", "place.in", "time.during"]
+variants = [
+  "{^victim} was found dead {place.in}, and the crime was done {time.during}.",
+  "The passengers woke to the news that {victim} had been killed {place.in} {time.during}.",
+  "{^victim} died {place.in} {time.during}, and the whole ship was shaken.",
+  "Word spread that {victim} had been murdered {place.in} {time.during}.",
+  "A cabin boy raised the cry that {victim} lay dead {place.in}, killed {time.during}.",
+  "{^victim} was killed {place.in} {time.during}, and every gangway was closed at once.",
+  "Someone had ended the life of {victim} {place.in} {time.during}, and the ship held its breath.",
+]
+
+[[victims]]
+text = "Sir Reginald Vane"
+pronoun = "he"
+proper = true
+
+[[victims]]
+text = "Lady Cordelia Ashby"
+pronoun = "she"
+proper = true
+
+[[victims]]
+text = "Captain Harrow"
+pronoun = "he"
+proper = true
+
+[[victims]]
+text = "Colonel Fitzroy"
+pronoun = "he"
+proper = true
+
+[[victims]]
+text = "Countess Valeska"
+pronoun = "she"
+proper = true
+
+[[victims]]
+text = "Mr Thaddeus Crane"
+pronoun = "he"
+proper = true
+
+[[victims]]
+text = "Mrs Honoria Blythe"
+pronoun = "she"
+proper = true

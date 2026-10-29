@@ -219,6 +219,36 @@ NEW_FAMILIES = {
 
 CASTLE_PHYSICAL_NOUNS = ("cloak", "boots", "gloves", "sleeve", "belt", "apron", "cap", "hat")
 
+LINER_WITNESS_NOUNS = (
+    "deckhand",
+    "bellboy",
+    "waiter",
+    "quartermaster",
+    "lookout",
+    "nursemaid",
+    "passenger",
+    "dinner guest",
+    "cabin boy",
+    "bosun",
+    "carpenter",
+    "officer",
+)
+
+LINER_AUDIENCES = ("the crew", "the passengers", "a fellow passenger", "the officers")
+
+LINER_PHYSICAL_NOUNS = ("coat", "shoes", "gloves", "sleeve", "cuffs", "apron", "cap", "hat")
+
+LINER_HARD_CODED_RECORD_NAMES = (
+    "manifest",
+    "passenger list",
+    "logbook",
+    "log",
+    "ledger",
+    "register",
+    "roster",
+    "day book",
+)
+
 
 # Hand lists for the parity and leak rules, per pack id. A pack with no entry gets an empty list,
 # and the non-vacuity guard below then fails it loudly: a new setting must list its own words.
@@ -228,6 +258,12 @@ WORDS_BY_PACK: dict[str, dict[str, tuple[str, ...]]] = {
         "audience": CASTLE_AUDIENCES,
         "physical": CASTLE_PHYSICAL_NOUNS,
         "record": CASTLE_HARD_CODED_RECORD_NAMES,
+    },
+    "liner": {
+        "witness": LINER_WITNESS_NOUNS,
+        "audience": LINER_AUDIENCES,
+        "physical": LINER_PHYSICAL_NOUNS,
+        "record": LINER_HARD_CODED_RECORD_NAMES,
     },
 }
 MIN_HITS = 2  # each parity list must appear in at least this many words of the pack's own texts
