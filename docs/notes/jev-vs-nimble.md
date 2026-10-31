@@ -15,6 +15,28 @@ Jev prices used: $0.042 per million input tokens, output free (secondary sources
   5 s median, 0 errors, 90% agreement), but it is still 16x slower than Jev there.
 - **Where they agree, the choice does not matter; where they disagree, we do not yet know who is right.** See below.
 
+## Update 2026-10-31: clean latency run
+
+Done as planned in "Next experiments" (below), with one simplification: the battery only calls the decision layer, so
+no persona model was loaded. `nimble:latest` was the only model resident in Ollama, on its own, so no second Ollama
+was needed. 3 rounds of the 12 demo inputs = 36 decisions, shadow mode on, into a fresh database (about 50 Jev calls
+in all with the live tests; roughly 15.4k input and 3.0k output tokens on Jev).
+
+| Backend | Decisions | Errors | p50 | p95 |
+|---|---|---|---|---|
+| Jev | 36 | 0 | 308 ms | 798 ms |
+| Nimble | 36 | 0 | 648 ms | 1.5 s |
+
+Warm-call figures: the first call of each backend (cold) is left out of the percentiles. Agreement on `intent` was
+27 of 36 inputs; Jev was often confident (0.99) where Nimble hedged (for example "action" against "meta" at 0.52).
+
+**What changes in the verdict.** The 12.5 s median and 28% timeouts above were mostly contention from the persona
+models sharing one Ollama. Alone, Nimble answers in about 0.65 s with no errors, roughly twice Jev's time. That makes
+it a plausible fallback or an offline primary for the short decisions. It does not settle accuracy: agreement is still
+not correctness, the inputs are the fixed demo set (not real players), and in a real game Nimble will again share the
+machine with the personas. The next step is to measure Nimble inside a played game with personas loaded, or to give it
+its own Ollama (below).
+
 ## Numbers
 
 | Node | Compared | Agreement | Jev p50 / p95 | Nimble p50 / p95 | Nimble errors |
@@ -38,7 +60,8 @@ Input tokens are not comparable between backends (Nimble reports ~4000 per `unde
 
 1. **The latency comparison is confounded.** Nimble shared one Ollama with the two persona models, so a persona
    reply could evict Nimble or queue ahead of it. The 30 s errors are partly that, not Nimble alone. A clean run
-   (Nimble on its own Ollama, personas on another) was planned but not done: it needs a Jev key and `SHADOW_RUN=true`.
+   without personas was done on 2026-10-31 (see the update above): Nimble p50 0.65 s, 0 errors. Nimble on its own Ollama
+   next to loaded personas is still untested.
    Even then both models share one 24 GB machine, so contention for GPU and memory remains.
 2. **Agreement is not accuracy.** 165 compared of 228 means 28% of `understand` decisions have no Nimble answer.
    Someone should label a sample of the disagreements by hand before saying either model is better.
